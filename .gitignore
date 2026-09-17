@@ -1,0 +1,39 @@
+# ===== 密钥与凭据（绝不入库）=====
+.env
+.env.*
+*.pem
+*.key
+*secret*
+credentials*.json
+token*.json
+!*.env.example
+
+# ===== 依赖目录 =====
+node_modules/
+__pycache__/
+.venv/
+venv/
+
+# ===== 本地数据库与索引文件 =====
+*.db
+*.sqlite
+*.sqlite3
+index_data/
+*.faiss
+
+# ===== 日志 =====
+*.log
+logs/
+
+# ===== 编辑器与系统文件 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 本地 AI 助手数据 =====
+.workbuddy/
+
+# ===== 临时文件 =====
+.tmp-*
