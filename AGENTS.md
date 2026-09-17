@@ -21,7 +21,8 @@
 ## 3. 当前进度
 
 - **Day 1（2026-09-16）**：✅ WorkBuddy 安装登录；✅ 工作区文件夹；✅ 本文件（AGENTS.md）；✅ Git 2.50.1；✅ Node.js v22.22.2（npm 10.9.7）；✅ GitHub 账号（用户名 **bird-z**，XiaoPeng Zhong）。
-- **Day 2 计划**：创建 GitHub 仓库（建议仓库名 vbcd 或项目主题名）并首次提交代码。
+- **Day 2（2026-09-17）**：✅ 创建 GitHub 仓库 **https://github.com/bird-z/vbcd**（Public，默认分支 main）；✅ 首次提交 `a3c8456`（Day 2｜初始化 Git 仓库并加入首个占位页）已推送；✅ .gitignore 生效（.env、node_modules、.workbuddy 均不上传）。
+- **Day 3 计划**：写 research.md（选题调研）。项目主题仍待最终确认。
 
 ## 4. AI 工作规则
 
@@ -37,7 +38,8 @@
 - 语言：简体中文交流。
 - 运行环境：Windows + WorkBuddy（内置 Node 22 / Python 3.13）。
 - 后端与数据库：第 3 周起使用 CloudBase（手册附录 M 有指导）。
-- 版本管理：Day 2 起使用 GitHub，本仓库将关联远程仓库。
+- 版本管理：Git + GitHub，远程仓库 https://github.com/bird-z/vbcd（origin，main 分支）；本地提交身份 bird-z / z.x.peng@outlook.com。
+- 提交规范：提交标题以「Day N｜一句话」开头，正文两行（改了什么 / 加了什么）。
 
 ## 6. 训练营红线（提醒用途）
 
