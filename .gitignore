@@ -1,15 +1,28 @@
-# ===== 依赖与构建产物 =====
-node_modules/
-dist/
-build/
-.cache/
-
-# ===== 环境变量与密钥（绝不能上传）=====
+# ===== 密钥与凭据（绝不入库）=====
 .env
 .env.*
 !.env.example
 *.pem
 *.key
+*secret*
+credentials*.json
+token*.json
+
+# ===== 依赖目录与构建产物 =====
+node_modules/
+__pycache__/
+.venv/
+venv/
+dist/
+build/
+.cache/
+
+# ===== 本地数据库与索引文件 =====
+*.db
+*.sqlite
+*.sqlite3
+index_data/
+*.faiss
 
 # ===== 本地 AI 助手数据 =====
 .workbuddy/
@@ -24,4 +37,5 @@ desktop.ini
 # ===== 日志与临时文件 =====
 *.log
 npm-debug.log*
+logs/
 .tmp-*
