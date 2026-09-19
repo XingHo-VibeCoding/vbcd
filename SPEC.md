@@ -10,8 +10,8 @@
 | 服务器 | `47.85.210.76`（**海外，无需备案**）；端口 **22 可达**、**80 可达**、443 未开（证书待配） |
 | 本机 WSL | Debian 13 + **Node v20.19.2** + **Docker 26.1.5**（免 sudo，systemd 已启用） |
 | ⚠️ 镜像拉取 | 本机 WSL 直连 Docker Hub **超时** → **改为在海外服务器上构建/拉取镜像**（本机不拉） |
-| 代码/数据分区 | 代码与文档 → GitHub 公开仓 `bird-z/vbcd`；个人资料 → 自建 Gitea 私有仓（**待搭建**） |
-| 本机网络 | 经代理 `127.0.0.1:3792` 访问 github.com 偶发 502（`api.github.com` 正常） |
+| 代码/数据分区 | 代码与文档 → GitHub 公开仓 **双远程**（`origin`: bird-z/vbcd、`camp`: XingHo-VibeCoding/vbcd）；个人资料 → 自建 Gitea 私有仓（**待搭建**） |
+| 本机网络 | ⚠️ 环境变量中的代理端口已失效 → 推送报 502 / TLS handshake failed；**直连 GitHub 正常**，推送统一加 `-c http.proxy= -c https.proxy=`（alias `pushboth`） |
 | 域名 | 已有域名（**待确认**是否已解析到服务器 IP） |
 
 ## 1. 项目结构（monorepo）

@@ -87,7 +87,7 @@ flowchart TD
 | 资料内容 | 使用者在手机/电脑上输入 | 服务器 `memory/` 目录 → 提交进 Gitea 私有仓库 | 前端收集 → 后端写入 |
 | 索引 | 扫描资料目录生成 | 服务器上的 `index.json`（**不入公开仓库**） | 后端（打开列表页时重建） |
 | 任务与确认记录（F4–F6） | 使用者提交的任务与点击的确认 | 服务器记录 → 私有仓库 | 后端（未确认不执行） |
-| 代码与文档 | 开发机（Windows） | GitHub 公开仓库 `bird-z/vbcd` | Git（人工与本助手协作提交） |
+| 代码与文档 | 开发机（Windows） | GitHub 公开仓库：`bird-z/vbcd`（origin）+ `XingHo-VibeCoding/vbcd`（camp，组织仓） | Git（人工与本助手协作提交，双远程同步） |
 
 ### 4.4 备份链路
 

@@ -119,10 +119,13 @@
   - ⚠️ 跨文件系统 I/O 较慢：代码放 `/mnt/e` 用 Windows 编辑器改，**装依赖/构建尽量放 WSL 内部目录**（如 `~/build`）执行；
   - **分工约定**：日常开发调试用 Windows 侧 Node 22；**部署彩排（Nginx / 容器 / 证书）在 WSL 里做**，两者不要混用同一个 `node_modules`。
 - 后端与数据库：第 3 周起使用 CloudBase（手册附录 M 有指导）。
-- 版本管理：Git + GitHub，远程仓库 https://github.com/bird-z/vbcd（origin，主干 **main**）。
+- 版本管理：Git + GitHub，**双远程**（主干 **main**）：
+  - `origin` → https://github.com/bird-z/vbcd （个人公开仓）
+  - `camp` → https://github.com/XingHo-VibeCoding/vbcd （组织公开仓，2026-09-19 起启用）
+  - 推送：两个仓库都要推，保持 HEAD 一致；已配 alias `git pushboth`（内含绕过失效代理的参数）
   - 分支策略：**main 为唯一主线**（2026-09-18 将 buddy 分支合并回 main，两边历史已并入；2026-09-19 删除远程 buddy 分支，仓库只剩 main）。
   - 未来要试风险大的改动时，开临时分支，成功后再合回 main；不长期并列两条分支。
-  - ⚠️ 网络：本机经代理 `127.0.0.1:3792` 访问 `github.com` 偶发 **502**（`api.github.com` 正常）；推送失败时报告并等网络恢复，不反复重试。
+  - ⚠️ 网络：环境变量里的 `HTTP_PROXY`/`HTTPS_PROXY` 指向的端口已失效监听，直接推会报 **502** 或 `TLS handshake failed`；**直连 GitHub 正常**。推送一律加 `-c http.proxy= -c https.proxy=`（alias `pushboth` 已包含）；失败时报告，不反复重试。
 
 ## 8. 训练营红线（提醒用途）
 
