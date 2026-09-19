@@ -91,7 +91,8 @@
 - **Day 2（2026-09-17）**：✅ 创建 GitHub 仓库 https://github.com/bird-z/vbcd（Public，main）；✅ 首个占位页 `index.html` 与 `.gitignore` 提交推送；✅ 忽略规则验证生效（.env 不上传）。
 - **Day 3（2026-09-18）**：✅ 确定项目主题 buddy 与 MVP 范围；✅ 调研 6 个竞品；✅ 产出 `research.md`（含本期不做清单）；✅ buddy 分支内容合并回 main。
 - **Day 4（2026-09-19）**：✅ 确定 MVP 范围（F1–F7）；✅ 产出 `PRD.md`（25 条验收标准）；✅ 两轮 AI 自检，必须修改与建议级全部清零；✅ 确定数据与同步策略（代码→GitHub 公开、资料→自建 Gitea 私有、公网 HTTPS + 登录）；✅ 追加后续候选 F8（学习留痕）；✅ 远程 `buddy` 分支已删除，仓库只剩 `main`。
-- **Day 5 计划**：写 `TECH_DESIGN.md`（技术选型与架构设计），输入材料为 `PRD.md`。
+- **Day 5（2026-09-19）**：✅ 讲解前后端与存储分工；✅ 产出 `TECH_DESIGN.md`（技术路线 10 条选型含理由与备选、数据流图 3 张 Mermaid、架构原则与演化策略、技术债台账）；✅ 产出 `SPEC.md` 实现规格（项目结构 / 数据对象及字段 / 8 个 API / 数据流 / 错误处理与错误码 / 环境变量 / 部署与迁移含"文件→数据库"三步迁移）；✅ 前端定为 React + Vite、后端 Node.js + Express；✅ 配置**双远程**（origin=bird-z/vbcd、camp=XingHo-VibeCoding/vbcd）与 `git pushboth`；✅ `.gitignore` 排除 `memory/`、`drafts/`（个人资料不进公开仓）；✅ 确立提交粒度规则（板块提交 + 阶段总结提交）。
+- **Day 6**：待任务清单（清单到手后再补计划，不提前预设）。
 
 ## 5. buddy 项目规则（产品行为的铁律）
 
