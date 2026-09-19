@@ -24,6 +24,11 @@ build/
 index_data/
 *.faiss
 
+# ===== 个人资料与未确认产物（只进自建 Gitea 私有仓，永不入公开仓）=====
+# 依据：PRD 第 5 章数据策略 / SPEC.md 第 1 章仓库边界
+memory/
+drafts/
+
 # ===== 本地 AI 助手数据 =====
 .workbuddy/
 

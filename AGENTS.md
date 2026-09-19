@@ -111,10 +111,18 @@
 
 - 语言：简体中文交流。
 - 运行环境：Windows 11 + WorkBuddy（内置 Node 22 / Python 3.13）。
+- **本机 WSL（2026-09-19 实测可用，已解除程序黑名单）**：
+  - 发行版 **Debian 13 (trixie)**，WSL **版本 2**，`/etc/wsl.conf` 已启用 **systemd**；
+  - 内含 **Node v20.19.2 + npm 9.2.0**（apt 官方源）与 **Docker 26.1.5 + Compose 2.26.1**（`docker` 免 sudo，服务 `active`/`enabled`）；
+  - Windows 磁盘挂载点：`C:\ → /mnt/c`、`E:\ → /mnt/e`（可读写，项目目录即 `/mnt/e/github/vbcd`）；
+  - ⚠️ **Docker Hub 不可达**（`registry-1.docker.io` 超时）→ 拉镜像前需在 `/etc/docker/daemon.json` 配置国内镜像加速器（如阿里云 ACR 个人版专属地址）；配好后 `sudo systemctl restart docker`；
+  - ⚠️ 跨文件系统 I/O 较慢：代码放 `/mnt/e` 用 Windows 编辑器改，**装依赖/构建尽量放 WSL 内部目录**（如 `~/build`）执行；
+  - **分工约定**：日常开发调试用 Windows 侧 Node 22；**部署彩排（Nginx / 容器 / 证书）在 WSL 里做**，两者不要混用同一个 `node_modules`。
 - 后端与数据库：第 3 周起使用 CloudBase（手册附录 M 有指导）。
 - 版本管理：Git + GitHub，远程仓库 https://github.com/bird-z/vbcd（origin，主干 **main**）。
   - 分支策略：**main 为唯一主线**（2026-09-18 将 buddy 分支合并回 main，两边历史已并入；2026-09-19 删除远程 buddy 分支，仓库只剩 main）。
   - 未来要试风险大的改动时，开临时分支，成功后再合回 main；不长期并列两条分支。
+  - ⚠️ 网络：本机经代理 `127.0.0.1:3792` 访问 `github.com` 偶发 **502**（`api.github.com` 正常）；推送失败时报告并等网络恢复，不反复重试。
 
 ## 8. 训练营红线（提醒用途）
 
