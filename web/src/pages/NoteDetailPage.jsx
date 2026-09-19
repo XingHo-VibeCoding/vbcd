@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { getNote } from '../api/notes'
+import MarkdownContent from '../components/MarkdownContent.jsx'
 
 const CATEGORY_LABELS = { learning: '学习', life: '生活', work: '事务' }
 
@@ -54,9 +55,7 @@ export default function NoteDetailPage() {
       </dl>
 
       <div className="detail-content">
-        {String(note.content || '').split('\n').map((line, i) => (
-          <p key={i}>{line || ' '}</p>
-        ))}
+        <MarkdownContent content={note.content} />
       </div>
 
       <p className="detail-back">

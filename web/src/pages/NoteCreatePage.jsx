@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createNote } from '../api/notes'
+import MarkdownContent from '../components/MarkdownContent.jsx'
 
 const CATEGORIES = [
   { value: 'learning', label: '学习' },
@@ -16,6 +17,7 @@ export default function NoteCreatePage() {
   const [sourceUrl, setSourceUrl] = useState('')
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
+  const [tab, setTab] = useState('edit') // 仅窄屏生效：编辑 / 预览
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -78,15 +80,43 @@ export default function NoteCreatePage() {
           />
         </label>
 
-        <label>
-          正文 *
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={8}
-            placeholder="记录内容…"
-          />
-        </label>
+        <div className="editor-block">
+          <div className="editor-head">
+            <span className="editor-label">正文 *（支持 Markdown）</span>
+            <div className="tabs-mobile">
+              <button
+                type="button"
+                className={tab === 'edit' ? 'tab active' : 'tab'}
+                onClick={() => setTab('edit')}
+              >
+                编辑
+              </button>
+              <button
+                type="button"
+                className={tab === 'preview' ? 'tab active' : 'tab'}
+                onClick={() => setTab('preview')}
+              >
+                预览
+              </button>
+            </div>
+          </div>
+
+          <div className="editor-split" data-mode={tab}>
+            <textarea
+              className="pane-editor"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              rows={14}
+              placeholder={'记录内容…\n\n试试 Markdown：# 标题、- 列表、**加粗**、`代码`、| 表格 |'}
+            />
+            <div className="pane-preview">
+              <MarkdownContent
+                content={content}
+                emptyHint="左侧开始输入，这里实时显示渲染效果"
+              />
+            </div>
+          </div>
+        </div>
 
         {error ? <div className="error-bar">{error}</div> : null}
 
