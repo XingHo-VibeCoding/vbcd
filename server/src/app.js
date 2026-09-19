@@ -1,9 +1,9 @@
-// 组装 Express 应用：中间件 + 路由 + 错误处理
-// 与启动入口分离，方便以后接测试与部署（SPEC 第 1 章 server/src 结构）
 import express from 'express'
+import cookieParser from 'cookie-parser'
 import { requestLog } from './middleware/request-log.js'
 import { notFound, errorHandler } from './middleware/errors.js'
 import healthRouter from './routes/health.js'
+import authRouter from './routes/auth.js'
 
 export function createApp() {
   const app = express()
@@ -11,11 +11,15 @@ export function createApp() {
   // 解析 JSON 请求体（限制 1MB，防止超大请求）
   app.use(express.json({ limit: '1mb' }))
 
+  // 解析 Cookie（登录态用）
+  app.use(cookieParser())
+
   // 请求日志（每条含 request_id 与耗时）
   app.use(requestLog)
 
-  // 业务路由：先挂健康检查；后续子步骤在此挂 /notes、/tasks 等
+  // 业务路由：health 公开；auth 公开（登录本身不需要登录）；后续 /notes、/tasks 等挂 requireAuth
   app.use('/api', healthRouter)
+  app.use('/api', authRouter)
 
   // 兜底：找不到的路由返回统一的 404
   app.use(notFound)
