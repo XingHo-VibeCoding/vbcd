@@ -28,6 +28,8 @@ index_data/
 # 依据：PRD 第 5 章数据策略 / SPEC.md 第 1 章仓库边界
 memory/
 drafts/
+# /data/：Day 8 起资料根目录（DATA_DIR）。根锚定写法，避免误伤 web/src/data/
+/data/
 
 # ===== 本地 AI 助手数据 =====
 .workbuddy/
