@@ -44,7 +44,7 @@ vbcd/
 
 **仓库边界（重要）**：
 - 公开仓**只放代码与文档**，个人资料内容**不进公开仓**；
-- 开发期的资料目录（`memory/`）**需补一条 `.gitignore` 规则**（见 7.5 行动项 A1）；
+- 开发期的资料目录（`data/`）**已补 `.gitignore` 规则**（见 7.5 行动项 A1）；
 - 线上资料目录位于服务器 `DATA_DIR`（数据私有仓的克隆），与代码目录分开。
 
 ## 2. 数据对象及字段（草案，请逐项确认）
@@ -55,7 +55,7 @@ vbcd/
 - 所有对象带 `schema_version`（整数），为未来迁移做准备；
 - `hash`：正文与元数据的 SHA-256，用于**查重**与一致性校验。
 
-### 2.1 Note（资料条目）——存为 `memory/<分类>/YYYY-MM-DD-<slug>.md`
+### 2.1 Note（资料条目）——存为 `data/<分类>/YYYY-MM-DD-<slug>.md`
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `id` | string | ✅ | 文件名主键 |
@@ -100,7 +100,7 @@ vbcd/
 | `decision` | `approved` / `rejected` |
 | `confirmed_at` | 确认时间（**不记录"谁"**，单人使用） |
 
-### 2.5 Rule（规则）——`memory/rules.md` 的条目
+### 2.5 Rule（规则）——`data/rules.md` 的条目
 | 字段 | 说明 |
 |---|---|
 | `id` | 主键 |
@@ -136,7 +136,7 @@ vbcd/
 
 两条链路的完整图见 `TECH_DESIGN.md` 第 4 章（写入链路 / 读取链路），此处只列要点：
 
-- **写入**：前端（JSON）→ Nginx → 后端（鉴权 → 校验 → 写 `memory/<分类>/…md`）→ 更新索引 → `git commit & push` → 私有仓；
+- **写入**：前端（JSON）→ Nginx → 后端（鉴权 → 校验 → 写 `data/<分类>/…md`）→ 更新索引 → `git commit & push` → 私有仓；
 - **读取**：前端 → 后端 → （必要时 `git pull`）→ 扫描资料目录重建索引 → 返回 JSON → 前端展示，点条目可看原文；
 - **权威副本**：**Gitea 私有仓的 Git 版本**；服务器目录与本地 `index.json` 都是可重建的副本。
 
@@ -185,7 +185,7 @@ vbcd/
 | `NODE_ENV` | `production` | 运行模式 | ⬜ |
 | `PORT` | `3000` | 后端监听端口（仅内网，不直接暴露） | ⬜ |
 | `PUBLIC_ORIGIN` | `https://buddy.example.com` | 对外地址，用于 Cookie 与跳转 | ⬜ |
-| `DATA_DIR` | `/srv/buddy/data` | 资料目录（私有仓克隆根） | ⬜ |
+| `DATA_DIR` | `/srv/buddy/data` | 资料目录；本地开发缺省 = 仓库根 `data/` | ⬜ |
 | `DATA_REPO_URL` | `git@gitea.example.com:bird/buddy-data.git` | 数据私有仓地址 | 🟡 |
 | `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` | `buddy` / `buddy@local` | 服务器上自动提交身份 | ⬜ |
 | `SESSION_SECRET` | 随机 32 字节 | 会话签名 | 🔴 |
@@ -235,7 +235,7 @@ vbcd/
 ### 7.5 已知阻塞项与行动项
 | # | 事项 | 状态 |
 |---|---|---|
-| A1 | 公开仓补 `.gitignore` 规则，确保 `memory/` 内容永不入公开库 | ✅ **已完成**（2026-09-19：`.gitignore` 增加 `memory/`、`drafts/`，并已用 `git check-ignore` 验证生效） |
+| A1 | 公开仓补 `.gitignore` 规则，确保资料目录（`memory/`、`data/`）内容永不入公开库 | ✅ **已完成**（2026-09-19：`.gitignore` 增加 `memory/`、`drafts/`；2026-09-22：增加根锚定 `/data/`；均已 `git check-ignore` 验证） |
 | A2 | 搭建自建 Gitea 私有仓（含 backup 与 deploy key） | ⬜ 待做 |
 | A3 | 本机 WSL 拉镜像超时 → 确定"服务器构建"路线，或在 WSL 配镜像加速器 | ⬜ 待定 |
 | A4 | 确认域名 A 记录是否已指向 `47.85.210.76` | ⬜ 待确认 |

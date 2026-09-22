@@ -94,6 +94,7 @@
 - **Day 5（2026-09-19）**：✅ 讲解前后端与存储分工；✅ 产出 `TECH_DESIGN.md`（技术路线 10 条选型含理由与备选、数据流图 3 张 Mermaid、架构原则与演化策略、技术债台账）；✅ 产出 `SPEC.md` 实现规格（项目结构 / 数据对象及字段 / 8 个 API / 数据流 / 错误处理与错误码 / 环境变量 / 部署与迁移含"文件→数据库"三步迁移）；✅ 前端定为 React + Vite、后端 Node.js + Express；✅ 配置**双远程**（origin=bird-z/vbcd、camp=XingHo-VibeCoding/vbcd）与 `git pushboth`；✅ `.gitignore` 排除 `memory/`、`drafts/`（个人资料不进公开仓）；✅ 确立提交粒度规则（板块提交 + 阶段总结提交）。
 - **Day 6（2026-09-19）**：✅ 板块①检查规则文件——确认 Day 1 规则内容仍在，「当天唯一的任务范围」「没说『进入下一板块』就不继续」两条关键规则原文保留；✅ 板块②追加「我的个人规则」3 条（中文作答与注释 / 代码只放规定的项目结构 / 改完代码提醒刷新浏览器），仅末尾追加、原有内容未改动（diff 仅 +8 行）；✅ 板块③ AI 完整复述规则，经用户确认无误；✅ 规则自测 2 项（越界测试、流程测试）均通过，记录见文末「规则自测记录」。
 - **Day 7（2026-09-19）**：✅ 读四份文档并从 PRD/SPEC 推导今日范围（F1 录入降级为浏览器 localStorage、F2 列表检索、F3 只做"打开即刷新"的行为体现；F4–F6 因需登录与后端，明确不做）；✅ 产出第一个能跑的 MVP：`web/`（Vite 8 + React 19），三个视图（列表检索 / 新建录入 / 详情）+ 本地数据适配层（签名对齐 SPEC 接口）+ 一份测试数据；`npm run dev` 与 `npm run build` 均实测通过；✅ 前端补 Markdown 渲染（`react-markdown` + `remark-gfm`）与录入页实时预览；✅ 新增 `RUN.md` 运行说明；✅ 后端骨架 `server/`（Express 5）：应用装配、统一错误格式 `{ ok:false, error:{ code, message } }`、请求日志（request_id + 耗时）、`GET /api/health` 健康检查；✅ 后端登录：`POST /api/login`（bcrypt 校验 + HttpOnly Cookie 会话 + 同 IP 10 分钟失败 5 次限流）、`POST /api/logout`、内存会话存储（默认 30 天）、`scripts/hash-password.js` 本机生成口令哈希、`.env.example` 配置样例（`.env` 不入库）；✅ 鉴权中间件 `requireAuth` 已就位但**尚未挂到任何路由**，前端仍走 localStorage，**前后端未打通**；⚠️ 后端尚未实测运行：`server/.env` 未创建、`server/node_modules` 未安装；✅ 过程纪律：首次搭骨架因"一次性写多个文件"被回退重来，确立"写文件前先列清单"的现场规则。
+- **Day 8 前预做（2026-09-22）**：✅ 数据目录 `data/`：`.gitignore` 补根锚定 `/data/` 规则，4 条种子迁成真 Markdown（frontmatter + SHA-256）；✅ 后端存储适配层 `server/src/storage/files.js`（`list/get/put/remove/sync`）+ 资料业务 `services/notes.js`（校验/查重/slug/原子写入，绝不覆盖）；✅ 资料三接口 `POST/GET /api/notes`、`GET /api/notes/:id`，`requireAuth` 挂载生效，索引缓存 `data/.index.json`（指纹 + 全文检索 + `INDEX_CACHE=0` 可关）；✅ `server/scripts/smoke.mjs` 12/12 端到端实测通过（临时口令 + 临时目录，未碰真实口令）；✅ 前端接入后端：登录页 `/login`、`api/client.js` 统一请求、三页改异步、`vite` 代理 `/api`，删除 localStorage 与种子文件；✅ RUN.md 补后端运行与 Obsidian 展示说明；✅ 文档口径 `memory/` → `data/` 同步；✅ 浏览器登录实测通过。
 - **Day 8**：待任务清单（清单到手后再补计划，不提前预设）。
 
 ## 5. buddy 项目规则（产品行为的铁律）
@@ -102,7 +103,7 @@
 2. **不重复处理**：同一封邮件不重复处理或发送；重复性任务执行前先查重。
 3. **密钥与隐私不入库**：`.env`、密码、API 密钥、数据库连接串永不进代码和提交；本地数据库与索引文件不入 Git（见 `.gitignore`）。
 4. **保守优先**：宁可多做一步确认，不猜、不代办用户的决定。
-5. **记忆与纠错**：用户指出的每条纠正写入 `memory/rules.md` 长期生效，新会话必须先读取；成功流程整理进 `skills/`；未确认的草稿放 `drafts/`。
+5. **记忆与纠错**：用户指出的每条纠正写入 `data/rules.md` 长期生效，新会话必须先读取；成功流程整理进 `skills/`；未确认的草稿放 `drafts/`。
 
 ## 6. AI 工作规则（兜底，与第 2 节冲突时以第 2 节为准）
 
