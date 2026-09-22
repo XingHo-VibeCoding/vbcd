@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { listNotes } from '../api/notes'
 
 const CATEGORIES = [
@@ -10,19 +10,40 @@ const CATEGORIES = [
 ]
 
 function fmtTime(iso) {
-  const d = new Date(iso)
-  return d.toLocaleTimeString('zh-CN', { hour12: false })
+  if (!iso) return '—'
+  return new Date(iso).toLocaleTimeString('zh-CN', { hour12: false })
 }
 
 export default function NoteListPage() {
+  const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [category, setCategory] = useState('')
+  const [result, setResult] = useState({ total: 0, items: [], rebuilt: false, rebuiltAt: '', rebuiltInMs: 0 })
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const debounceRef = useRef(null)
 
-  // 每次渲染/输入变化时"重建"列表（对应 F3 的行为体现：打开或输入即刷新）
-  const { items, total, rebuiltAt } = useMemo(
-    () => listNotes({ q, category }),
-    [q, category],
-  )
+  // 搜索 250ms 防抖；分类变化立即重新请求（F3：打开/输入即刷新）
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      listNotes({ q, category })
+        .then((data) => setResult(data))
+        .catch((err) => {
+          if (err.code === 'AUTH_REQUIRED') navigate('/login?from=/', { replace: true })
+          else setError(err.message || '加载失败')
+        })
+        .finally(() => setLoading(false))
+    }, 250)
+    return () => clearTimeout(debounceRef.current)
+  }, [q, category, navigate])
+
+  const { total, items, rebuilt, rebuiltAt, rebuiltInMs } = result
+  const indexNote = rebuiltAt
+    ? `索引${rebuilt ? '本次重建' : '命中缓存'}（耗时 ${rebuiltInMs} ms）· 更新于 ${fmtTime(rebuiltAt)}`
+    : '索引加载中…'
 
   return (
     <section>
@@ -44,22 +65,26 @@ export default function NoteListPage() {
       </div>
 
       <p className="meta">
-        共 {total} 条 · 索引更新于 {fmtTime(rebuiltAt)}（打开/输入时自动刷新）
+        共 {total} 条 · {indexNote}
       </p>
 
-      {total === 0 ? (
-        <div className="empty">没有找到</div>
+      {error ? <div className="error-bar">{error}</div> : null}
+
+      {loading && total === 0 ? (
+        <div className="loading">载入中…</div>
+      ) : total === 0 ? (
+        <div className="empty">没有找到{error ? '' : '，去「新建资料」记一条吧'}</div>
       ) : (
         <ul className="note-list">
           {items.map((n) => (
             <li key={n.id} className="note-item">
-              <Link to={`/notes/${n.id}`}>
+              <Link to={`/notes/${encodeURIComponent(n.id)}`}>
                 <div className="note-item-title">{n.title}</div>
                 <div className="note-item-excerpt">{n.excerpt}</div>
                 <div className="note-item-meta">
                   <span className="badge">{n.category}</span>
                   <span>{n.date}</span>
-                  {n.tags.map((t) => (
+                  {(n.tags || []).map((t) => (
                     <span key={t} className="tag">
                       #{t}
                     </span>

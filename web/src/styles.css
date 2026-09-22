@@ -175,6 +175,43 @@ body {
   font-size: 14px;
 }
 
+/* ===== Day 8 · 登录、登出、加载态 ===== */
+.nav .logout {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 2px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.nav .logout:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.loading {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.login-card {
+  max-width: 400px;
+  margin: 40px auto;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ===== Day 7 · 录入页表单 ===== */
 .form {
   display: flex;

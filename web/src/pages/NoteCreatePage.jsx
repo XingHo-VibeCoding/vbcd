@@ -17,28 +17,36 @@ export default function NoteCreatePage() {
   const [sourceUrl, setSourceUrl] = useState('')
   const [content, setContent] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const [tab, setTab] = useState('edit') // 仅窄屏生效：编辑 / 预览
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    setSubmitting(true)
     try {
       const tags = tagsText
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean)
-      createNote({ title, category, tags, source_url: sourceUrl, content })
+      await createNote({ title, category, tags, source_url: sourceUrl, content })
       navigate('/')
     } catch (err) {
-      // 适配层会抛带 code 的错误：VALIDATION_FAILED（缺字段）/ DUPLICATE（内容重复）
+      // 后端会抛带 code 的错误：VALIDATION_FAILED / DUPLICATE / AUTH_REQUIRED / NETWORK
+      if (err.code === 'AUTH_REQUIRED') {
+        navigate('/login?from=/new', { replace: true })
+        return
+      }
       setError(err.message || '保存失败')
+    } finally {
+      setSubmitting(false)
     }
   }
 
   return (
     <section className="card">
       <h2>新建资料</h2>
-      <p className="hint">保存到浏览器本地（localStorage），接后端后会落到资料目录</p>
+      <p className="hint">保存后写入本项目 data/ 目录，Obsidian 里也能看到</p>
 
       <form onSubmit={handleSubmit} className="form">
         <label>
@@ -121,7 +129,7 @@ export default function NoteCreatePage() {
         {error ? <div className="error-bar">{error}</div> : null}
 
         <div className="form-actions">
-          <button type="submit" className="btn-primary">保存</button>
+          <button type="submit" className="btn-primary" disabled={submitting}>{submitting ? '保存中…' : '保存'}</button>
           <button type="button" className="btn-ghost" onClick={() => navigate('/')}>返回列表</button>
         </div>
       </form>
