@@ -141,3 +141,36 @@ server/
     ├── routes/           # health（/api/health）/ auth（/api/login、/api/logout）
     └── services/         # sessions（内存会话，默认 30 天）
 ```
+
+## 9. 用 Obsidian 查看资料（F1 的「能看到文件」）
+
+buddy 的资料就是 Markdown 文件，Obsidian 能直接当笔记打开、编辑。开发机上的做法：把项目 `data/` 目录用**符号链接**挂进你的 Obsidian 仓库。
+
+```bash
+ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
+```
+
+> 这一步由你本人执行（目标目录在项目结构之外，我不代做）。
+
+### 9.1 预期效果
+
+| 在哪 | 看到什么 |
+|---|---|
+| Obsidian 左侧栏 | 多出 `buddy/`，下面按 `learning / life / work` 分类，每篇一个 `.md` |
+| 打开一篇 | frontmatter（标题/标签/日期/来源…）+ Markdown 正文正常渲染；`tags` 自动成为 Obsidian 标签 |
+| 双向联动 | 你在 Obsidian 里改正文或新增文件，回浏览器列表页刷新，条目随之变化（索引重建，对应 F3） |
+
+### 9.2 验收清单（逐条勾）
+
+- [ ] Obsidian 的 `buddy/` 下能看到 4 条示例（atomic-commit / prd-review / proxy-502 / wsl-env）
+- [ ] 浏览器「新建资料」录一条 → `buddy/` 下立即出现对应 `.md`
+- [ ] 在 Obsidian 里改一条的正文 → 浏览器刷新列表，顶部显示「索引本次重建」且内容更新
+- [ ] `data/.index.json` 是点开头的隐藏文件，Obsidian 默认不显示（也别删：删了只是下次重建，不丢资料）
+
+### 9.3 常见问题
+
+| 现象 | 处理 |
+|---|---|
+| Obsidian 里看不到 `buddy/` | 符号链接可能不被跟随 → 把后端 `DATA_DIR` 直接指向仓库内真实目录：`DATA_DIR=/home/bird/note/los/buddy npm run dev`（目录结构不变） |
+| 想换资料目录 | 改 `server/.env` 的 `DATA_DIR` 或启动时传 `DATA_DIR=…`，重启后端即可 |
+| 列表看不到你在 Obsidian 里新加的文件 | 确认它第一行是 `---`（有 frontmatter）；没有 frontmatter 会被索引跳过，并在后端日志里告警 |
