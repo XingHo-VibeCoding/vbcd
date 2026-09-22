@@ -132,7 +132,7 @@ function storageError(message) {
 }
 
 /**
- * 扫描资料目录，返回全部条目（含派生字段）。
+ * 扫描资料目录，返回全部条目（含派生字段与正文）。
  * 返回 { items, warnings }：单个文件解析/读取失败只记警告并跳过，不让整次请求失败。
  */
 export async function list() {
@@ -170,6 +170,7 @@ export async function list() {
           category: parsed.meta.category || category,
           path: `${category}/${name}`,
           excerpt: excerptOf(parsed.content),
+          content: parsed.content, // 供索引层做全文检索用
           mtimeMs: fileStat.mtimeMs,
           size: fileStat.size,
         })
@@ -196,7 +197,7 @@ export async function get(id) {
   }
   if (!parsed) return null
 
-  const { excerpt, mtimeMs, size, ...meta } = hit
+  const { excerpt, content, mtimeMs, size, ...meta } = hit
   return { meta, content: parsed.content }
 }
 

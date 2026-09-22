@@ -2,6 +2,7 @@
 // 校验 → 组装 Note → 查重 → 交给存储适配层落盘。本文件不直接读写文件系统。
 import { createHash } from 'node:crypto'
 import * as storage from '../storage/files.js'
+import { fail } from './errors.js'
 
 export const CATEGORIES = ['learning', 'life', 'work']
 
@@ -9,10 +10,6 @@ const TITLE_MAX = 80
 const TAGS_MAX = 10
 const SLUG_MAX = 40
 const TZ_OFFSET_MINUTES = 8 * 60 // Asia/Shanghai（SPEC 第 6 章约定），不依赖机器时区
-
-function fail(code, message, status = 400) {
-  return Object.assign(new Error(message), { status, code })
-}
 
 /** 统一时间：带 +08:00 偏移的 ISO 8601（不随机器时区变化） */
 export function nowShanghai() {
