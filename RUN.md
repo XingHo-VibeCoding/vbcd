@@ -1,6 +1,7 @@
-# RUN.md — buddy 前端运行说明（Day 7）
+# RUN.md — buddy 运行说明（Day 7）
 
 > 范围：本文件只说**怎么把今天的 MVP 跑起来**。技术选型见 `TECH_DESIGN.md`，实现规格见 `SPEC.md`。
+> 结构：第 1–7 节是**前端**（`web/`，Day 7 已实测）；第 8 节是**后端**（`server/`，代码已完成，**尚未实测**）。
 
 ## 1. 前提
 
@@ -60,4 +61,83 @@ web/
     ├── pages/            # 三个视图（列表 / 新建 / 详情）
     ├── api/notes.js      # 本地数据适配层（将来接后端只换这里）
     └── data/notes.js     # 测试数据（4 条样例）
+```
+
+## 8. 后端（`server/`）怎么跑
+
+> ⚠️ **诚实标注**：本节是**按代码写出的预期步骤，本机尚未实测**（`server/node_modules` 未安装、`server/.env` 未创建）。照着跑一遍、把结果反馈给我，我再把「已实测」补上。
+
+### 8.1 前提
+
+- Node.js **20.19+ 或 22.12+**（与前端同一份 Node 即可）；
+- 后端不需要 Docker；依赖装在 `server/node_modules/`（**不入库**，已在 `.gitignore`）。
+
+### 8.2 启动（四步）
+
+```bash
+cd server
+npm install                                  # 首次；若卡住/502 → 先清空 HTTP_PROXY、HTTPS_PROXY 再装
+cp .env.example .env                         # Windows PowerShell 用：Copy-Item .env.example .env
+node scripts/hash-password.js "你的口令"     # 生成 bcrypt 哈希（口令明文只出现在你的终端里）
+```
+
+把上一步打印出的**一整串哈希**粘到 `server/.env` 的 `PASSWORD_HASH=` 后面，然后：
+
+```bash
+npm run dev                                  # = node --watch src/index.js，默认 3000 端口
+```
+
+`server/.env` 需要的内容（此文件不入库、不要发给别人）：
+
+| 变量 | 值 | 说明 |
+|---|---|---|
+| `PORT` | `3000` | 端口 |
+| `NODE_ENV` | `development` | 生产环境才给 Cookie 加 `Secure` |
+| `PASSWORD_HASH` | 上一步生成的一整串 | **必填**，缺了登录接口会返回 500 并明确报错 |
+| `SESSION_TTL_HOURS` | `720` | 会话有效期（30 天），可省 |
+
+### 8.3 验证（看到这些输出才算跑通）
+
+```bash
+# ① 服务活着
+curl http://localhost:3000/api/health
+# 期望：{"ok":true,"data":{"status":"ok","time":"..."}}
+
+# ② 口令正确 → 拿到会话 Cookie
+curl -i -X POST http://localhost:3000/api/login \
+  -H "Content-Type: application/json" -d '{"password":"你的口令"}'
+# 期望：200 {"ok":true,"data":{"message":"登录成功"}}
+#       响应头带 Set-Cookie: sid=...; HttpOnly; SameSite=Lax
+
+# ③ 口令错误 → 401；连续错 5 次 → 429
+# 期望：{"ok":false,"error":{"code":"AUTH_FAILED","message":"口令错误"}}
+#       {"ok":false,"error":{"code":"RATE_LIMITED","message":"尝试次数过多，请 10 分钟后再试"}}
+
+# ④ 不存在的接口 → 统一 404
+curl -i http://localhost:3000/api/nope
+# 期望：404 {"ok":false,"error":{"code":"NOT_FOUND","message":"接口不存在"}}
+```
+
+### 8.4 今天能做什么 / 不能做什么
+
+| 能做 | 不能做（今天不做） |
+|---|---|
+| 健康检查、登录、登出三个接口 | **前端还没接后端**：`web/` 仍读写浏览器 localStorage |
+| 口令校验 + HttpOnly Cookie 会话 + 失败限流 | 资料的读写接口（`/api/notes` 等，第 3 周） |
+| 统一错误格式与请求日志（每条带 request_id 与耗时） | 会话持久化：现在存内存，**重启服务就掉线**，需重新登录 |
+
+### 8.5 目录速查
+
+```
+server/
+├── package.json          # 依赖与脚本（dev = node --watch / start）
+├── .env.example          # 配置样例（.env 自己建，不入库）
+├── scripts/
+│   └── hash-password.js  # 本机生成口令哈希
+└── src/
+    ├── index.js          # 启动入口（读 .env → 建应用 → 监听端口）
+    ├── app.js            # 装配中间件与路由
+    ├── middleware/       # auth（requireAuth，尚未挂路由）/ errors（统一错误）/ request-log
+    ├── routes/           # health（/api/health）/ auth（/api/login、/api/logout）
+    └── services/         # sessions（内存会话，默认 30 天）
 ```
