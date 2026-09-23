@@ -119,12 +119,12 @@ vbcd/
 ## 3. API 列表（**8 个**）
 
 > 说明：原方案我提了 7 个，**漏了 F5 需要的"任务列表"接口**，故实为 8 个（此处如实修正）。
-> 统一前缀 `/api`；除登录外**全部要求已登录**；请求与响应均为 JSON。
+> 统一前缀 `/api`；请求与响应均为 JSON。资料接口**默认公开**；启用隐私模块（`AUTH_ENABLED=1`）后，除登录外全部要求已登录。
 
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
 |---|---|---|---|---|---|
-| 1 | `POST /api/login` | 口令登录 | `password` | `200` + `Set-Cookie: sid=…` | `AUTH_FAILED` |
-| 2 | `POST /api/logout` | 退出 | — | `204` | `AUTH_REQUIRED` |
+| 1 | `POST /api/login` | 口令登录（隐私模块，默认关闭） | `password` | `200` + `Set-Cookie: sid=…` | `AUTH_FAILED` |
+| 2 | `POST /api/logout` | 退出（隐私模块，默认关闭） | — | `204` | `AUTH_REQUIRED` |
 | 3 | `POST /api/notes` | 新建资料（F1） | `title, category, content, tags?, source_url?` | `201 {id, path, hash}` | `VALIDATION_FAILED`、`DUPLICATE` |
 | 4 | `GET /api/notes` | 列表与检索（F2/F3） | `q?, category?, from?, to?, sort?, limit?, offset?` | `200 {total, items[], rebuilt_in_ms}` | `INTERNAL` |
 | 5 | `GET /api/notes/:id` | 读原文（F2） | — | `200 {meta, content}` | `NOT_FOUND` |
@@ -136,7 +136,7 @@ vbcd/
 
 两条链路的完整图见 `TECH_DESIGN.md` 第 4 章（写入链路 / 读取链路），此处只列要点：
 
-- **写入**：前端（JSON）→ Nginx → 后端（鉴权 → 校验 → 写 `data/<分类>/…md`）→ 更新索引 → `git commit & push` → 私有仓；
+- **写入**：前端（JSON）→ Nginx → 后端（校验 → 写 `data/<分类>/…md`；**隐私模式启用时才先鉴权**）→ 更新索引 → `git commit & push` → 私有仓；
 - **读取**：前端 → 后端 → （必要时 `git pull`）→ 扫描资料目录重建索引 → 返回 JSON → 前端展示，点条目可看原文；
 - **权威副本**：**Gitea 私有仓的 Git 版本**；服务器目录与本地 `index.json` 都是可重建的副本。
 
@@ -188,9 +188,10 @@ vbcd/
 | `DATA_DIR` | `/srv/buddy/data` | 资料目录；本地开发缺省 = 仓库根 `data/` | ⬜ |
 | `DATA_REPO_URL` | `git@gitea.example.com:bird/buddy-data.git` | 数据私有仓地址 | 🟡 |
 | `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` | `buddy` / `buddy@local` | 服务器上自动提交身份 | ⬜ |
-| `SESSION_SECRET` | 随机 32 字节 | 会话签名 | 🔴 |
-| `PASSWORD_HASH` | `$2b$…`（bcrypt） | 单用户口令哈希（**不存明文**） | 🔴 |
-| `SESSION_TTL_HOURS` | `720` | 会话有效期 | ⬜ |
+| `AUTH_ENABLED` | `1` | 设 1 启用隐私模块（需登录）；缺省公开免登录 | ⬜ |
+| `SESSION_SECRET` | 随机 32 字节 | 会话签名（**暂未启用**，当前用随机 sid） | 🟡 |
+| `PASSWORD_HASH` | `$2b$…`（bcrypt） | 单用户口令哈希（**仅 AUTH_ENABLED=1 时需要**，不存明文） | 🔴 |
+| `SESSION_TTL_HOURS` | `720` | 会话有效期（仅隐私启用时生效） | ⬜ |
 | `TZ` | `Asia/Shanghai` | 时区 | ⬜ |
 | `LOG_LEVEL` | `info` | 日志级别 | ⬜ |
 | `LOG_DIR` | `/srv/buddy/logs` | 日志目录 | ⬜ |
@@ -210,6 +211,7 @@ vbcd/
 7. 域名：A 记录指向 `47.85.210.76`（**待确认是否已解析**）
 
 ### 7.2 安全清单（部署时逐条打勾）
+> ⚠️ 本期**隐私模块默认关闭**：站点公开可读写。需要门禁时才设 `AUTH_ENABLED=1` 并妥善保管口令。
 - [ ] 只对外开放 80/443；22 建议改端口或限制来源 IP
 - [ ] 后端端口不对公网暴露
 - [ ] Gitea：强密码 + 两步验证 + 关闭公开注册

@@ -1,9 +1,11 @@
-import { Link, Route, Routes, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import NoteListPage from './pages/NoteListPage.jsx'
 import NoteCreatePage from './pages/NoteCreatePage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { logout } from './api/auth.js'
+import { request } from './api/client.js'
 
 function LogoutButton() {
   const navigate = useNavigate()
@@ -23,6 +25,15 @@ function LogoutButton() {
 }
 
 export default function App() {
+  // 隐私模块默认关闭：读 /api/health 的 auth_enabled，决定是否显示「退出」与登录页
+  const [authEnabled, setAuthEnabled] = useState(false)
+
+  useEffect(() => {
+    request('/api/health')
+      .then((data) => setAuthEnabled(Boolean(data?.auth_enabled)))
+      .catch(() => setAuthEnabled(false)) // 后端连不上按公开处理，页面会自行报错
+  }, [])
+
   return (
     <div className="app">
       <header className="app-header">
@@ -31,7 +42,7 @@ export default function App() {
         <nav className="nav">
           <Link to="/">资料列表</Link>
           <Link to="/new">新建资料</Link>
-          <LogoutButton />
+          {authEnabled ? <LogoutButton /> : null}
         </nav>
       </header>
 
@@ -40,7 +51,7 @@ export default function App() {
           <Route path="/" element={<NoteListPage />} />
           <Route path="/new" element={<NoteCreatePage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/login" element={authEnabled ? <LoginPage /> : <Navigate to="/" replace />} />
         </Routes>
       </main>
 

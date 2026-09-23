@@ -78,57 +78,62 @@ web/
 
 ## 8. 后端（`server/`）怎么跑
 
-> ✅ **已实测**（2026-09-22）：`server/scripts/smoke.mjs` 12/12 全过（健康检查 / 鉴权 / 登录 / 新建 / 查重 / 检索 / 详情 / 404 / 登出）。
+> ✅ **已实测**：`server/scripts/smoke.mjs` 在公开（免登录）与隐私（`AUTH_ENABLED=1`）两种模式下均通过（自动按 `/api/health` 的 `auth_enabled` 适配断言）。
 
 ### 8.1 前提
 
 - Node.js **20.19+ 或 22.12+**（与前端同一份 Node 即可）；
 - 后端不需要 Docker；依赖装在 `server/node_modules/`（**不入库**，已在 `.gitignore`）。
 
-### 8.2 启动（四步）
+### 8.2 启动（默认公开、无需登录）
 
 ```bash
 cd server
 npm install                                  # 首次；若卡住/502 → 先清空 HTTP_PROXY、HTTPS_PROXY 再装
 cp .env.example .env                         # Windows PowerShell 用：Copy-Item .env.example .env
-node scripts/hash-password.js "你的口令"     # 生成 bcrypt 哈希（口令明文只出现在你的终端里）
-```
-
-把上一步打印出的**一整串哈希**粘到 `server/.env` 的 `PASSWORD_HASH=` 后面，然后：
-
-```bash
 npm run dev                                  # = node --watch src/index.js，默认 3000 端口
 ```
 
-`server/.env` 需要的内容（此文件不入库、不要发给别人）：
+`.env` 里**不设 `AUTH_ENABLED` 即完全公开、免登录**。要启用隐私模块（登录）时，才需要加两步：
+
+```bash
+node scripts/hash-password.js "你的口令"     # 把哈希粘到 .env 的 PASSWORD_HASH=
+# 再在 .env 加一行：AUTH_ENABLED=1
+```
+
+`server/.env` 常用项（此文件不入库、不要发给别人）：
 
 | 变量 | 值 | 说明 |
 |---|---|---|
 | `PORT` | `3000` | 端口 |
 | `NODE_ENV` | `development` | 生产环境才给 Cookie 加 `Secure` |
-| `PASSWORD_HASH` | 上一步生成的一整串 | **必填**，缺了登录接口会返回 500 并明确报错 |
+| `AUTH_ENABLED` | `1` | **可选**：设 1 启用隐私模块（需登录）；不设 = 公开免登录 |
+| `PASSWORD_HASH` | bcrypt 哈希 | **仅启用隐私时才需要** |
 | `SESSION_TTL_HOURS` | `720` | 会话有效期（30 天），可省 |
 
 ### 8.3 验证（看到这些输出才算跑通）
 
 ```bash
-# ① 服务活着
+# ① 服务活着（看 auth_enabled 判断当前模式）
 curl http://localhost:3000/api/health
-# 期望：{"ok":true,"data":{"status":"ok","time":"..."}}
+# 期望：{"ok":true,"data":{"status":"ok","time":"...","auth_enabled":false}}
 
-# ② 口令正确 → 拿到会话 Cookie
-curl -i -X POST http://localhost:3000/api/login \
-  -H "Content-Type: application/json" -d '{"password":"你的口令"}'
-# 期望：200 {"ok":true,"data":{"message":"登录成功"}}
-#       响应头带 Set-Cookie: sid=...; HttpOnly; SameSite=Lax
+# ② 公开模式：免登录直接读列表
+curl http://localhost:3000/api/notes
+# 期望：200 {"ok":true,"data":{"total":4,...}}（无需任何 Cookie）
 
-# ③ 口令错误 → 401；连续错 5 次 → 429
-# 期望：{"ok":false,"error":{"code":"AUTH_FAILED","message":"口令错误"}}
-#       {"ok":false,"error":{"code":"RATE_LIMITED","message":"尝试次数过多，请 10 分钟后再试"}}
-
-# ④ 不存在的接口 → 统一 404
+# ③ 不存在的接口 → 统一 404
 curl -i http://localhost:3000/api/nope
 # 期望：404 {"ok":false,"error":{"code":"NOT_FOUND","message":"接口不存在"}}
+```
+
+启用隐私（`AUTH_ENABLED=1`）后，再验证登录：
+
+```bash
+curl -i -X POST http://localhost:3000/api/login \
+  -H "Content-Type: application/json" -d '{"password":"你的口令"}'
+# 期望：200 + Set-Cookie: sid=...; HttpOnly
+# 口令错误 → 401 AUTH_FAILED；连续错 5 次 → 429 RATE_LIMITED
 ```
 
 ### 8.4 今天能做什么 / 不能做什么
