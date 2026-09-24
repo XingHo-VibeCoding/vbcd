@@ -132,6 +132,7 @@
   - `origin` → https://github.com/bird-z/vbcd （个人公开仓）
   - `camp` → https://github.com/XingHo-VibeCoding/vbcd （组织公开仓，2026-09-19 起启用）
   - 推送：两个仓库都要推，保持 HEAD 一致；已配 alias `git pushboth`（内含绕过失效代理的参数）
+  - ⚠️ **设备差异（2026-09-24 更新）**：以上双远程/`pushboth` 描述针对 **Windows 侧工作区**。本设备（Linux，`/home/bird/work/vbcd`）**只有 `origin` 一个远程且指向 camp 组织仓**（`git@github.com:XingHo-VibeCoding/vbcd.git`），无 `pushboth` 别名、无 `camp` 远程——**本设备只推 `origin`（=camp 仓）**，个人仓 `bird-z/vbcd` 的同步留给 Windows 侧处理。另：本设备连 github.com 的 SSH :22 与 `ssh.github.com:443` 均超时（网络屏蔽），HTTPS 正常。
   - 分支策略：**main 为唯一主线**（2026-09-18 将 buddy 分支合并回 main，两边历史已并入；2026-09-19 删除远程 buddy 分支，仓库只剩 main）。
   - 未来要试风险大的改动时，开临时分支，成功后再合回 main；不长期并列两条分支。
   - ⚠️ 网络：环境变量里的 `HTTP_PROXY`/`HTTPS_PROXY` 指向的端口已失效监听，直接推会报 **502** 或 `TLS handshake failed`；**直连 GitHub 正常**。推送一律加 `-c http.proxy= -c https.proxy=`（alias `pushboth` 已包含）；失败时报告，不反复重试。
