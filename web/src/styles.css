@@ -1,14 +1,64 @@
 :root {
+  /* ===== 颜色（Day 9 步骤 1：值不变，先把散落的内联色值收进 token）===== */
   --bg: #f7f7f5;
   --surface: #ffffff;
-  --border: #e3e2dd;
+  --surface-subtle: #fcfcfb; /* 预览面板底 */
+  --border: #cfcec6; /* Day 9 · P3：e3e2dd → 加深一档，卡片/输入框边界可辨 */
   --text: #2c2c2a;
-  --muted: #6b6a65;
+  --muted: #57564f; /* Day 9 · P3：6b6a65(5.4:1) → 57564f(7.37:1)，次要文字更深 */
   --accent: #185fa5;
+  --accent-hover: #14508a; /* Day 9 · P5：主按钮 hover 加深一档 */
+  --accent-soft: #eef2f7; /* 徽章底 */
+  --surface-hover: #f2f1ed; /* 幽灵按钮 hover 底 */
+  --disabled-bg: #57564f; /* Day 9 · P5：禁用态深灰底，白字 7.4:1（值同 muted 但语义独立）*/
+  --code-bg: #f0efeb; /* 行内 code 底 */
+  --pre-bg: #f4f3ef; /* pre / th 底 */
+  --danger-bg: #fdecea;
+  --danger-text: #b3261e;
+  --danger-border: #f5c6c2;
+  --text-on-accent: #ffffff; /* 强调色上的文字（按钮）*/
+
+  /* ===== 字号：7 档，关键相邻差 ≥2px（Day 9 · P1/P2）=====
+     正文基准 = --fs-3（15px）；12px 档取消（最小为 13px）。 */
+  --fs-1: 13px; /* 元信息 / 页脚 / 标签 / md code */
+  --fs-2: 14px; /* 提示 / 按钮 / 徽章 / 页签 / 表单标签 */
+  --fs-3: 15px; /* 正文基准 / md h3 */
+  --fs-4: 17px; /* 列表项标题 / md h2 */
+  --fs-5: 20px; /* 卡片标题 / md h1 */
+  --fs-6: 24px; /* 详情页标题 */
+  --fs-7: 28px; /* 页面主标题 */
+
+  /* ===== 圆角 ===== */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 10px;
+
+  /* ===== 间距：只取这 7 档（Day 9 · P4）=====
+     例外说明：badge / 行内 code 的「1px 纵向内衬」不受阶梯约束；
+     min-height、max-width 等尺寸类只要求是 4 的倍数。 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Day 9 · P5：统一键盘焦点环。之前全站没有任何 :focus-visible 样式，
+   Tab 键导航完全看不到焦点位置 */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+html,
+body {
+  overflow-x: clip; /* Day 9 · P5：横向滚动兜底 */
 }
 
 body {
@@ -16,98 +66,107 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  font-size: var(--fs-3); /* 正文基准 */
   line-height: 1.6;
+  /* Day 9 · P2：等宽数字，日期/时间戳纵向对位不抖 */
+  font-variant-numeric: tabular-nums;
 }
 
 .app {
   max-width: 760px;
   margin: 0 auto;
-  padding: 24px 16px 48px;
+  padding: var(--sp-5) var(--sp-4) var(--sp-7);
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: var(--fs-7);
+  font-weight: 600; /* Day 9 · P2：显式半粗，PingFang 用 Semibold、雅黑回退 Bold */
 }
 
 .subtitle {
-  margin: 4px 0 16px;
+  margin: var(--sp-1) 0 var(--sp-4);
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--fs-2);
 }
 
 .nav {
   display: flex;
-  gap: 12px;
-  padding-bottom: 12px;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
   border-bottom: 1px solid var(--border);
 }
 
 .nav a {
   color: var(--accent);
   text-decoration: none;
-  font-size: 15px;
+  font-size: var(--fs-3);
 }
 
 .app-main {
-  margin-top: 20px;
+  margin-top: var(--sp-5);
 }
 
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px 18px;
+  border-radius: var(--radius-lg);
+  /* Day 9 · P4：18px → 16px，卡片内容左基准由 34px 收敛到 32px */
+  padding: var(--sp-4);
 }
 
 .card h2 {
-  margin: 0 0 6px;
-  font-size: 18px;
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-5); /* Day 9 · P1：18 → 20px，区块标题上浮一档 */
+  font-weight: 600;
 }
 
 .hint {
   margin: 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--fs-2);
 }
 
 .app-footer {
-  margin-top: 32px;
+  margin-top: var(--sp-6);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-1); /* Day 9 · P1：12 → 13px，最小字号抬到 13 */
   text-align: center;
 }
 
 /* ===== Day 7 · 资料列表页 ===== */
 .toolbar {
   display: flex;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
 }
 
 .search-input {
   flex: 1;
-  padding: 9px 12px;
+  min-width: 0; /* Day 9 · P5：允许收缩，窄屏不顶破工具栏 */
+  /* Day 9 · P4：9px 12px → 12px，与同行的 select 拉齐文字左缩进 */
+  padding: var(--sp-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius);
+  font-size: var(--fs-2);
   background: var(--surface);
   color: var(--text);
 }
 
 .toolbar select {
-  padding: 9px 10px;
+  /* Day 9 · P4：9px 10px → 12px，消掉与搜索框的 2px 左缩进差 */
+  padding: var(--sp-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius);
+  font-size: var(--fs-2);
   background: var(--surface);
   color: var(--text);
 }
 
 .meta {
-  margin: 0 0 12px;
+  margin: 0 0 var(--sp-3);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--fs-1); /* 12 → 13px */
 }
 
 .note-list {
@@ -116,15 +175,15 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-3);
 }
 
 .note-item a {
   display: block;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3) var(--sp-4);
   text-decoration: none;
   color: var(--text);
 }
@@ -134,31 +193,35 @@ body {
 }
 
 .note-item-title {
-  font-size: 15px;
-  font-weight: 500;
-  margin-bottom: 4px;
+  /* Day 9 · P1：15 → 17px，与摘要（13px）拉开层级；字重在步骤 3 改 */
+  font-size: var(--fs-4);
+  /* Day 9 · P2：500 → 600。500 在微软雅黑（只有 400/700）下被回退成常规体，
+     标题失去加粗；600 在雅黑映射到 Bold、在 PingFang 映射到 Semibold */
+  font-weight: 600;
+  margin-bottom: var(--sp-1);
 }
 
 .note-item-excerpt {
   color: var(--muted);
-  font-size: 13px;
-  margin-bottom: 8px;
+  font-size: var(--fs-1);
+  margin-bottom: var(--sp-2);
 }
 
 .note-item-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sp-2);
   align-items: center;
-  font-size: 12px;
+  font-size: var(--fs-1); /* 12 → 13px */
   color: var(--muted);
 }
 
 .badge {
-  background: #eef2f7;
+  background: var(--accent-soft);
   color: var(--accent);
-  border-radius: 6px;
-  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  padding: 1px var(--sp-2); /* 例外：文字紧贴内衬 */
+  font-size: var(--fs-2);
 }
 
 .tag {
@@ -168,11 +231,11 @@ body {
 .empty {
   background: var(--surface);
   border: 1px dashed var(--border);
-  border-radius: 10px;
-  padding: 28px;
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--fs-2);
 }
 
 /* ===== Day 8 · 登录、登出、加载态 ===== */
@@ -181,9 +244,9 @@ body {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--muted);
-  border-radius: 8px;
-  padding: 2px 12px;
-  font-size: 13px;
+  border-radius: var(--radius);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-2); /* 13 → 14px */
   cursor: pointer;
 }
 
@@ -195,41 +258,64 @@ body {
 .loading {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 24px;
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--fs-2);
 }
 
 .login-card {
   max-width: 400px;
-  margin: 40px auto;
+  margin: var(--sp-6) auto;
 }
 
 .btn-primary:disabled {
-  opacity: 0.6;
+  /* Day 9 · P5：不再用 opacity(.6)（白字对比度仅约 3.4:1），
+     改用深灰底 + 白字 = 7.4:1，仍可读且 cursor 表明不可点 */
+  background: var(--disabled-bg);
   cursor: not-allowed;
+}
+
+/* ===== Day 9 · P5：补齐 hover（此前只有 note-item 与 logout 有）===== */
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-ghost:hover {
+  background: var(--surface-hover);
+  border-color: var(--muted);
+  color: var(--text);
+}
+
+.nav a:hover,
+.detail-back a:hover {
+  text-decoration: underline;
+}
+
+.tab:hover:not(.active) {
+  border-color: var(--muted);
+  color: var(--text);
 }
 
 /* ===== Day 7 · 录入页表单 ===== */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 12px;
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
 }
 
 .form label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
+  gap: var(--sp-2);
+  font-size: var(--fs-2);
 }
 
 .form-row {
   display: flex;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .form-row label {
@@ -239,10 +325,10 @@ body {
 .form input,
 .form select,
 .form textarea {
-  padding: 9px 12px;
+  padding: var(--sp-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius);
+  font-size: var(--fs-2);
   font-family: inherit;
   background: var(--surface);
   color: var(--text);
@@ -254,26 +340,26 @@ body {
 }
 
 .error-bar {
-  background: #fdecea;
-  color: #b3261e;
-  border: 1px solid #f5c6c2;
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 13px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+  padding: var(--sp-3);
+  font-size: var(--fs-2); /* 13 → 14px，错误信息不小一号 */
 }
 
 .form-actions {
   display: flex;
-  gap: 10px;
+  gap: var(--sp-3);
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   border: none;
-  border-radius: 8px;
-  padding: 9px 20px;
-  font-size: 14px;
+  border-radius: var(--radius);
+  padding: var(--sp-3) 20px;
+  font-size: var(--fs-2);
   cursor: pointer;
 }
 
@@ -281,24 +367,26 @@ body {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 9px 20px;
-  font-size: 14px;
+  border-radius: var(--radius);
+  padding: var(--sp-3) 20px;
+  font-size: var(--fs-2);
   cursor: pointer;
 }
 
 /* ===== Day 7 · 详情页 ===== */
 .detail-title {
-  margin: 0 0 8px;
-  font-size: 20px;
+  margin: 0 0 var(--sp-2);
+  /* Day 9 · P1：20 → 24px，与正文 md h1（20px）脱钩，页面标题与正文一级标题可区分 */
+  font-size: var(--fs-6);
+  font-weight: 600;
 }
 
 .detail-meta {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px 14px;
-  margin: 12px 0 16px;
-  font-size: 13px;
+  gap: var(--sp-1) var(--sp-3);
+  margin: var(--sp-3) 0 var(--sp-4);
+  font-size: var(--fs-1);
 }
 
 .detail-meta dt {
@@ -311,32 +399,32 @@ body {
 }
 
 .detail-meta code {
-  background: #f0efeb;
-  border-radius: 6px;
-  padding: 1px 6px;
-  font-size: 12px;
+  background: var(--code-bg);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px; /* 例外：文字紧贴内衬 */
+  font-size: var(--fs-1); /* 12 → 13px */
 }
 
 .detail-content {
   border-top: 1px solid var(--border);
-  padding-top: 12px;
-  font-size: 15px;
+  padding-top: var(--sp-3);
+  font-size: var(--fs-3);
   line-height: 1.7;
 }
 
 .detail-content p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--sp-2);
 }
 
 .detail-back a {
   color: var(--accent);
   text-decoration: none;
-  font-size: 14px;
+  font-size: var(--fs-2);
 }
 
 /* ===== Markdown 渲染排版（详情页与预览共用） ===== */
 .markdown-body {
-  font-size: 15px;
+  font-size: var(--fs-3);
   line-height: 1.75;
   word-wrap: break-word;
 }
@@ -349,29 +437,31 @@ body {
 .markdown-body h2,
 .markdown-body h3 {
   line-height: 1.4;
-  margin: 18px 0 8px;
+  margin: var(--sp-5) 0 var(--sp-2);
+  /* Day 9 · P2：统一 600。h3 与正文同为 15px，靠此字重与正文区分 */
+  font-weight: 600;
 }
 
 .markdown-body h1 {
-  font-size: 20px;
+  font-size: var(--fs-5); /* 20px，低于详情页标题 24px */
 }
 
 .markdown-body h2 {
-  font-size: 17px;
+  font-size: var(--fs-4);
 }
 
 .markdown-body h3 {
-  font-size: 15px;
+  font-size: var(--fs-3); /* 与正文同档，靠字重区分 */
 }
 
 .markdown-body ul,
 .markdown-body ol {
-  padding-left: 22px;
-  margin: 8px 0;
+  padding-left: var(--sp-5);
+  margin: var(--sp-2) 0;
 }
 
 .markdown-body li {
-  margin: 3px 0;
+  margin: var(--sp-1) 0;
 }
 
 .markdown-body a {
@@ -379,73 +469,73 @@ body {
 }
 
 .markdown-body code {
-  background: #f0efeb;
-  border-radius: 6px;
-  padding: 1px 6px;
-  font-size: 13px;
+  background: var(--code-bg);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px; /* 例外：文字紧贴内衬 */
+  font-size: var(--fs-1);
 }
 
 .markdown-body pre {
-  background: #f4f3ef;
+  background: var(--pre-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: var(--radius);
+  padding: var(--sp-3);
   overflow-x: auto;
 }
 
 .markdown-body pre code {
   background: transparent;
   padding: 0;
-  font-size: 13px;
+  font-size: var(--fs-1);
 }
 
 .markdown-body blockquote {
-  margin: 10px 0;
-  padding: 4px 12px;
+  margin: var(--sp-3) 0;
+  padding: var(--sp-1) var(--sp-3);
   border-left: 3px solid var(--border);
   color: var(--muted);
 }
 
 .markdown-body table {
   border-collapse: collapse;
-  margin: 10px 0;
-  font-size: 14px;
+  margin: var(--sp-3) 0;
+  font-size: var(--fs-2);
 }
 
 .markdown-body th,
 .markdown-body td {
   border: 1px solid var(--border);
-  padding: 6px 10px;
+  padding: var(--sp-2) var(--sp-3);
 }
 
 .markdown-body th {
-  background: #f4f3ef;
+  background: var(--pre-bg);
 }
 
 .markdown-body hr {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 16px 0;
+  margin: var(--sp-4) 0;
 }
 
 .md-empty {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--fs-1);
 }
 
 /* ===== 录入页：实时预览（桌面分栏 / 窄屏页签） ===== */
 .editor-block {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
 .editor-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  font-size: 14px;
+  gap: var(--sp-3);
+  font-size: var(--fs-2);
 }
 
 .editor-label {
@@ -454,7 +544,7 @@ body {
 
 .editor-split {
   display: flex;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
 .editor-split .pane-editor,
@@ -464,10 +554,10 @@ body {
 }
 
 .editor-split .pane-editor {
-  padding: 10px 12px;
+  padding: var(--sp-3);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius);
+  font-size: var(--fs-2);
   font-family: inherit;
   line-height: 1.6;
   min-height: 260px;
@@ -477,25 +567,25 @@ body {
 }
 
 .editor-split .pane-preview {
-  padding: 10px 14px;
+  padding: var(--sp-3);
   border: 1px dashed var(--border);
-  border-radius: 8px;
-  background: #fcfcfb;
+  border-radius: var(--radius);
+  background: var(--surface-subtle);
   min-height: 260px;
 }
 
 .tabs-mobile {
   display: none;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
 .tab {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--muted);
-  border-radius: 8px;
-  padding: 4px 12px;
-  font-size: 13px;
+  border-radius: var(--radius);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-2); /* 13 → 14px */
   cursor: pointer;
 }
 
@@ -506,6 +596,34 @@ body {
 
 /* 窄屏（手机）：分栏改为"编辑 / 预览"页签，一次只看一边 */
 @media (max-width: 720px) {
+  /* Day 9 · P5：触控目标 ≥44px */
+  .btn-primary,
+  .btn-ghost,
+  .nav .logout,
+  .tab,
+  .note-item a {
+    min-height: 44px;
+  }
+
+  /* Day 9 · P5：输入字号提到 16px，防 iOS Safari 聚焦时自动缩放页面 */
+  .search-input,
+  .toolbar select,
+  .form input,
+  .form select,
+  .form textarea,
+  .editor-split .pane-editor {
+    font-size: 16px;
+  }
+
+  /* Day 9 · P5：日期/分类两列在窄屏允许换行，不再被挤扁 */
+  .form-row {
+    flex-wrap: wrap;
+  }
+
+  .form-row label {
+    flex: 1 1 140px;
+  }
+
   .tabs-mobile {
     display: flex;
   }
@@ -520,5 +638,12 @@ body {
 
   .editor-split[data-mode='preview'] .pane-editor {
     display: none;
+  }
+}
+
+/* Day 9 · P5：超窄屏工具栏允许换行（搜索框一行、筛选一行） */
+@media (max-width: 480px) {
+  .toolbar {
+    flex-wrap: wrap;
   }
 }
