@@ -199,6 +199,62 @@ curl -N "http://localhost:3000/api/kb/stream?q=WSL"
 | 换 Embedding 模型后检索全乱 | 向量维度变了 | 删 Chroma collection 与 `data/.kb-manifest.json`，重跑 `/api/kb/index` |
 | Chroma 裸奔在公网 | 没配认证 | 设 `CHROMA_SERVER_AUTHN_CREDENTIALS` + `.env` 的 `CHROMA_AUTH_TOKEN`，或安全组只放后端 IP |
 
+### 8.7 Docker 部署（Nginx + 后端 + Chroma）
+
+> 2026-09-25 在开发机（原生 Ubuntu）**彩排实测通过**。彩排与上线用**同一份** `docker-compose.yml`。
+
+**跑起来**：
+
+```bash
+cd /home/bird/work/vbcd
+docker compose up -d --build     # 首次构建镜像；之后改动只需再跑一次
+docker compose ps                # 三个服务：web(发 80) / server(仅内网 3000) / chroma(仅内网 8000)
+```
+
+访问 **http://localhost/**（前端静态站 + `/api` 反代，同源，Cookie 零配置）。
+后端 3000 与 Chroma 8000 **都不对宿主机发端口**，Chroma 因此永远不会裸奔公网。
+
+**镜像从哪来**（Docker Hub 直连不通时；不改 `daemon.json` 的办法）：
+
+```bash
+docker pull docker.m.daocloud.io/library/node:22-alpine && docker tag docker.m.daocloud.io/library/node:22-alpine node:22-alpine
+docker pull docker.m.daocloud.io/library/nginx:alpine && docker tag docker.m.daocloud.io/library/nginx:alpine nginx:alpine
+docker pull docker.m.daocloud.io/chromadb/chroma:latest && docker tag docker.m.daocloud.io/chromadb/chroma:latest chromadb/chroma:latest
+```
+
+| 镜像站（2026-09-25 实测可达） | 备注 |
+|---|---|
+| `docker.m.daocloud.io` | 本文示例用它 |
+| `docker.1ms.run` / `hub.rat.dev` | 备选 |
+| `registry.cn-hangzhou.aliyuncs.com` | 需带命名空间路径 |
+
+**验证清单（逐条能看到结果）**：
+
+```bash
+docker compose ps                                           # 三个 Up，server 应为 (healthy)
+curl -s http://localhost/api/health                         # {"ok":true,...}
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/ask   # 200（SPA 回退生效）
+curl -sN 'http://localhost/api/kb/stream?q=test'            # 未配 key 时应立刻回 event: error
+ls data/work/                                               # 在页面上新建资料后，这里能看到新 .md
+```
+
+**实测已确认**（2026-09-25）：容器写盘落到宿主机且属主为 `bird`（容器内 `uid=1000(node)`）；`./data` 与 `vbcd_chroma-data` 两个卷**整栈 `down`→`up` 后数据仍在**；Chroma JS 客户端 `3.5.0` 与服务器 `1.4.4` **兼容**。
+
+**踩过的坑（都是实测发现，改配置时别把这几条删了）**：
+
+| 现象 | 原因 | 现状 |
+|---|---|---|
+| 刷新 `/ask`、`/notes/xxx` 变 404 | 前端是单页路由，Nginx 默认找不到文件就 404 | `web/nginx.conf` 已配 `try_files $uri /index.html` |
+| 流式回答不逐字，卡一下全出来 | Nginx 缓冲了 SSE | 已对 `/api/kb/stream` 单独关 `proxy_buffering` |
+| 模型端点挂掉时要等 **60 秒**才回，且是 Nginx 的英文 504 页 | OpenAI SDK 默认超时 600s + 重试 2 次，超过 Nginx 的 `proxy_read_timeout 60s` | 已设 `LLM_TIMEOUT_MS=30000`（< 60s）+ `LLM_MAX_RETRIES=1`，修后 **1.8 秒**返回中文 `LLM_FAILED` |
+| 彩排时开了 `AUTH_ENABLED` 登录不了 | `NODE_ENV=production` 让 Cookie 带 `Secure`，而彩排走的是 HTTP | 彩排期间别开；上线用上 HTTPS 后正常 |
+| 宿主机 80 端口被别的服务占用 | — | 改 compose 的 `ports`（如 `"8080:80"`） |
+| Chroma 数据存哪 | 命名卷，不在仓库里 | 实测镜像 `1.4.4` 的 `persist_path` 是 **`/data`**（不是 `/chroma/chroma`），已挂 `vbcd_chroma-data` |
+| 换 Embedding 模型后检索全乱 | 向量语义变了，但文档 hash 未变 → 不会重建 | 删 Chroma collection `buddy-notes` 与 `data/.kb-manifest.json`，再跑 `/api/kb/index` |
+| `docker` 报 `permission denied` | 当前用户不在 `docker` 组 | 永久：`sudo usermod -aG docker $USER` 后重新登录；临时：`sudo setfacl -m u:$USER:rw /var/run/docker.sock`（docker 服务重启后失效，需重跑） |
+
+**上线到服务器还差三步**（现只开了 80）：① 阿里云安全组放行 **443**；② 域名 A 记录指向服务器 IP；③ 加 `certbot` 证书段。
+
 ## 9. 用 Obsidian 查看资料（F1 的「能看到文件」）
 
 buddy 的资料就是 Markdown 文件，Obsidian 能直接当笔记打开、编辑。开发机上的做法：把项目 `data/` 目录用**符号链接**挂进你的 Obsidian 仓库。
