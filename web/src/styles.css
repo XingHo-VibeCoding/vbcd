@@ -238,6 +238,98 @@ body {
   font-size: var(--fs-2);
 }
 
+/* ===== Day 10 · 目录分组文件列表 ===== */
+/* 工具栏右侧的「卡片 / 目录」切换；toolbar 在 480px 以下折行时靠右对齐 */
+.view-switch {
+  display: flex;
+  gap: var(--sp-1);
+  margin-left: auto;
+  align-self: center;
+}
+
+.view-switch button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-2);
+  cursor: pointer;
+}
+
+.view-switch button:hover:not(.active) {
+  background: var(--surface-hover);
+  border-color: var(--muted);
+  color: var(--text);
+}
+
+.view-switch button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.file-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.file-group-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-2); /* 组头是元信息，压过卡片标题一档 */
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1); /* 行间距比卡片紧，贴近文件列表观感 */
+}
+
+.file-item a {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap; /* 窄屏允许行内元素折行 */
+  gap: var(--sp-1) var(--sp-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-3);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.file-item a:hover {
+  border-color: var(--accent);
+}
+
+.file-name {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: var(--fs-1);
+  color: var(--muted);
+  word-break: break-all; /* 超长文件名在窄屏不断行撑破 */
+}
+
+.file-item-title {
+  font-size: var(--fs-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.file-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+
 /* ===== Day 8 · 登录、登出、加载态 ===== */
 .nav .logout {
   margin-left: auto;
@@ -601,7 +693,9 @@ body {
   .btn-ghost,
   .nav .logout,
   .tab,
-  .note-item a {
+  .view-switch button,
+  .note-item a,
+  .file-item a {
     min-height: 44px;
   }
 

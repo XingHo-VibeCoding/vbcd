@@ -100,6 +100,7 @@
 - **F9 知识库问答（2026-09-25，RAG MVP）**：✅ 后端三接口 `/api/kb/query|stream|index`（LangChain.js 编排 + chromadb 官方客户端直连——未引 `@langchain/community`，其 peer 依赖与 dotenv@18 冲突）；✅ 中文优先切分 500/50、Chroma collection `buddy-notes`、增量清单 `data/.kb-manifest.json`；✅ SSE 事件流（sources → token×N → done/error）；✅ 前端 `/ask` 问答页（打字机 + 来源可跳原文）；✅ 文档同步：PRD v1.3（F9 + 验收 6 条）/ SPEC（接口升至 11 个 + 3.1 小节 + 错误码 +3 + env 组）/ TECH_DESIGN v1.2（选型 +3 + RAG 数据流图）/ RUN.md 8.6；⚠️ **未端到端实测**：需 `OPENAI_API_KEY` + 可达的 Chroma 才能真跑（未配置时返回 `KB_NOT_CONFIGURED` 已实测）；Chroma 部署与安全组属运维动作，待用户确认。✅ 两个 commit（`7e7052c` feat + `241404b` docs）**已推送 `origin`（=camp 仓）**。
 - **云端部署方案（2026-09-25 定）**：采用**单机 Docker Compose**（Nginx + buddy-server + Chroma 内网 + 可选 Gitea），部署在既有海外 ECS `47.85.210.76`；训练营**不强制** CloudBase，故不走 CloudBase。前端 `web/dist` 由同一 Nginx 托管（同源，HttpOnly Cookie 零配置）；Chroma **不发布端口**、只走 compose 内网，从根上避免向量库裸奔公网。待办：① 安全组放行 443（当前 80/443 未开）；② 确认域名 A 记录是否指向该 IP；③ 服务器侧配镜像加速器（本机暂不配）；④ 本机 docker 加组后做一次彩排。
 - **Day 9（2026-09-24）**：✅ 按设计规则审查前端 `web/src/styles.css` 六个维度并修 5 处（CSS-only、功能零改动）：① P4 间距/对齐——卡片与列表项左基准差 2px 归零、搜索框与下拉框左缩进差 2px 归零、建 `--sp-1..7` 间距/圆角阶梯并全部归位（44 处）；② P1 信息层级——详情页标题 20→24px 与正文 h1 脱钩、建 `--fs-1..7` 字号阶梯（13–28px）、取消 12px 档；③ P2 字体——`font-weight:500` 虚标修正为 600（微软雅黑无 500 档）、`tabular-nums` 等宽数字；④ P3 颜色——`--muted` 5.4:1→7.37:1（AAA）、`--border` 加深一档；⑤ P5 状态+移动端——补 `:focus-visible` 焦点环与全量 hover、disabled 3.4:1→7.4:1、触控目标≥44px、16px 输入防 iOS 缩放、480px 工具栏换行。✅ `npm run build` 通过；前后对照截图用 `git stash` 切换同取景采集；Tab 焦点/disabled/375px 移动模拟手测。
+- **Day 10（2026-09-25）**：✅ 资料列表页新增「按目录分组」文件列表视图——工具栏右侧「卡片 / 目录」切换（`aria-pressed` 按钮组），选择记 `?view=dir`（刷新/前进后退保持）；目录视图按 `data/<目录>/` 分组（学习→生活→事务→其余按字母序），行内为等宽文件名 + 标题 + 日期 + 标签；复用后端已返回的 `path` 字段，后端 0 行改动；新增 `web/src/components/NoteFileList.jsx` 纯渲染组件，搜索与分类筛选对两种视图同时生效；✅ `npm run build` 通过。
 
 ## 5. buddy 项目规则（产品行为的铁律）
 
@@ -184,7 +185,7 @@
 
 ## 9. AI 运行纪律（2026-09-25 由使用者追加 · 与上文冲突时以本节为准）
 
-1. **默认不调用视觉模型检查渲染结果**：唯一例外是 `compile`——允许对可视绘图板的**离线栅格化结果**做视觉检查和迭代。`compile` 以外的视觉效果默认视为正确，由使用者发现问题后要求修复。
+1. **默认不调用视觉模型检查渲染结果**：仅两处例外——① `compile`：允许对可视绘图板的**离线栅格化结果**做视觉检查和迭代；② **使用者主动发图**要求查看时，允许读图。除这两类外，视觉效果默认视为正确，由使用者发现问题后要求修复。
 2. **不调用任何浏览器工具**。
 3. **功能性需求直接用 API 实现**，不绕界面走。并行任务可以存在、彼此不冲突，提交时留意它们即可。
 4. **提交纪律**：实现时小步提交；commit message 用**英文一行**；保持**线性提交历史**；远端有新提交时先 `rebase`。

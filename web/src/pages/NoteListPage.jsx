@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { listNotes } from '../api/notes'
+import NoteFileList from '../components/NoteFileList.jsx'
 
 const CATEGORIES = [
   { value: '', label: '全部' },
@@ -22,6 +23,10 @@ export default function NoteListPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const debounceRef = useRef(null)
+  // Day 10 · 视图切换：?view=dir 为目录分组视图，其余（含无参数）一律卡片视图。
+  // 写进地址栏而不是 state/localStorage——刷新、前进后退、把链接发给手机都能保持视图。
+  const [searchParams, setSearchParams] = useSearchParams()
+  const isDirView = searchParams.get('view') === 'dir'
 
   // 搜索 250ms 防抖；分类变化立即重新请求（F3：打开/输入即刷新）
   useEffect(() => {
@@ -62,6 +67,24 @@ export default function NoteListPage() {
             </option>
           ))}
         </select>
+        <div className="view-switch" role="group" aria-label="列表视图">
+          <button
+            type="button"
+            aria-pressed={!isDirView}
+            className={isDirView ? '' : 'active'}
+            onClick={() => setSearchParams({})}
+          >
+            卡片
+          </button>
+          <button
+            type="button"
+            aria-pressed={isDirView}
+            className={isDirView ? 'active' : ''}
+            onClick={() => setSearchParams({ view: 'dir' })}
+          >
+            目录
+          </button>
+        </div>
       </div>
 
       <p className="meta">
@@ -74,6 +97,9 @@ export default function NoteListPage() {
         <div className="loading">载入中…</div>
       ) : total === 0 ? (
         <div className="empty">没有找到{error ? '' : '，去「新建资料」记一条吧'}</div>
+      ) : isDirView ? (
+        // 目录视图与卡片视图共用同一份过滤结果（items），筛选行为完全一致
+        <NoteFileList items={items} />
       ) : (
         <ul className="note-list">
           {items.map((n) => (
