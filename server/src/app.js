@@ -7,6 +7,7 @@ import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import notesRouter from './routes/notes.js'
 import kbRouter from './routes/kb.js'
+import meRouter from './routes/me.js'
 
 export function createApp() {
   const app = express()
@@ -25,6 +26,7 @@ export function createApp() {
   app.use('/api', authRouter)
   app.use('/api/notes', requireAuth, notesRouter)
   app.use('/api/kb', requireAuth, kbRouter)
+  app.use('/api/me', requireAuth, meRouter)
 
   // 兜底：找不到的路由返回统一的 404
   app.use(notFound)
