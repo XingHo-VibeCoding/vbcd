@@ -97,7 +97,8 @@
 - **Day 8 前预做（2026-09-22）**：✅ 数据目录 `data/`：`.gitignore` 补根锚定 `/data/` 规则，4 条种子迁成真 Markdown（frontmatter + SHA-256）；✅ 后端存储适配层 `server/src/storage/files.js`（`list/get/put/remove/sync`）+ 资料业务 `services/notes.js`（校验/查重/slug/原子写入，绝不覆盖）；✅ 资料三接口 `POST/GET /api/notes`、`GET /api/notes/:id`，`requireAuth` 挂载生效，索引缓存 `data/.index.json`（指纹 + 全文检索 + `INDEX_CACHE=0` 可关）；✅ `server/scripts/smoke.mjs` 12/12 端到端实测通过（临时口令 + 临时目录，未碰真实口令）；✅ 前端接入后端：登录页 `/login`、`api/client.js` 统一请求、三页改异步、`vite` 代理 `/api`，删除 localStorage 与种子文件；✅ RUN.md 补后端运行与 Obsidian 展示说明；✅ 文档口径 `memory/` → `data/` 同步；✅ 浏览器登录实测通过。
 - **隐私模块调整（2026-09-23）**：登录/鉴权从「默认必开」改为「隐私模块默认关闭」——站点默认公开免登录，设 `AUTH_ENABLED=1` 才启用；保留登录代码骨架（不删）；SPEC/RUN/PRD/research 口径同步；smoke 改为按 `auth_enabled` 自适应（公开 8/8、隐私 12/12）。
 - **Day 8**：待任务清单（清单到手后再补计划，不提前预设）。
-- **F9 知识库问答（2026-09-25，RAG MVP）**：✅ 后端三接口 `/api/kb/query|stream|index`（LangChain.js 编排 + chromadb 官方客户端直连——未引 `@langchain/community`，其 peer 依赖与 dotenv@18 冲突）；✅ 中文优先切分 500/50、Chroma collection `buddy-notes`、增量清单 `data/.kb-manifest.json`；✅ SSE 事件流（sources → token×N → done/error）；✅ 前端 `/ask` 问答页（打字机 + 来源可跳原文）；✅ 文档同步：PRD v1.3（F9 + 验收 6 条）/ SPEC（接口升至 11 个 + 3.1 小节 + 错误码 +3 + env 组）/ TECH_DESIGN v1.2（选型 +3 + RAG 数据流图）/ RUN.md 8.6；⚠️ **未端到端实测**：需 `OPENAI_API_KEY` + 可达的 Chroma 才能真跑（未配置时返回 `KB_NOT_CONFIGURED` 已实测）；Chroma 部署与安全组属运维动作，待用户确认。
+- **F9 知识库问答（2026-09-25，RAG MVP）**：✅ 后端三接口 `/api/kb/query|stream|index`（LangChain.js 编排 + chromadb 官方客户端直连——未引 `@langchain/community`，其 peer 依赖与 dotenv@18 冲突）；✅ 中文优先切分 500/50、Chroma collection `buddy-notes`、增量清单 `data/.kb-manifest.json`；✅ SSE 事件流（sources → token×N → done/error）；✅ 前端 `/ask` 问答页（打字机 + 来源可跳原文）；✅ 文档同步：PRD v1.3（F9 + 验收 6 条）/ SPEC（接口升至 11 个 + 3.1 小节 + 错误码 +3 + env 组）/ TECH_DESIGN v1.2（选型 +3 + RAG 数据流图）/ RUN.md 8.6；⚠️ **未端到端实测**：需 `OPENAI_API_KEY` + 可达的 Chroma 才能真跑（未配置时返回 `KB_NOT_CONFIGURED` 已实测）；Chroma 部署与安全组属运维动作，待用户确认。✅ 两个 commit（`7e7052c` feat + `241404b` docs）**已推送 `origin`（=camp 仓）**。
+- **云端部署方案（2026-09-25 定）**：采用**单机 Docker Compose**（Nginx + buddy-server + Chroma 内网 + 可选 Gitea），部署在既有海外 ECS `47.85.210.76`；训练营**不强制** CloudBase，故不走 CloudBase。前端 `web/dist` 由同一 Nginx 托管（同源，HttpOnly Cookie 零配置）；Chroma **不发布端口**、只走 compose 内网，从根上避免向量库裸奔公网。待办：① 安全组放行 443（当前 80/443 未开）；② 确认域名 A 记录是否指向该 IP；③ 服务器侧配镜像加速器（本机暂不配）；④ 本机 docker 加组后做一次彩排。
 - **Day 9（2026-09-24）**：✅ 按设计规则审查前端 `web/src/styles.css` 六个维度并修 5 处（CSS-only、功能零改动）：① P4 间距/对齐——卡片与列表项左基准差 2px 归零、搜索框与下拉框左缩进差 2px 归零、建 `--sp-1..7` 间距/圆角阶梯并全部归位（44 处）；② P1 信息层级——详情页标题 20→24px 与正文 h1 脱钩、建 `--fs-1..7` 字号阶梯（13–28px）、取消 12px 档；③ P2 字体——`font-weight:500` 虚标修正为 600（微软雅黑无 500 档）、`tabular-nums` 等宽数字；④ P3 颜色——`--muted` 5.4:1→7.37:1（AAA）、`--border` 加深一档；⑤ P5 状态+移动端——补 `:focus-visible` 焦点环与全量 hover、disabled 3.4:1→7.4:1、触控目标≥44px、16px 输入防 iOS 缩放、480px 工具栏换行。✅ `npm run build` 通过；前后对照截图用 `git stash` 切换同取景采集；Tab 焦点/disabled/375px 移动模拟手测。
 
 ## 5. buddy 项目规则（产品行为的铁律）
@@ -121,22 +122,33 @@
 
 - 语言：简体中文交流。
 - 运行环境：Windows 11 + WorkBuddy（内置 Node 22 / Python 3.13）。
-- **本机 WSL（2026-09-19 实测可用，已解除程序黑名单）**：
+- **Windows 侧机器 · WSL（2026-09-19 实测可用，已解除程序黑名单）**：
+  - ⚠️ 本块描述的是 **Windows 那台机器**；与下方「本设备 · 原生 Ubuntu」是**两台独立机器**，不要混用。
   - 发行版 **Debian 13 (trixie)**，WSL **版本 2**，`/etc/wsl.conf` 已启用 **systemd**；
   - 内含 **Node v20.19.2 + npm 9.2.0**（apt 官方源）与 **Docker 26.1.5 + Compose 2.26.1**（`docker` 免 sudo，服务 `active`/`enabled`）；
   - Windows 磁盘挂载点：`C:\ → /mnt/c`、`E:\ → /mnt/e`（可读写，项目目录即 `/mnt/e/github/vbcd`）；
   - ⚠️ **Docker Hub 不可达**（`registry-1.docker.io` 超时）→ 拉镜像前需在 `/etc/docker/daemon.json` 配置国内镜像加速器（如阿里云 ACR 个人版专属地址）；配好后 `sudo systemctl restart docker`；
   - ⚠️ 跨文件系统 I/O 较慢：代码放 `/mnt/e` 用 Windows 编辑器改，**装依赖/构建尽量放 WSL 内部目录**（如 `~/build`）执行；
-  - **分工约定**：日常开发调试用 Windows 侧 Node 22；**部署彩排（Nginx / 容器 / 证书）在 WSL 里做**，两者不要混用同一个 `node_modules`。
+  - **分工约定**：日常开发调试用 Windows 侧 Node 22；~~部署彩排（Nginx / 容器 / 证书）在 WSL 里做~~（**2026-09-25 修订：彩排改到本设备做**，见下条），两者不要混用同一个 `node_modules`。
+- **本设备 · 原生 Ubuntu（2026-09-25 实测；⚠️ 不是 WSL）**：
+  - 项目目录 `/home/bird/work/vbcd`；发行版 **Ubuntu 26.04.1 LTS**（Resolute Raccoon），内核 `7.0.0-31-generic`，主机名 `BL`；
+  - **判定依据**：无 `/mnt/c`、`/mnt/e`，无 `/etc/wsl.conf`，无 `WSLInterop`，无 `WSL*` 环境变量 → 原生 Ubuntu，**不是 WSL**；
+  - 硬件：**16 核 / 30 GiB 内存 / 397G NVMe**（剩 208G）；
+  - 工具链：**Node v24.15.0 + npm 11.12.1**、**Docker 29.8.0 + Compose v5.5.1**、git 2.53.0、Python 3.13.13、curl 8.18.0；systemd running，`docker` 服务 `active`/`enabled`；
+  - ⚠️ **`bird` 不在 `docker` 组**（组 gid 973 存在），且 `sudo` 需要密码（`sudo -n` 不可用）→ **AI 无法直接执行 docker 命令**；2026-09-25 使用者已授权加组，待其自行执行 `sudo usermod -aG docker bird` 并重新登录后生效；
+  - ⚠️ **Docker Hub 不可达**（`registry-1.docker.io:443` 不通），且**未配镜像加速器**（无 `/etc/docker/daemon.json`）→ 本机 `docker pull` 会失败；**2026-09-25 决定暂不配加速器**，本机彩排只能用已有本地镜像，或改用带镜像地址的完整镜像名（如 `docker.m.daocloud.io/library/node:24-alpine`，无需改 daemon.json）；
+  - 网络：WiFi 内网 `192.168.1.62`（NAT 后，**不是公网服务器**，对外服务仍用 ECS `47.85.210.76`）；
+  - 未装 `nginx` / `certbot` / `caddy`（彩排需另装或用容器）；
+  - **分工约定（2026-09-25 修订）**：部署彩排（Nginx / 容器 / 证书）在**本设备**做（16 核 / 30G 足够）。
 - 后端与数据库：第 3 周起使用 CloudBase（手册附录 M 有指导）。
 - 版本管理：Git + GitHub，**双远程**（主干 **main**）：
   - `origin` → https://github.com/bird-z/vbcd （个人公开仓）
   - `camp` → https://github.com/XingHo-VibeCoding/vbcd （组织公开仓，2026-09-19 起启用）
   - 推送：两个仓库都要推，保持 HEAD 一致；已配 alias `git pushboth`（内含绕过失效代理的参数）
-  - ⚠️ **设备差异（2026-09-24 更新）**：以上双远程/`pushboth` 描述针对 **Windows 侧工作区**。本设备（Linux，`/home/bird/work/vbcd`）**只有 `origin` 一个远程且指向 camp 组织仓**（`git@github.com:XingHo-VibeCoding/vbcd.git`），无 `pushboth` 别名、无 `camp` 远程——**本设备只推 `origin`（=camp 仓）**，个人仓 `bird-z/vbcd` 的同步留给 Windows 侧处理。另：本设备连 github.com 的 SSH :22 与 `ssh.github.com:443` 均超时（网络屏蔽），HTTPS 正常。
+  - ⚠️ **设备差异（2026-09-24 更新）**：以上双远程/`pushboth` 描述针对 **Windows 侧工作区**。本设备（Linux，`/home/bird/work/vbcd`）**只有 `origin` 一个远程且指向 camp 组织仓**（`git@github.com:XingHo-VibeCoding/vbcd.git`），无 `pushboth` 别名、无 `camp` 远程——**本设备只推 `origin`（=camp 仓）**，个人仓 `bird-z/vbcd` 的同步留给 Windows 侧处理。另：**网络结论已于 2026-09-25 重新实测并修订**——本设备 `github.com:22`（SSH）**可用**，且推送成功（`321e456..241404b`）；`github.com:443`（HTTPS）与 `ssh.github.com:443` **不通**（与 2026-09-24 记录的「SSH 超时、HTTPS 正常」**正好相反**）。偶发 `Connection closed by ... port 22` 属瞬时故障，**重试即可**。环境详情见本节「本设备 · 原生 Ubuntu」。
   - 分支策略：**main 为唯一主线**（2026-09-18 将 buddy 分支合并回 main，两边历史已并入；2026-09-19 删除远程 buddy 分支，仓库只剩 main）。
   - 未来要试风险大的改动时，开临时分支，成功后再合回 main；不长期并列两条分支。
-  - ⚠️ 网络：环境变量里的 `HTTP_PROXY`/`HTTPS_PROXY` 指向的端口已失效监听，直接推会报 **502** 或 `TLS handshake failed`；**直连 GitHub 正常**。推送一律加 `-c http.proxy= -c https.proxy=`（alias `pushboth` 已包含）；失败时报告，不反复重试。
+  - ⚠️ 网络（**Windows 侧**）：环境变量里的 `HTTP_PROXY`/`HTTPS_PROXY` 指向的端口已失效监听，直接推会报 **502** 或 `TLS handshake failed`；**直连 GitHub 正常**。推送一律加 `-c http.proxy= -c https.proxy=`（alias `pushboth` 已包含）；失败时报告，不反复重试。本设备无代理变量，该参数无害可继续带。
 
 ## 8. 训练营红线（提醒用途）
 
