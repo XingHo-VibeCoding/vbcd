@@ -11,6 +11,12 @@ function env(name, fallback = '') {
   return String(process.env[name] ?? fallback).trim()
 }
 
+// 超时/重试必须显式设定：OpenAI SDK 默认超时 600 秒 + 重试 2 次，
+// 端点不可达时会挂到 Nginx 的 proxy_read_timeout（60 秒）先返回 504 英文页，
+// 用户就看不到我们统一的中文错误了。默认 30 秒 < Nginx 60 秒，保证应用侧先失败。
+const TIMEOUT_MS = Number(env('LLM_TIMEOUT_MS', '30000'))
+const MAX_RETRIES = Number(env('LLM_MAX_RETRIES', '1'))
+
 /** 未配置 key 时不让进程崩溃，只在真正调用时给出中文错误（路由会转成统一错误响应） */
 export function kbConfigured() {
   return Boolean(env('OPENAI_API_KEY') && env('CHROMA_URL'))
@@ -26,6 +32,8 @@ export function getChatModel() {
       model: env('LLM_MODEL', 'gpt-4o-mini'),
       apiKey: env('OPENAI_API_KEY'),
       streaming: true,
+      timeout: TIMEOUT_MS,
+      maxRetries: MAX_RETRIES,
       configuration: { baseURL: env('OPENAI_BASE_URL', 'https://api.openai.com/v1') },
     })
   }
@@ -42,6 +50,8 @@ export function getEmbeddings() {
     embedModel = new OpenAIEmbeddings({
       model: env('EMBED_MODEL', 'text-embedding-3-small'),
       apiKey,
+      timeout: TIMEOUT_MS,
+      maxRetries: MAX_RETRIES,
       configuration: {
         baseURL: env('EMBED_BASE_URL') || env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
       },

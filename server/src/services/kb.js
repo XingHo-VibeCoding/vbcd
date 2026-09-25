@@ -86,7 +86,21 @@ function chromaError(err) {
 
 function llmError(err) {
   if (err?.code) return err
-  return fail('LLM_FAILED', `模型服务异常：${err.message}`, 503)
+  const status = err?.status ?? err?.response?.status
+  const raw = String(err?.message || '未知错误')
+  if (status === 401 || status === 403) {
+    return fail('LLM_FAILED', '模型服务鉴权失败：请检查 OPENAI_API_KEY 是否有效', 503)
+  }
+  if (status === 404) {
+    return fail('LLM_FAILED', `模型或接口路径不存在：请检查 LLM_MODEL / EMBED_MODEL 与 OPENAI_BASE_URL（原始：${raw}）`, 503)
+  }
+  if (status === 429) {
+    return fail('LLM_FAILED', '模型服务限流或额度不足，请稍后重试', 503)
+  }
+  if (/connection error|fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|timeout/i.test(raw)) {
+    return fail('LLM_FAILED', '连不上模型服务：请检查 OPENAI_BASE_URL 与网络是否可达', 503)
+  }
+  return fail('LLM_FAILED', `模型服务异常：${raw}`, 503)
 }
 
 // ---------- 索引 ----------
