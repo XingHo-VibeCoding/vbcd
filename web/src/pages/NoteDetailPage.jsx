@@ -28,6 +28,7 @@ export default function NoteDetailPage() {
         if (!alive) return
         if (err.code === 'AUTH_REQUIRED') {
           navigate(`/login?from=/notes/${encodeURIComponent(id)}`, { replace: true })
+          // 列表页已挪到 /notes（个人主页占用了 /）
         } else {
           setError(err.message || '加载失败')
         }
@@ -47,7 +48,7 @@ export default function NoteDetailPage() {
       <div className="empty">
         {error}
         <br />
-        <Link to="/">返回列表</Link>
+        <Link to="/notes">返回列表</Link>
       </div>
     )
   }
@@ -55,7 +56,7 @@ export default function NoteDetailPage() {
   if (!note) {
     return (
       <div className="empty">
-        没有找到这条资料。<Link to="/">返回列表</Link>
+        没有找到这条资料。<Link to="/notes">返回列表</Link>
       </div>
     )
   }
@@ -101,7 +102,7 @@ export default function NoteDetailPage() {
       </div>
 
       <p className="detail-back">
-        <Link to="/">← 返回列表</Link>
+        <Link to="/notes">← 返回列表</Link>
       </p>
     </article>
   )

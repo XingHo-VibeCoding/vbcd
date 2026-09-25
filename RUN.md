@@ -48,6 +48,7 @@ npm run dev        # 监听 :5173，/api 自动代理到 :3000
 - **资料根目录**：项目 `data/`，按分类（`learning` / `life` / `work`）分子目录，每条一个 `.md`（frontmatter + 正文）；
 - **示例**：`data/` 里预置 4 条（Day 8 迁入）；
 - **索引缓存**：`data/.index.json`（派生数据，删了下次重建，不丢资料）；
+- **个人主页数据**：`data/profile.md`（frontmatter：`nickname` / `avatar` / `bio`）与 `data/schedule.md`（每行 `- YYYY-MM-DD [HH:mm] 事项`），放 `data/` 根级、不进资料索引；改完刷新 `http://localhost:5173/` 即可看到；
 - ⚠️ `data/` **不进公开仓**（`.gitignore` 已排除）：换电脑/重新 `git clone` 不会带过去，等第 3 周接私有仓后才真正可迁移。
 
 ## 6. 常见问题

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import HomePage from './pages/HomePage.jsx'
 import NoteListPage from './pages/NoteListPage.jsx'
 import NoteCreatePage from './pages/NoteCreatePage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
@@ -41,7 +42,8 @@ export default function App() {
         <h1>buddy</h1>
         <p className="subtitle">会成长的个人助手 · 第一版骨架</p>
         <nav className="nav">
-          <Link to="/">资料列表</Link>
+          <Link to="/">主页</Link>
+          <Link to="/notes">资料列表</Link>
           <Link to="/new">新建资料</Link>
           <Link to="/ask">知识库问答</Link>
           {authEnabled ? <LogoutButton /> : null}
@@ -50,7 +52,8 @@ export default function App() {
 
       <main className="app-main">
         <Routes>
-          <Route path="/" element={<NoteListPage />} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/notes" element={<NoteListPage />} />
           <Route path="/new" element={<NoteCreatePage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
           <Route path="/ask" element={<KbAskPage />} />

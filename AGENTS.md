@@ -101,6 +101,7 @@
 - **云端部署方案（2026-09-25 定）**：采用**单机 Docker Compose**（Nginx + buddy-server + Chroma 内网 + 可选 Gitea），部署在既有海外 ECS `47.85.210.76`；训练营**不强制** CloudBase，故不走 CloudBase。前端 `web/dist` 由同一 Nginx 托管（同源，HttpOnly Cookie 零配置）；Chroma **不发布端口**、只走 compose 内网，从根上避免向量库裸奔公网。待办：① 安全组放行 443（当前 80/443 未开）；② 确认域名 A 记录是否指向该 IP；③ 服务器侧配镜像加速器（本机暂不配）；④ 本机 docker 加组后做一次彩排。
 - **Day 9（2026-09-24）**：✅ 按设计规则审查前端 `web/src/styles.css` 六个维度并修 5 处（CSS-only、功能零改动）：① P4 间距/对齐——卡片与列表项左基准差 2px 归零、搜索框与下拉框左缩进差 2px 归零、建 `--sp-1..7` 间距/圆角阶梯并全部归位（44 处）；② P1 信息层级——详情页标题 20→24px 与正文 h1 脱钩、建 `--fs-1..7` 字号阶梯（13–28px）、取消 12px 档；③ P2 字体——`font-weight:500` 虚标修正为 600（微软雅黑无 500 档）、`tabular-nums` 等宽数字；④ P3 颜色——`--muted` 5.4:1→7.37:1（AAA）、`--border` 加深一档；⑤ P5 状态+移动端——补 `:focus-visible` 焦点环与全量 hover、disabled 3.4:1→7.4:1、触控目标≥44px、16px 输入防 iOS 缩放、480px 工具栏换行。✅ `npm run build` 通过；前后对照截图用 `git stash` 切换同取景采集；Tab 焦点/disabled/375px 移动模拟手测。
 - **Day 10（2026-09-25）**：✅ 资料列表页新增「按目录分组」文件列表视图——工具栏右侧「卡片 / 目录」切换（`aria-pressed` 按钮组），选择记 `?view=dir`（刷新/前进后退保持）；目录视图按 `data/<目录>/` 分组（学习→生活→事务→其余按字母序），行内为等宽文件名 + 标题 + 日期 + 标签；复用后端已返回的 `path` 字段，后端 0 行改动；新增 `web/src/components/NoteFileList.jsx` 纯渲染组件，搜索与分类筛选对两种视图同时生效；✅ `npm run build` 通过。
+- **个人主页（2026-09-25）**：✅ 新增 `GET /api/me`（接口升至 12 个）——读 `data/` **根级**的 `profile.md`（nickname/avatar/bio）与 `schedule.md`（每行 `- YYYY-MM-DD [HH:mm] 事项`），文件缺失返回空对象不报错；已核实它们不被资料索引与 KB 向量索引扫描（两者都只遍历子目录）；✅ 前端 `/` 改为个人主页（个人卡头像/昵称/简介 + 当月月历与近期日程，头像缺失降级首字母色块），资料列表挪到 `/notes`，详情页返回链同步；✅ `npm run build` 与 `services/me.js` 解析实测通过。
 
 ## 5. buddy 项目规则（产品行为的铁律）
 

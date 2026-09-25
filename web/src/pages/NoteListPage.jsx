@@ -37,7 +37,7 @@ export default function NoteListPage() {
       listNotes({ q, category })
         .then((data) => setResult(data))
         .catch((err) => {
-          if (err.code === 'AUTH_REQUIRED') navigate('/login?from=/', { replace: true })
+          if (err.code === 'AUTH_REQUIRED') navigate('/login?from=/notes', { replace: true })
           else setError(err.message || '加载失败')
         })
         .finally(() => setLoading(false))

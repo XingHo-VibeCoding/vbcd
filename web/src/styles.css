@@ -787,3 +787,144 @@ body {
     flex-wrap: wrap;
   }
 }
+
+/* ===== 个人主页：个人卡 + 日历卡（两栏，窄屏堆叠） ===== */
+.home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--sp-4);
+}
+
+.profile-card {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: center;
+}
+
+.profile-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
+/* 头像缺失/加载失败时的降级：昵称首字母色块 */
+.profile-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--fs-7);
+  font-weight: 600;
+}
+
+.profile-text {
+  min-width: 0;
+}
+
+.profile-name {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-5);
+  font-weight: 600;
+}
+
+.profile-bio {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+
+.cal-title {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-4);
+  font-weight: 600;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--sp-1);
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+
+.cal-cell {
+  position: relative;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-2);
+  border-radius: var(--radius-sm);
+}
+
+/* 今天：强调色反白圆圈 */
+.cal-cell--today {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+
+/* 有日程的日期：下方小圆点；今天反白时用白点 */
+.cal-cell--has-event::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.cal-cell--today.cal-cell--has-event::after {
+  background: var(--text-on-accent);
+}
+
+.agenda {
+  list-style: none;
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-3) 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--fs-2);
+}
+
+.agenda-item {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: baseline;
+}
+
+.agenda-date {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* 已过期日程置灰，默认焦点仍在将来的安排上 */
+.agenda-item--past {
+  opacity: 0.55;
+}
+
+.agenda-empty {
+  margin: var(--sp-3) 0 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+
+@media (max-width: 720px) {
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+}

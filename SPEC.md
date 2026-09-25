@@ -116,9 +116,9 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（**11 个**）
+## 3. API 列表（**12 个**）
 
-> 说明：原方案我提了 7 个，**漏了 F5 需要的"任务列表"接口**，故实为 8 个（此处如实修正）；2026-09-25 为 F9 知识库问答追加 3 个，共 11 个。
+> 说明：原方案我提了 7 个，**漏了 F5 需要的"任务列表"接口**，故实为 8 个（此处如实修正）；2026-09-25 为 F9 知识库问答追加 3 个、为个人主页追加 1 个，共 12 个。
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 流式接口除外，见 3.1）。资料接口**默认公开**；启用隐私模块（`AUTH_ENABLED=1`）后，除登录外全部要求已登录。
 
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
@@ -134,11 +134,12 @@ vbcd/
 | 9 | `POST /api/kb/query` | 知识库问答（F9） | `q`（必填，≤500 字）, `k?` | `200 {answer, sources[]}` | `VALIDATION_FAILED`、`KB_NOT_CONFIGURED`、`CHROMA_UNAVAILABLE`、`LLM_FAILED` |
 | 10 | `GET /api/kb/stream` | 流式问答（SSE，F9） | `?q=`、`?k=` | `text/event-stream` | 错误以 `event: error` 推送 |
 | 11 | `POST /api/kb/index` | 触发增量索引（F9） | 无 | `200 {added, updated, removed, unchanged, chunks}` | `KB_NOT_CONFIGURED`、`CHROMA_UNAVAILABLE`、`LLM_FAILED` |
+| 12 | `GET /api/me` | 个人主页（头像/昵称/简介/日程） | — | `200 {profile:{nickname,avatar,bio}, schedule:[{date,time,title}]}` | `INTERNAL` |
 
 ### 3.1 知识库问答（F9，2026-09-25 追加）
 
 **索引（离线建库，`POST /api/kb/index` 触发）**：
-- 扫描 `DATA_DIR` 下全部 `*.md`（frontmatter + 正文），空正文跳过；
+- 扫描 `DATA_DIR` 各分类**子目录**中的 `*.md`（frontmatter + 正文），空正文跳过（根级文件如 `profile.md` 不进索引）；
 - 切分：`RecursiveCharacterTextSplitter`，`chunkSize=500 / chunkOverlap=50`，分隔符中文优先 `["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""]`（依次：段落 → 换行 → 中英文句读 → 空格 → 硬切字符）；每篇以 `# 标题` 开头拼接正文一起切分；
 - 向量化后写入 Chroma collection `buddy-notes`，chunk id 为 `<note_id>::<i>`，metadata 带 `note_id / title / path / chunk_index / hash`；
 - **增量**：本地清单 `data/.kb-manifest.json` 记录 `note_id → {hash, chunk_ids, path}`（hash=标题+正文 SHA-256）。hash 相同跳过；变化先按 chunk_ids 删除再重写；文件被删则删 chunks 并清清单条目。清单为派生数据，不入库。
@@ -151,6 +152,13 @@ vbcd/
 - `sources[]` 元素：`{ note_id, title, path, chunk_index, score }`（score 为检索距离）。
 
 **SSE 事件格式（接口 10）**：`event: sources`（检索结果，回答前先推）→ `event: token` ×N（`data:{"text":"…"}`）→ `event: done`；任一步失败推 `event: error`（`data:{code,message}`）后关闭。响应头含 `X-Accel-Buffering: no`（供 Nginx 反代不缓冲）。
+
+### 3.2 个人主页数据文件（2026-09-25 追加）
+
+- **`data/profile.md`**：frontmatter 只取三个字段——`nickname`（昵称，空则前端回落 `buddy`）、`avatar`（头像 URL，推荐把图片放 `web/public/` 后填 `/xxx.jpg`）、`bio`（单行简介）。
+- **`data/schedule.md`**：正文每行一条日程，格式 `- YYYY-MM-DD [HH:mm] 事项`（时间可省略表示全天）；不合法的行静默跳过；接口返回按日期+时间升序。
+- 两文件位于 `data/` **根级而非子目录**：`files.js:list()` 只遍历子目录，所以它们不会出现在资料列表，也不会进知识库向量索引。
+- 文件缺失或为空时接口照常返回 `200`（空 profile / 空 schedule），由前端降级展示。
 
 ## 4. 数据流
 
