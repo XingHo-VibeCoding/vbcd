@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import NoteListPage from './pages/NoteListPage.jsx'
 import NoteCreatePage from './pages/NoteCreatePage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
+import KbAskPage from './pages/KbAskPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { logout } from './api/auth.js'
 import { request } from './api/client.js'
@@ -42,6 +43,7 @@ export default function App() {
         <nav className="nav">
           <Link to="/">资料列表</Link>
           <Link to="/new">新建资料</Link>
+          <Link to="/ask">知识库问答</Link>
           {authEnabled ? <LogoutButton /> : null}
         </nav>
       </header>
@@ -51,6 +53,7 @@ export default function App() {
           <Route path="/" element={<NoteListPage />} />
           <Route path="/new" element={<NoteCreatePage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
+          <Route path="/ask" element={<KbAskPage />} />
           <Route path="/login" element={authEnabled ? <LoginPage /> : <Navigate to="/" replace />} />
         </Routes>
       </main>

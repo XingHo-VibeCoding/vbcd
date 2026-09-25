@@ -111,6 +111,26 @@ check('⑨ 详情读回正文一致', detail.status === 200 && detail.json?.data
 const missing = await req('GET', `/api/notes/nope-${UNIQ}`, { cookie })
 check('⑩ 不存在的 id → 404 NOT_FOUND', missing.status === 404 && missing.json?.error?.code === 'NOT_FOUND', missing.json?.error?.message)
 
+// ===== KB 知识库问答（可选）：仅在 .env 配好 OPENAI_API_KEY + CHROMA_URL 时跑 =====
+const kbIndex = await req('POST', '/api/kb/index', { cookie })
+if (kbIndex.status === 503 && kbIndex.json?.error?.code === 'KB_NOT_CONFIGURED') {
+  console.log('  ⏭️  KB 未配置（缺 OPENAI_API_KEY / CHROMA_URL），跳过问答冒烟')
+} else if (authEnabled && kbIndex.status === 401) {
+  check('KB 接口鉴权', false, '隐私模式下带会话仍 401，请检查 requireAuth 挂载')
+} else {
+  check('KB POST /api/kb/index → 增量索引统计', kbIndex.status === 200 && kbIndex.json?.ok === true, JSON.stringify(kbIndex.json?.data))
+
+  const kbQ = await req('POST', '/api/kb/query', { body: { q: `冒烟 ${UNIQ} 讲了什么`, k: 3 }, cookie })
+  check('KB POST /api/kb/query → 答案 + 来源', kbQ.status === 200 && typeof kbQ.json?.data?.answer === 'string' && Array.isArray(kbQ.json?.data?.sources), kbQ.json?.data?.answer?.slice(0, 40))
+
+  const kbEmpty = await req('POST', '/api/kb/query', { body: { q: '  ' }, cookie })
+  check('KB 空问题 → 400 VALIDATION_FAILED', kbEmpty.status === 400 && kbEmpty.json?.error?.code === 'VALIDATION_FAILED', kbEmpty.json?.error?.code)
+
+  const streamRes = await fetch(`${BASE}/api/kb/stream?q=${encodeURIComponent('你好')}`, { headers: cookie ? { Cookie: cookie } : {} })
+  const streamText = await streamRes.text()
+  check('KB GET /api/kb/stream → SSE 事件流', streamRes.status === 200 && /event: (token|error|done)/.test(streamText), `status=${streamRes.status}`)
+}
+
 if (authEnabled) {
   // ⑪ 登出 → 204
   const logout = await req('POST', '/api/logout', { cookie })

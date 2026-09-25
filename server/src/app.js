@@ -6,6 +6,7 @@ import { requireAuth } from './middleware/auth.js'
 import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import notesRouter from './routes/notes.js'
+import kbRouter from './routes/kb.js'
 
 export function createApp() {
   const app = express()
@@ -23,6 +24,7 @@ export function createApp() {
   app.use('/api', healthRouter)
   app.use('/api', authRouter)
   app.use('/api/notes', requireAuth, notesRouter)
+  app.use('/api/kb', requireAuth, kbRouter)
 
   // 兜底：找不到的路由返回统一的 404
   app.use(notFound)

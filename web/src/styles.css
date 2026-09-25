@@ -641,9 +641,55 @@ body {
   }
 }
 
+/* ===== F9 · 知识库问答页 ===== */
+.kb-ask-form {
+  display: flex;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.kb-answer {
+  margin-top: var(--sp-3);
+}
+
+.kb-answer h2 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-5);
+  font-weight: 600;
+}
+
+.kb-sources {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: center;
+  font-size: var(--fs-1);
+}
+
+.kb-sources-label {
+  color: var(--muted);
+}
+
+.kb-source {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--sp-2); /* 例外：文字紧贴内衬，同 badge */
+  font-size: var(--fs-2);
+  text-decoration: none;
+}
+
+.kb-source:hover {
+  text-decoration: underline;
+}
+
 /* Day 9 · P5：超窄屏工具栏允许换行（搜索框一行、筛选一行） */
 @media (max-width: 480px) {
-  .toolbar {
+  .toolbar,
+  .kb-ask-form {
     flex-wrap: wrap;
   }
 }
