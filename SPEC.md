@@ -31,8 +31,8 @@ vbcd/
 │   └── package.json
 ├── server/              # 后端：Node.js + Express
 │   ├── src/
-│   │   ├── routes/      # 接口路由（对应第 3 章）
-│   │   ├── services/    # 业务逻辑（资料、任务、确认）
+│   │   ├── routes/      # 接口路由（对应第 3 章；kb.js = F9 问答）
+│   │   ├── services/    # 业务逻辑（资料、任务、确认；kb.js 索引+问答、llm.js 模型装配）
 │   │   ├── storage/     # 存储适配层（见 7.3：将来换数据库只动这里）
 │   │   ├── middleware/  # 鉴权、错误处理、请求日志
 │   │   └── index.js
@@ -116,10 +116,10 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（**8 个**）
+## 3. API 列表（**11 个**）
 
-> 说明：原方案我提了 7 个，**漏了 F5 需要的"任务列表"接口**，故实为 8 个（此处如实修正）。
-> 统一前缀 `/api`；请求与响应均为 JSON。资料接口**默认公开**；启用隐私模块（`AUTH_ENABLED=1`）后，除登录外全部要求已登录。
+> 说明：原方案我提了 7 个，**漏了 F5 需要的"任务列表"接口**，故实为 8 个（此处如实修正）；2026-09-25 为 F9 知识库问答追加 3 个，共 11 个。
+> 统一前缀 `/api`；请求与响应均为 JSON（SSE 流式接口除外，见 3.1）。资料接口**默认公开**；启用隐私模块（`AUTH_ENABLED=1`）后，除登录外全部要求已登录。
 
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
 |---|---|---|---|---|---|
@@ -131,6 +131,26 @@ vbcd/
 | 6 | `POST /api/tasks` | 建任务（F4） | `type, payload` | `201 {id, status}` | `VALIDATION_FAILED` |
 | 7 | `GET /api/tasks` | 任务进度列表（F5） | `status?` | `200 {items[]}` | `AUTH_REQUIRED` |
 | 8 | `PATCH /api/tasks/:id` | 更新状态 / 提交确认（F5/F6） | `status?, decision?, summary?` | `200 {task}` | `CONFIRM_REQUIRED`（高风险动作未确认时返回 `428`） |
+| 9 | `POST /api/kb/query` | 知识库问答（F9） | `q`（必填，≤500 字）, `k?` | `200 {answer, sources[]}` | `VALIDATION_FAILED`、`KB_NOT_CONFIGURED`、`CHROMA_UNAVAILABLE`、`LLM_FAILED` |
+| 10 | `GET /api/kb/stream` | 流式问答（SSE，F9） | `?q=`、`?k=` | `text/event-stream` | 错误以 `event: error` 推送 |
+| 11 | `POST /api/kb/index` | 触发增量索引（F9） | 无 | `200 {added, updated, removed, unchanged, chunks}` | `KB_NOT_CONFIGURED`、`CHROMA_UNAVAILABLE`、`LLM_FAILED` |
+
+### 3.1 知识库问答（F9，2026-09-25 追加）
+
+**索引（离线建库，`POST /api/kb/index` 触发）**：
+- 扫描 `DATA_DIR` 下全部 `*.md`（frontmatter + 正文），空正文跳过；
+- 切分：`RecursiveCharacterTextSplitter`，`chunkSize=500 / chunkOverlap=50`，分隔符中文优先 `["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""]`（依次：段落 → 换行 → 中英文句读 → 空格 → 硬切字符）；每篇以 `# 标题` 开头拼接正文一起切分；
+- 向量化后写入 Chroma collection `buddy-notes`，chunk id 为 `<note_id>::<i>`，metadata 带 `note_id / title / path / chunk_index / hash`；
+- **增量**：本地清单 `data/.kb-manifest.json` 记录 `note_id → {hash, chunk_ids, path}`（hash=标题+正文 SHA-256）。hash 相同跳过；变化先按 chunk_ids 删除再重写；文件被删则删 chunks 并清清单条目。清单为派生数据，不入库。
+
+**检索与生成**：
+- 问题向量化 → Chroma Top-K（默认 `KB_TOP_K=3`，接口可传 `k`，上限 10）；
+- 可选 `KB_MAX_DISTANCE`：命中的距离大于该值即丢弃（Chroma 返回的是距离，越小越像）；
+- Prompt 约束：只根据给定资料回答、不足时明说、禁止编造、末尾用「来源：」行列出用到的文件；
+- 零命中时不调用 LLM，直接返回固定话术「资料库里没有找到相关内容…」；
+- `sources[]` 元素：`{ note_id, title, path, chunk_index, score }`（score 为检索距离）。
+
+**SSE 事件格式（接口 10）**：`event: sources`（检索结果，回答前先推）→ `event: token` ×N（`data:{"text":"…"}`）→ `event: done`；任一步失败推 `event: error`（`data:{code,message}`）后关闭。响应头含 `X-Accel-Buffering: no`（供 Nginx 反代不缓冲）。
 
 ## 4. 数据流
 
@@ -160,6 +180,9 @@ vbcd/
 | `RATE_LIMITED` | 429 | 登录尝试过于频繁（简单限流） |
 | `STORAGE_FAILED` | 503 | 写文件失败（磁盘/权限） |
 | `GIT_FAILED` | 503 | 文件写成功但提交或推送失败 |
+| `KB_NOT_CONFIGURED` | 503 | 知识库问答未配置（缺 `OPENAI_API_KEY` / `CHROMA_URL`） |
+| `LLM_FAILED` | 503 | 模型端点异常（Chat 或 Embedding） |
+| `CHROMA_UNAVAILABLE` | 503 | 向量库连不上或异常 |
 | `INTERNAL` | 500 | 其他未预期错误 |
 
 ### 5.3 用户可见文案
@@ -196,6 +219,16 @@ vbcd/
 | `LOG_LEVEL` | `info` | 日志级别 | ⬜ |
 | `LOG_DIR` | `/srv/buddy/logs` | 日志目录 | ⬜ |
 | `TRUST_PROXY` | `1` | 位于 Nginx 之后 | ⬜ |
+| `OPENAI_API_KEY` | `sk-…` | **F9 必填**：OpenAI 兼容端点 key | 🔴 |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Chat 端点；可换 DashScope 兼容模式 / Ollama `/v1` | ⬜ |
+| `LLM_MODEL` | `gpt-4o-mini` | 聊天模型（可换 deepseek-chat / qwen-plus…） | ⬜ |
+| `EMBED_MODEL` | `text-embedding-3-small` | Embedding 模型 | ⬜ |
+| `EMBED_BASE_URL` | （可空） | Embedding 端点；可空 = 与 `OPENAI_BASE_URL` 同端点（DeepSeek 无 embeddings，需单独配） | ⬜ |
+| `EMBED_API_KEY` | （可空） | Embedding key；可空 = 与 `OPENAI_API_KEY` 相同 | 🔴 |
+| `CHROMA_URL` | `http://47.85.210.76:8000` | Chroma 服务地址（自托管） | ⬜ |
+| `CHROMA_AUTH_TOKEN` | 随机串 | Chroma token 认证（`X-Chroma-Token` 头）；服务端开了才需要 | 🟡 |
+| `KB_TOP_K` | `3` | 检索段落数（1–10） | ⬜ |
+| `KB_MAX_DISTANCE` | （可空） | 距离阈值：命中的距离大于它即丢弃 | ⬜ |
 
 **密钥管理**：Git 拉取用服务器上的 **deploy key（SSH）**，不放 `.env` 明文；`.env` 权限 `600`，只属于部署用户。
 
@@ -231,6 +264,8 @@ vbcd/
 - **注意事项**：`schema_version` 与迁移脚本必须成对存在；迁移期间**不要改 API 契约**（前端零改动是验收点之一）。
 
 ### 7.4 其他迁移（简述）
+- **换 Embedding 模型**：向量维度会变 → 删 Chroma collection `buddy-notes` 与 `data/.kb-manifest.json` 后重跑一次 `/api/kb/index`（不做自动迁移）；
+- **向量库迁移**：Chroma 数据是派生数据（可由 `data/` 重建），换实例直接重索引即可，无需导出；
 - **换电脑**：`git clone` 两个仓库（代码 + 数据）即可继续；
 - **换服务器**：新机装 Docker → 恢复 `data` 与 `.env` → 起容器 → 切 DNS；因为数据在 Git 里，迁移风险低。
 

@@ -40,6 +40,7 @@ npm run dev        # 监听 :5173，/api 自动代理到 :3000
 | 登录（口令校验）后查看资料列表、关键词搜索、按分类过滤 | 编辑 / 删除资料（高风险操作，等确认机制就位） |
 | 新建资料（标题/分类/标签/来源链接/正文）→ 落到 `data/` 目录 | 任务发起 / 进度 / 确认操作（F4–F6，第 3 周） |
 | 点开详情看原文 + 真实文件路径（`data/…`） | 多用户与权限、公网 HTTPS 部署（第 3 周） |
+| 知识库问答 `/ask`（配好 KB env 后可用，见 8.6） | RAG 进阶项：混合检索 / Rerank / 多轮记忆 |
 | 查重（内容完全相同时拒绝重复保存） | — |
 
 ## 5. 数据存哪（重要）
@@ -70,9 +71,9 @@ web/
 ├── vite.config.js        # 端口 5173、host 打开、/api 代理到 :3000
 └── src/
     ├── main.jsx          # 挂载 React + 路由
-    ├── App.jsx           # 外壳 + 路由（列表 / 新建 / 详情 / 登录）
-    ├── pages/            # 列表 / 新建 / 详情 / 登录
-    ├── api/              # client.js（统一请求）/ notes.js / auth.js
+    ├── App.jsx           # 外壳 + 路由（列表 / 新建 / 详情 / 问答 / 登录）
+    ├── pages/            # 列表 / 新建 / 详情 / 问答（KbAskPage）/ 登录
+    ├── api/              # client.js（统一请求）/ notes.js / auth.js / kb.js（问答+SSE）
     └── components/       # MarkdownContent（Markdown 渲染）
 ```
 
@@ -143,6 +144,7 @@ curl -i -X POST http://localhost:3000/api/login \
 | 登录 / 登出 / 健康检查 | 删除资料（`remove` 占位，501） |
 | 资料三接口：新建、列表检索、读原文（`/api/notes`） | 资料的 Git 提交/推送同步（`sync` 占位，第 3 周） |
 | 全文检索 + 索引缓存 + 失败限流 + 统一错误格式 | 会话持久化：现在存内存，**重启服务就掉线**，需重新登录 |
+| 知识库问答三接口 `/api/kb/*`（需配 env，见 8.6） | — |
 
 ### 8.5 目录速查
 
@@ -156,10 +158,46 @@ server/
     ├── index.js          # 启动入口（读 .env → 建资料目录 → 建应用 → 监听端口）
     ├── app.js            # 装配中间件与路由（/api/notes 挂 requireAuth）
     ├── middleware/       # auth（requireAuth）/ errors（统一错误）/ request-log
-    ├── routes/           # health / auth（登录、登出）/ notes（资料三接口）
+    ├── routes/           # health / auth（登录、登出）/ notes（资料三接口）/ kb（问答三接口）
     ├── services/         # notes（校验+查重）/ index-store（索引缓存）/ sessions / errors
+    │                     # kb（RAG 索引+问答）/ llm（模型装配）
     └── storage/          # files.js（文件存储适配层，SPEC 7.3）
 ```
+
+### 8.6 知识库问答（F9，RAG）
+
+**要跑通需要三样东西**：① 一个 OpenAI 兼容端点的 API Key（Chat + Embedding 同端点；Embedding 可单独配）；② 一个 Chroma 向量库服务；③ `server/.env` 里配好对应变量（见 `.env.example` 的「知识库问答」组）。
+
+```bash
+# ① 起 Chroma（本机 Docker 或服务器 47.85.210.76 均可）
+docker run -d --name chroma -p 8000:8000 chromadb/chroma
+
+# ② server/.env 里配（键名见 .env.example）
+#    OPENAI_API_KEY=sk-…  CHROMA_URL=http://localhost:8000
+
+# ③ 建索引（增量：改过/新加的才重新向量化）
+curl -X POST http://localhost:3000/api/kb/index
+# 期望：{"ok":true,"data":{"added":N,"updated":0,"removed":0,"unchanged":M,"chunks":K}}
+
+# ④ 问答
+curl -X POST http://localhost:3000/api/kb/query \
+  -H 'Content-Type: application/json' -d '{"q":"WSL 里 Docker 怎么配"}'
+# 流式（看到逐 token 输出）：
+curl -N "http://localhost:3000/api/kb/stream?q=WSL"
+```
+
+前端：`/ask` 页提问，逐字显示，回答下方列来源（点击跳原文）。
+
+**常见坑**：
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| `KB_NOT_CONFIGURED` | 缺 `OPENAI_API_KEY` 或 `CHROMA_URL` | 补齐 `.env` 后重启后端 |
+| `CHROMA_UNAVAILABLE` | Chroma 没起 / 地址错 / 网络不通 | `curl $CHROMA_URL/api/v2/heartbeat` 验证可达 |
+| `LLM_FAILED` | key 错 / 端点不支持该模型 / 欠费 | 先 `curl` 端点的 `/models` 或 `/chat/completions` 排障 |
+| LLM 用 DeepSeek 时报 embeddings 404 | DeepSeek 无 /embeddings | 给 Embedding 单独配 `EMBED_BASE_URL`（如 DashScope 兼容模式） |
+| 换 Embedding 模型后检索全乱 | 向量维度变了 | 删 Chroma collection 与 `data/.kb-manifest.json`，重跑 `/api/kb/index` |
+| Chroma 裸奔在公网 | 没配认证 | 设 `CHROMA_SERVER_AUTHN_CREDENTIALS` + `.env` 的 `CHROMA_AUTH_TOKEN`，或安全组只放后端 IP |
 
 ## 9. 用 Obsidian 查看资料（F1 的「能看到文件」）
 

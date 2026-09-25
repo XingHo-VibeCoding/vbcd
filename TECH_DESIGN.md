@@ -16,7 +16,7 @@
 | 手机浏览器直接访问，**不装客户端**；公网 HTTPS + 登录 | PRD F4、第 5 章 |
 | 个人资料存自建私有仓库，公开仓库里看不到 | PRD F1、F7、第 5 章 |
 | 部署在已有阿里云 ECS（2 vCPU / 4GB） | 使用者现有资源 |
-| 第 1 期不引入数据库；索引可再生即可 | PRD 第 8 章风险 4 |
+| 第 1 期不引入业务数据库；索引可再生即可（F9 的 Chroma 向量库是派生数据，可由 data/ 重建，不是权威副本） | PRD 第 8 章风险 4 |
 | 开发环境：Windows 11 + Node 22 / Python 3.13 | 本机实测 |
 
 ## 2. 三层分工（各层只干自己的事）
@@ -44,6 +44,9 @@
 | 8 | 手机端形态 | **响应式网页**（无客户端） | 直接满足 PRD F4"不装客户端"；改一次两端都生效 | 原生 App / PWA | 需要打包与上架流程，与本期目标无关 |
 | 9 | 代码与数据分区 | 代码与文档 → GitHub 公开仓；资料数据 → 自建 Gitea 私有仓 | 打卡/验收与隐私兼顾（PRD 第 5 章） | 全部放一处 | 全部公开会泄露隐私；全部私有会让训练营验收不便 |
 | 10 | 备份 | **本地 git mirror + 阿里云快照** | 服务器是单点，必须有第二份（PRD 第 5 章） | 只靠服务器磁盘 | 单点故障即丢数据，不可接受 |
+| 11 | AI 编排（F9，2026-09-25 追加） | **LangChain.js（@langchain/core + @langchain/openai + @langchain/textsplitters）** | 生态成熟、流式 API 与 splitter 现成；向量库直连 chromadb 官方客户端，不引 @langchain/community（其 peer 依赖与本项目 dotenv@18 冲突） | LangGraph / 手写 fetch | 本期只要检索+生成，图编排是杀鸡用牛刀；手写 fetch 可跑但切分/流式要自己造轮子 |
+| 12 | 向量库（F9） | **Chroma 自托管**（Docker 跑在阿里云 ECS `47.85.210.76`，token 认证或安全组限源） | 云端持久化且数据自有，符合 F7 精神；向量是派生数据，坏了可由 data/ 重建 | Chroma Cloud 托管 / 本地文件存向量 | 托管版把资料内容交给第三方（违背数据自有）；本地文件方案够用但与后端同机部署耦合，先按自托管走，挂了再降级 |
+| 13 | 模型端点（F9） | **OpenAI 兼容端点统一供 Chat + Embedding**（`OPENAI_BASE_URL` 可切换；Embedding 可单独配 `EMBED_BASE_URL`） | 一套代码同时支持 OpenAI / DashScope 兼容模式 / Ollama 本地，改 env 即换模型 | 锁定某家 SDK | DeepSeek 无 embeddings，双端点设计就是为这个坑留的口子 |
 
 **一句话技术路线（打卡截图要的那行）**：
 > **前端 React（Vite 构建）→ 后端 Node.js + Express（REST/JSON）→ 存储为 Git 仓库里的 Markdown 文件与 JSON 索引 → 部署在阿里云 ECS（Docker + Nginx + HTTPS），登录后可用。**
@@ -89,7 +92,20 @@ flowchart TD
 | 任务与确认记录（F4–F6） | 使用者提交的任务与点击的确认 | 服务器记录 → 私有仓库 | 后端（未确认不执行） |
 | 代码与文档 | 开发机（Windows） | GitHub 公开仓库：`bird-z/vbcd`（origin）+ `XingHo-VibeCoding/vbcd`（camp，组织仓） | Git（人工与本助手协作提交，双远程同步） |
 
-### 4.4 备份链路
+### 4.4 RAG 问答链路（F9，2026-09-25 追加）
+
+```mermaid
+flowchart TD
+    A["浏览器 /ask 问答页"] -->|"1  POST /api/kb/query 或 GET /api/kb/stream（SSE）"| B["Express 后端 routes/kb.js"]
+    B -->|"2  问题向量化"| E["OpenAI 兼容端点<br/>Embedding 模型"]
+    B -->|"3  Top-K 相似度检索"| C["Chroma 自托管<br/>collection: buddy-notes"]
+    C -->|"4  命中段落 + 来源元数据"| B
+    B -->|"5  资料 + 问题组装中文 Prompt<br/>（只依据资料回答、不编造、附来源）"| D["OpenAI 兼容端点<br/>LLM（可切 DeepSeek/Qwen/Ollama）"]
+    D -->|"6  逐 token 流式回推"| A
+    I["data/ 下 .md 资料"] -->|"7  POST /api/kb/index：切分 → Embedding → 写 Chroma<br/>（增量：hash 对比 manifest，变了才重写）"| C
+```
+
+### 4.5 备份链路
 
 ```mermaid
 flowchart LR
@@ -145,7 +161,7 @@ flowchart TB
 
 | 债务 | 为什么现在欠 | 何时偿还 |
 |---|---|---|
-| 索引用"扫描目录重建"，不做向量检索 | 数据量小，先求跑通 | 资料上千条或检索明显变慢时 |
+| 列表索引用"扫描目录重建"（向量检索仅限 F9 问答链路） | 数据量小，列表检索先求跑通 | 资料上千条或检索明显变慢时 |
 | 不引入数据库（文件即数据源） | 避免双写一致性问题 | 出现并发写或多端冲突时 |
 | 无自动化测试、无 CI | 单人项目，验收靠文档清单 | 第 4 周（测试与部署阶段） |
 | Tailscale 依赖第三方控制面 | 备用通道省事 | 需要完全自主时自建 Headscale |
@@ -173,3 +189,4 @@ flowchart TB
 |---|---|---|
 | 2026-09-19 | v1.0 | 初版：设计目标与约束、三层分工、技术路线（10 条选型）、数据流图（3 张 Mermaid） |
 | 2026-09-19 | v1.1 | 前端由原生 JS 改为 React（Vite 构建，为第 2 周铺路）；新增第 5 章「架构原则与演化策略」（架构全景、三条原则、可替换点、质量属性映射、技术债台账、AI Native 层、已知弱点） |
+| 2026-09-25 | v1.2 | 追加 F9 知识库问答技术方案：选型表 +3（LangChain.js / Chroma 自托管 / OpenAI 兼容端点）、RAG 数据流图、技术债条目修订 |
