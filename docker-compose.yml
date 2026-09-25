@@ -1,0 +1,56 @@
+# buddy 单机部署编排（Nginx + 后端 + Chroma）
+# 用法（本机彩排 / 服务器上线同一份）：
+#   docker compose up -d --build
+#   docker compose ps
+#   docker compose logs -f server
+#
+# 设计要点：
+#   - Chroma 不发布端口，只在内部网络可达 —— 从根上避免向量库裸奔公网
+#   - 前后端同源（Nginx 同时托管静态页与反代 /api），HttpOnly Cookie 零跨域配置
+#   - data/ 用绑定挂载，宿主机上直接能看到 Markdown；chroma 数据用命名卷
+
+services:
+  chroma:
+    image: chromadb/chroma:latest
+    restart: unless-stopped
+    # 持久化路径不是猜的：镜像内 /config.yaml 写明 persist_path: "/data"（实测 chroma 1.4.4）
+    # 官方镜像默认监听 8000（EXPOSE 8000/tcp）
+    volumes:
+      - chroma-data:/data
+    networks: [internal]
+    # 刻意不写 ports：不给公网留入口
+
+  server:
+    build: ./server
+    restart: unless-stopped
+    # 秘密与模型配置放 server/.env（不入库）；下面 environment 覆盖容器内部地址
+    env_file:
+      - ./server/.env
+    environment:
+      PORT: "3000"
+      NODE_ENV: production
+      DATA_DIR: /app/data
+      # 容器内用服务名访问 Chroma，覆盖 .env 里可能配置的公网地址
+      CHROMA_URL: http://chroma:8000
+    volumes:
+      # 资料目录绑定挂载：宿主机上也能直接备份/Obsidian 打开
+      - ./data:/app/data
+    networks: [internal]
+    depends_on:
+      - chroma
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    ports:
+      # 现在只开 80；等安全组放行 443、域名就位后再加证书这段
+      - "80:80"
+    networks: [internal]
+    depends_on:
+      - server
+
+networks:
+  internal:
+
+volumes:
+  chroma-data:
