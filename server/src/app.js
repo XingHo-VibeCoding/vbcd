@@ -6,6 +6,7 @@ import { requireAuth } from './middleware/auth.js'
 import healthRouter from './routes/health.js'
 import authRouter from './routes/auth.js'
 import notesRouter from './routes/notes.js'
+import tasksRouter from './routes/tasks.js'
 import kbRouter from './routes/kb.js'
 import meRouter from './routes/me.js'
 
@@ -25,6 +26,7 @@ export function createApp() {
   app.use('/api', healthRouter)
   app.use('/api', authRouter)
   app.use('/api/notes', requireAuth, notesRouter)
+  app.use('/api/tasks', requireAuth, tasksRouter)
   app.use('/api/kb', requireAuth, kbRouter)
   app.use('/api/me', requireAuth, meRouter)
 
