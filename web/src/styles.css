@@ -1075,3 +1075,58 @@ body {
   margin: 0;
   color: var(--text);
 }
+
+/* ===== 主页日历：周/月视图切换 ===== */
+
+/* 标题与视图切换按钮同一行两端对齐 */
+.cal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+
+.cal-head .cal-title {
+  margin: 0; /* 标题原来带下边距，放进 flex 行后由 .cal-head 统一控制 */
+}
+
+/* 周视图与月视图共用同一套格子样式：日历只做查看（日期 + 「有安排」小圆点），
+   信息由下方列表承载，因此无需为周视图单独定义格子样式。 */
+
+/* ===== 主页任务列表（来自 /api/tasks，在日程下方） ===== */
+
+.home-task-title {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-3);
+  font-weight: 600;
+}
+
+/* 列表容器复用 .agenda；行内为 徽标 + 摘要 + 动作链 */
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.task-row-summary {
+  flex: 1;
+  min-width: 0; /* 允许 flex 子项收缩，省略号才能生效 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 「去处理」是触控动作，给足点击区域 */
+.task-row-act {
+  flex-shrink: 0;
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-1);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.agenda-more {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-1);
+}

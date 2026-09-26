@@ -1,10 +1,30 @@
 // 个人主页（替换原 / 首页）：左个人卡（头像/昵称/简介）+ 右日历卡（当月月历 + 近期日程）。
 // 数据来自 GET /api/me → data/profile.md + data/schedule.md；文件缺失时各项有默认值，不报错。
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { getMe } from '../api/me.js'
+import { listTasks } from '../api/tasks.js'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
+
+// 与任务页同一套状态文案与徽标色（badge--* 已在全局样式里定义）
+const STATUS_LABEL = {
+  todo: '待办',
+  doing: '进行中',
+  done: '已完成',
+  failed: '失败',
+  attention: '需确认',
+}
+
+/** 任务摘要（与任务页 summaryOf 同一口径，payload 保留服务端 snake_case） */
+function taskSummary(task) {
+  const payload = task.payload ?? {}
+  if (task.type === 'note') return payload.title || '(无标题)'
+  if (task.type === 'remind') return payload.text || '(空提醒)'
+  if (task.type === 'organize') return payload.url || '(空链接)'
+  if (task.type === 'delete_note') return `删除资料 ${payload.note_id ?? ''}`
+  return task.type
+}
 
 /** 本地时区的 YYYY-MM-DD（不用 toISOString，避免时区把今天推到昨天） */
 function dateStr(d) {
@@ -24,11 +44,36 @@ function monthCells(year, month) {
   return cells
 }
 
+/** 本周 7 天（周一开头）：返回 Date 数组 */
+function weekDates(base) {
+  const offset = (base.getDay() + 6) % 7 // 周一 = 0
+  const monday = new Date(base)
+  monday.setDate(base.getDate() - offset)
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
+}
+
 export default function HomePage() {
   const navigate = useNavigate()
   const [data, setData] = useState(null)
+  const [tasks, setTasks] = useState([])
   const [error, setError] = useState('')
   const [avatarBroken, setAvatarBroken] = useState(false) // 头像加载失败 → 降级首字母色块
+
+  // 日历视图：缺省为周视图（7 列），?cal=month 才是月视图 —— 与 /notes?view=dir 同一套做法：
+  // 写进地址栏而不是 state，刷新、前进后退、把链接发到手机都能保持同一个视图。
+  const [searchParams, setSearchParams] = useSearchParams()
+  const isMonthView = searchParams.get('cal') === 'month'
+
+  function setCal(view) {
+    const next = new URLSearchParams(searchParams)
+    if (view === 'week') next.delete('cal') // 默认视图不写参数，地址栏保持干净
+    else next.set('cal', view)
+    setSearchParams(next)
+  }
 
   useEffect(() => {
     let alive = true
@@ -41,6 +86,12 @@ export default function HomePage() {
         if (err.code === 'AUTH_REQUIRED') navigate('/login?from=/', { replace: true })
         else setError(err.message || '加载失败')
       })
+    // 任务列表独立加载：主页核心是资料/日程，任务拉取失败不应拖垮整页
+    listTasks()
+      .then((d) => {
+        if (alive) setTasks(d.items || [])
+      })
+      .catch(() => {}) // 任务接口失败时主页照常显示，列表区给出空状态
     return () => {
       alive = false
     }
@@ -58,6 +109,16 @@ export default function HomePage() {
   const todayStr = dateStr(today)
   const cells = monthCells(today.getFullYear(), today.getMonth())
   const eventDays = new Set(schedule.map((s) => s.date))
+  const week = weekDates(today)
+
+  const rangeLabel = isMonthView
+    ? `${today.getFullYear()} 年 ${today.getMonth() + 1} 月`
+    : `${week[0].getMonth() + 1} 月 ${week[0].getDate()} 日 – ${week[6].getMonth() + 1} 月 ${week[6].getDate()} 日`
+
+  // 主页任务列表只显示「还要做的事」：已完成的在 /tasks 里翻
+  const pendingTasks = tasks
+    .filter((t) => t.status !== 'done' && t.status !== 'failed')
+    .slice(0, 5)
 
   return (
     <div className="home-grid">
@@ -81,18 +142,42 @@ export default function HomePage() {
       </section>
 
       <section className="card cal-card">
-        <h2 className="cal-title">
-          {today.getFullYear()} 年 {today.getMonth() + 1} 月
-        </h2>
+        <div className="cal-head">
+          <h2 className="cal-title">{rangeLabel}</h2>
+          <div className="view-switch" role="group" aria-label="日历视图">
+            <button
+              type="button"
+              className={isMonthView ? 'tab' : 'tab active'}
+              aria-pressed={!isMonthView}
+              onClick={() => setCal('week')}
+            >
+              周
+            </button>
+            <button
+              type="button"
+              className={isMonthView ? 'tab active' : 'tab'}
+              aria-pressed={isMonthView}
+              onClick={() => setCal('month')}
+            >
+              月
+            </button>
+          </div>
+        </div>
+
+        {/* 两个视图共用同一套格子：月视图 item=日期数字/null，周视图 item=Date。
+            日历只做查看（日期 + 「有安排」小圆点），信息统一由下方列表承载。 */}
         <div className="cal-grid">
           {WEEKDAYS.map((w) => (
             <div key={w} className="cal-weekday">
               {w}
             </div>
           ))}
-          {cells.map((d, i) => {
-            if (d === null) return <div key={i} className="cal-cell" />
-            const ds = dateStr(new Date(today.getFullYear(), today.getMonth(), d))
+
+          {(isMonthView ? cells : week).map((item, i) => {
+            if (item === null) return <div key={`blank-${i}`} className="cal-cell" />
+            const ds = isMonthView
+              ? dateStr(new Date(today.getFullYear(), today.getMonth(), item))
+              : dateStr(item)
             const cls = [
               'cal-cell',
               ds === todayStr ? 'cal-cell--today' : '',
@@ -101,8 +186,8 @@ export default function HomePage() {
               .filter(Boolean)
               .join(' ')
             return (
-              <div key={i} className={cls}>
-                {d}
+              <div key={ds} className={cls}>
+                {isMonthView ? item : item.getDate()}
               </div>
             )
           })}
@@ -122,6 +207,28 @@ export default function HomePage() {
         ) : (
           <p className="agenda-empty">暂无日程，去 data/schedule.md 里记一条吧</p>
         )}
+
+        <h3 className="home-task-title">任务</h3>
+        {pendingTasks.length ? (
+          <ul className="agenda">
+            {pendingTasks.map((t) => (
+              <li key={t.id} className="task-row">
+                <span className={`badge badge--${t.status}`}>{STATUS_LABEL[t.status] || t.status}</span>
+                <span className="task-row-summary">{taskSummary(t)}</span>
+                {t.status === 'attention' ? (
+                  <Link className="task-row-act" to={`/tasks/${t.id}/confirm`}>
+                    去处理
+                  </Link>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="agenda-empty">暂无待办任务，去「任务」页记一条吧</p>
+        )}
+        <p className="agenda-more">
+          <Link to="/tasks">全部任务 →</Link>
+        </p>
       </section>
     </div>
   )
