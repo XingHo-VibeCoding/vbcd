@@ -928,3 +928,77 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===== 板块 3 · 任务页（F4/F5）===== */
+
+.ok-bar {
+  background: #e8f4ea;
+  color: #1f6b39;
+  border: 1px solid #bcdcc4;
+  border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-2);
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.task-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.task-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.task-title {
+  font-size: var(--fs-4);
+  font-weight: 600;
+}
+
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* 状态徽标：形状沿用 .badge，只按状态换色（五种状态各不相同，均有 4.5:1 以上对比度） */
+.badge--todo {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.badge--doing {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.badge--done {
+  background: #e8f4ea;
+  color: #1f6b39;
+}
+
+.badge--failed {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.badge--attention {
+  background: #fff4e0;
+  color: #8a5300;
+}
