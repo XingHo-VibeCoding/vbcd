@@ -13,8 +13,8 @@ const CATEGORIES = [
 ]
 
 const TASK_KINDS = [
-  { value: 'note', label: '记一条资料' },
   { value: 'remind', label: '提醒事项' },
+  { value: 'note', label: '记一条资料' },
   { value: 'organize', label: '整理链接' },
 ]
 
@@ -78,7 +78,7 @@ function summaryOf(task) {
 
 export default function TaskListPage() {
   const navigate = useNavigate()
-  const [type, setType] = useState('note')
+  const [type, setType] = useState('remind')
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('learning')
   const [content, setContent] = useState('')
