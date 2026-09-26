@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getNote } from '../api/notes'
+import { createTask } from '../api/tasks'
 import MarkdownContent from '../components/MarkdownContent.jsx'
 
 const CATEGORY_LABELS = { learning: '学习', life: '生活', work: '事务' }
@@ -15,6 +16,9 @@ export default function NoteDetailPage() {
   const [note, setNote] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  // 删除：本页只负责「发起待确认任务」，真正的删除在确认页点确认后才执行（F6）
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -40,6 +44,27 @@ export default function NoteDetailPage() {
       alive = false
     }
   }, [id, navigate])
+
+  // 点「删除」不会删任何东西：建一条 delete_note 待确认任务，然后跳到确认页由使用者决定
+  async function handleDelete() {
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      const task = await createTask({
+        type: 'delete_note',
+        payload: { note_id: note.meta.id },
+        origin: /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'phone' : 'desktop',
+      })
+      navigate(`/tasks/${encodeURIComponent(task.id)}/confirm`)
+    } catch (err) {
+      if (err.code === 'AUTH_REQUIRED') {
+        navigate(`/login?from=/notes/${encodeURIComponent(id)}`, { replace: true })
+        return
+      }
+      setDeleteError(err.message || '发起删除失败')
+      setDeleting(false)
+    }
+  }
 
   if (loading) return <div className="loading">载入中…</div>
 
@@ -99,6 +124,14 @@ export default function NoteDetailPage() {
 
       <div className="detail-content">
         <MarkdownContent content={note.content} />
+      </div>
+
+      <div className="danger-zone">
+        <button type="button" className="btn-danger" disabled={deleting} onClick={handleDelete}>
+          {deleting ? '正在发起…' : '删除这条资料'}
+        </button>
+        <p className="hint">不会立即删除：下一步会请你确认，确认之后才真正删掉。</p>
+        {deleteError ? <p className="error-bar">{deleteError}</p> : null}
       </div>
 
       <p className="detail-back">
