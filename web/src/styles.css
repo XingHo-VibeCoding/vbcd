@@ -1065,3 +1065,13 @@ body {
     min-height: 44px;
   }
 }
+
+/* ===== 板块 4 · 确认留痕页（F6）===== */
+
+/* 留痕里的「将要发生什么」：比列表摘要重要，字号介于正文与标题之间 */
+.confirm-line {
+  font-size: var(--fs-3);
+  line-height: 1.6;
+  margin: 0;
+  color: var(--text);
+}

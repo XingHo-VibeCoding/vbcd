@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage.jsx'
 import NoteListPage from './pages/NoteListPage.jsx'
 import TaskListPage from './pages/TaskListPage.jsx'
 import TaskConfirmPage from './pages/TaskConfirmPage.jsx'
+import ConfirmHistoryPage from './pages/ConfirmHistoryPage.jsx'
 import NoteCreatePage from './pages/NoteCreatePage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
 import KbAskPage from './pages/KbAskPage.jsx'
@@ -47,6 +48,7 @@ export default function App() {
           <Link to="/">主页</Link>
           <Link to="/notes">资料列表</Link>
           <Link to="/tasks">任务</Link>
+          <Link to="/confirmations">确认记录</Link>
           <Link to="/new">新建资料</Link>
           <Link to="/ask">知识库问答</Link>
           {authEnabled ? <LogoutButton /> : null}
@@ -59,6 +61,7 @@ export default function App() {
           <Route path="/notes" element={<NoteListPage />} />
           <Route path="/tasks" element={<TaskListPage />} />
           <Route path="/tasks/:id/confirm" element={<TaskConfirmPage />} />
+          <Route path="/confirmations" element={<ConfirmHistoryPage />} />
           <Route path="/new" element={<NoteCreatePage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
           <Route path="/ask" element={<KbAskPage />} />
