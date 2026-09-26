@@ -102,6 +102,14 @@
 - **Day 9（2026-09-24）**：✅ 按设计规则审查前端 `web/src/styles.css` 六个维度并修 5 处（CSS-only、功能零改动）：① P4 间距/对齐——卡片与列表项左基准差 2px 归零、搜索框与下拉框左缩进差 2px 归零、建 `--sp-1..7` 间距/圆角阶梯并全部归位（44 处）；② P1 信息层级——详情页标题 20→24px 与正文 h1 脱钩、建 `--fs-1..7` 字号阶梯（13–28px）、取消 12px 档；③ P2 字体——`font-weight:500` 虚标修正为 600（微软雅黑无 500 档）、`tabular-nums` 等宽数字；④ P3 颜色——`--muted` 5.4:1→7.37:1（AAA）、`--border` 加深一档；⑤ P5 状态+移动端——补 `:focus-visible` 焦点环与全量 hover、disabled 3.4:1→7.4:1、触控目标≥44px、16px 输入防 iOS 缩放、480px 工具栏换行。✅ `npm run build` 通过；前后对照截图用 `git stash` 切换同取景采集；Tab 焦点/disabled/375px 移动模拟手测。
 - **Day 10（2026-09-25）**：✅ 资料列表页新增「按目录分组」文件列表视图——工具栏右侧「卡片 / 目录」切换（`aria-pressed` 按钮组），选择记 `?view=dir`（刷新/前进后退保持）；目录视图按 `data/<目录>/` 分组（学习→生活→事务→其余按字母序），行内为等宽文件名 + 标题 + 日期 + 标签；复用后端已返回的 `path` 字段，后端 0 行改动；新增 `web/src/components/NoteFileList.jsx` 纯渲染组件，搜索与分类筛选对两种视图同时生效；✅ `npm run build` 通过。
 - **个人主页（2026-09-25）**：✅ 新增 `GET /api/me`（接口升至 12 个）——读 `data/` **根级**的 `profile.md`（nickname/avatar/bio）与 `schedule.md`（每行 `- YYYY-MM-DD [HH:mm] 事项`），文件缺失返回空对象不报错；已核实它们不被资料索引与 KB 向量索引扫描（两者都只遍历子目录）；✅ 前端 `/` 改为个人主页（个人卡头像/昵称/简介 + 当月月历与近期日程，头像缺失降级首字母色块），资料列表挪到 `/notes`，详情页返回链同步；✅ `npm run build` 与 `services/me.js` 解析实测通过。
+- **Day 11（2026-09-26）**：✅ **手机端联动 F4–F6 端到端完成**（当天主任务，5 个板块 / 10 个提交，全部英文单行信息）：
+  - **后端任务链路**：新增 `storage/tasks.js`、`services/tasks.js`、`routes/tasks.js`（`POST/GET /api/tasks`、`PATCH /api/tasks/:id`）——`note` 类型**同步执行**（复用 `createNote()`）、`organize`/`remind` 登记待办（无执行器）、`done` 为终态且非法迁移拒绝；执行失败落一条 `failed` 任务而非报 4xx（让手机端看得到原因）；
+  - **F6 确认机制**：新增 `storage/confirmations.js`、`routes/confirmations.js`（**第 13 个接口** `GET /api/confirmations`）；`storage/files.js:remove()` 从 501 占位改为真实现；**删除资料不新增独立接口** —— 走 `POST /api/tasks` + `type=delete_note` → 任务 `attention` → 未确认时任何 `status` 改动返回 **428 `CONFIRM_REQUIRED`** → `decision=approved` 才真删、`rejected` 只取消；决定与时间写入 `Confirmation` 留痕（不记「谁」，单人使用）；
+  - **前端**：`/tasks` 任务页（三种类型提交 + 状态徽标 + 推进与状态筛选）、`/tasks/:id/confirm` 确认页（大白话后果 + 同一路由兼顾「回看」）、`/confirmations` 留痕页、资料详情页「删除这条资料」入口（点它**不删任何东西**，只发起待确认）；
+  - **数据落点**：`data/.runtime/tasks.json`、`data/.runtime/confirmations.json`（运行时数据独立成目录，便于第 3 周迁数据库）；
+  - **测试**：`server/scripts/smoke.mjs` 扩充 11 条断言，覆盖资料/任务/确认三条链路 —— **公开 19/19、隐私 23/23** 通过；
+  - **文档同步**：`SPEC.md`（13 个接口 + 新增 3.3 确认流小节 + `Task.type` 加 `delete_note` + `PATCH` 请求字段去掉未使用的 `summary`）、`RUN.md`（页面清单 + 功能边界重写 + 任务/确认 curl + 8.7 新增踩坑行）、三个文档版本引用对齐（PRD v1.3 / TECH_DESIGN v1.2 / SPEC 上游引用）、`Rule` 与 `sync()` 两处标注「尚未实现/生效」；
+  - 🔧 **插曲修复（非计划内）**：宿主机 sing-box（v2rayN 的 TUN 模式）把接口地址设成 `172.18.0.1/30`，与 Docker 的 `172.18.0.0/16` 撞车（`/30` 更具体 → web 容器 IP 被当成广播地址），表现为「访问 80 端口被重置」而误判「后端服务死了」——容器其实一直 healthy；已把 compose 网段固定为 `172.30.0.0/16` 并把原因写进注释与 RUN.md 踩坑表。
 
 ## 5. buddy 项目规则（产品行为的铁律）
 
@@ -137,7 +145,7 @@
   - **判定依据**：无 `/mnt/c`、`/mnt/e`，无 `/etc/wsl.conf`，无 `WSLInterop`，无 `WSL*` 环境变量 → 原生 Ubuntu，**不是 WSL**；
   - 硬件：**16 核 / 30 GiB 内存 / 397G NVMe**（剩 208G）；
   - 工具链：**Node v24.15.0 + npm 11.12.1**、**Docker 29.8.0 + Compose v5.5.1**、git 2.53.0、Python 3.13.13、curl 8.18.0；systemd running，`docker` 服务 `active`/`enabled`；
-  - ⚠️ **`bird` 不在 `docker` 组**（组 gid 973 存在），且 `sudo` 需要密码（`sudo -n` 不可用）→ **AI 无法直接执行 docker 命令**；2026-09-25 使用者已授权加组，待其自行执行 `sudo usermod -aG docker bird` 并重新登录后生效；
+  - ✅ **`bird` 已在 `docker` 组**（2026-09-26 实测：`docker version`、`docker compose ps/logs/exec` 可直接执行，无需 sudo）；但 `sudo` 仍需密码（`sudo -n` 不可用）→ **AI 能跑 docker，不能用 sudo**（需要 root 的排查动作，如看 80 端口的进程名，得请使用者代跑）；
   - ⚠️ **Docker Hub 不可达**（`registry-1.docker.io:443` 不通），且**未配镜像加速器**（无 `/etc/docker/daemon.json`）→ 本机 `docker pull` 会失败；**2026-09-25 决定暂不配加速器**，本机彩排只能用已有本地镜像，或改用带镜像地址的完整镜像名（如 `docker.m.daocloud.io/library/node:24-alpine`，无需改 daemon.json）；
   - 网络：WiFi 内网 `192.168.1.62`（NAT 后，**不是公网服务器**，对外服务仍用 ECS `47.85.210.76`）；
   - 未装 `nginx` / `certbot` / `caddy`（彩排需另装或用容器）；
