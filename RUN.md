@@ -33,21 +33,37 @@ npm run dev        # 监听 :5173，/api 自动代理到 :3000
 | 本机 | http://localhost:5173 | 打卡截图用这个（地址栏要有 localhost） |
 | 手机 | http://<本机局域网IP>:5173 | 同一 Wi-Fi 下可开（`ip addr` 查本机 IP；**仅局域网预览**，真正的手机端联动要公网 HTTPS + 登录，第 3 周） |
 
+页面清单（都能直接输地址打开）：
+
+| 路径 | 页面 | 说明 |
+|---|---|---|
+| `/` | 个人主页 | 头像 / 昵称 / 简介 + 当月日历与近期日程 |
+| `/notes` | 资料列表 | 卡片 / 目录两种视图，关键词与分类筛选 |
+| `/new` | 新建资料 | 支持 Markdown 实时预览 |
+| `/notes/:id` | 资料详情 | 正文 + 文件路径；底部有「删除这条资料」入口（F6） |
+| `/tasks` | 任务 | 手机端发起任务 + 查看/推进进度（F4/F5） |
+| `/tasks/:id/confirm` | 确认页 | 高风险动作的大白话后果 + 确认 / 取消（F6） |
+| `/confirmations` | 确认留痕 | 回看每一次请求与决定（F6） |
+| `/ask` | 知识库问答 | 需配 KB env，见 8.6 |
+| `/login` | 登录 | 仅隐私模块（`AUTH_ENABLED=1`）启用时可达 |
+
 ## 4. 今天能做什么（功能边界）
 
-| 能做 | 不能做（今天不做） |
+| 能做 | 不能做 |
 |---|---|
-| 登录（口令校验）后查看资料列表、关键词搜索、按分类过滤 | 编辑 / 删除资料（高风险操作，等确认机制就位） |
-| 新建资料（标题/分类/标签/来源链接/正文）→ 落到 `data/` 目录 | 任务发起 / 进度 / 确认操作（F4–F6，第 3 周） |
-| 点开详情看原文 + 真实文件路径（`data/…`） | 多用户与权限、公网 HTTPS 部署（第 3 周） |
-| 知识库问答 `/ask`（配好 KB env 后可用，见 8.6） | RAG 进阶项：混合检索 / Rerank / 多轮记忆 |
-| 查重（内容完全相同时拒绝重复保存） | — |
+| 资料：新建 / 列表检索 / 详情看原文（F1–F3） | 编辑已有资料（改一条已存在的资料）—— 本期没做 |
+| **任务：手机端发起（记资料 / 提醒 / 整理链接）+ 查看与推进状态（F4/F5）** | 任务自动执行器：`organize` / `remind` 只登记待办，只有 `note` 会同步归档 |
+| **删除资料：详情页发起 → 确认页看后果 → 确认后才真删（F6）** | smail 邮箱关联、ehall 事务（第 2–3 期，见 PRD 第 6 章） |
+| **确认留痕：每次请求与决定都能回看（F6）** | 多用户与权限、原生 App、自动后台记录（最后一个永不做） |
+| 个人主页；知识库问答 `/ask`（配好 KB env 后可用，见 8.6） | RAG 进阶项：混合检索 / Rerank / 多轮记忆 |
+| 查重：内容完全相同时拒绝重复写入 | 公网 HTTPS 部署（见 8.7，待安全组放行 443 + 域名） |
 
 ## 5. 数据存哪（重要）
 
 - **资料根目录**：项目 `data/`，按分类（`learning` / `life` / `work`）分子目录，每条一个 `.md`（frontmatter + 正文）；
 - **示例**：`data/` 里预置 4 条（Day 8 迁入）；
 - **索引缓存**：`data/.index.json`（派生数据，删了下次重建，不丢资料）；
+- **任务与确认记录**：`data/.runtime/tasks.json`、`data/.runtime/confirmations.json`（运行时数据，独立成目录、一类数据一个文件，便于第 3 周迁数据库；删这两个文件只会丢任务与留痕，**不影响资料本身**）；
 - **个人主页数据**：`data/profile.md`（frontmatter：`nickname` / `avatar` / `bio`）与 `data/schedule.md`（每行 `- YYYY-MM-DD [HH:mm] 事项`），放 `data/` 根级、不进资料索引；改完刷新 `http://localhost:5173/` 即可看到；
 - ⚠️ `data/` **不进公开仓**（`.gitignore` 已排除）：换电脑/重新 `git clone` 不会带过去，等第 3 周接私有仓后才真正可迁移。
 
@@ -80,7 +96,7 @@ web/
 
 ## 8. 后端（`server/`）怎么跑
 
-> ✅ **已实测**：`server/scripts/smoke.mjs` 在公开（免登录）与隐私（`AUTH_ENABLED=1`）两种模式下均通过（自动按 `/api/health` 的 `auth_enabled` 适配断言）。
+> ✅ **已实测**（2026-09-26 更新）：`server/scripts/smoke.mjs` 覆盖**资料、任务、确认**三条链路 —— 公开模式 **19/19**、隐私模式 **23/23** 通过（自动按 `/api/health` 的 `auth_enabled` 适配断言）。隐私模式的临时口令哈希：`node scripts/hash-password.js "口令" | head -1`（⚠️ 该脚本第二行是提示文字，用 `head -1` 取哈希）。
 
 ### 8.1 前提
 
@@ -127,6 +143,38 @@ curl http://localhost:3000/api/notes
 # ③ 不存在的接口 → 统一 404
 curl -i http://localhost:3000/api/nope
 # 期望：404 {"ok":false,"error":{"code":"NOT_FOUND","message":"接口不存在"}}
+
+# ④ 任务：建一条提醒（无自动执行器，落「待办」）
+curl -s -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" \
+  -d '{"type":"remind","payload":{"text":"交作业"},"origin":"phone"}'
+# 期望：201 {"ok":true,"data":{"status":"todo","origin":"phone",...}}
+
+# ⑤ 任务列表（可加 ?status=todo 过滤）
+curl -s http://localhost:3000/api/tasks
+# 期望：200 {"ok":true,"data":{"total":N,"items":[...]}}
+```
+
+删除确认流（F6）—— 把 `<资料id>` 换成 `/api/notes` 里某条的 id：
+
+```bash
+# ⑥ 发起删除 → 只生成待确认记录，**资料此时还在**
+curl -s -X POST http://localhost:3000/api/tasks -H "Content-Type: application/json" \
+  -d '{"type":"delete_note","payload":{"note_id":"<资料id>"}}'
+# 期望：201 + status=attention
+
+# ⑦ 没确认就想执行 → 直接拒绝
+curl -s -w ' [%{http_code}]\n' -X PATCH http://localhost:3000/api/tasks/<任务id> \
+  -H "Content-Type: application/json" -d '{"status":"done"}'
+# 期望：428 CONFIRM_REQUIRED
+
+# ⑧ 拒绝执行 → 任务失败，资料原封不动（改成 "approved" 才会真删）
+curl -s -X PATCH http://localhost:3000/api/tasks/<任务id> \
+  -H "Content-Type: application/json" -d '{"decision":"rejected"}'
+# 期望：200 + status=failed
+
+# ⑨ 留痕回看
+curl -s http://localhost:3000/api/confirmations
+# 期望：200 {"ok":true,"data":{"total":N,"items":[...]}}
 ```
 
 启用隐私（`AUTH_ENABLED=1`）后，再验证登录：
@@ -142,9 +190,12 @@ curl -i -X POST http://localhost:3000/api/login \
 
 | 能做 | 不能做（今天不做） |
 |---|---|
-| 登录 / 登出 / 健康检查 | 删除资料（`remove` 占位，501） |
-| 资料三接口：新建、列表检索、读原文（`/api/notes`） | 资料的 Git 提交/推送同步（`sync` 占位，第 3 周） |
-| 全文检索 + 索引缓存 + 失败限流 + 统一错误格式 | 会话持久化：现在存内存，**重启服务就掉线**，需重新登录 |
+| 登录 / 登出 / 健康检查 | 资料的 Git 提交/推送同步（`sync` 占位，第 3 周） |
+| 资料三接口：新建、列表检索、读原文（`/api/notes`） | 编辑已有资料（改已有内容）—— 本期没做 |
+| **任务三接口：建任务 / 进度列表 / 状态与确认（`/api/tasks`）** | `organize`、`remind` 的自动执行器（只登记待办） |
+| **确认留痕接口（`/api/confirmations`）** | 会话持久化：现在存内存，**重启服务就掉线**，需重新登录 |
+| 删除资料：`remove` 已实现，**但只能经 F6 确认流触发**（没有直接删除的接口） | 公网 HTTPS 部署（见 8.7） |
+| 全文检索 + 索引缓存 + 失败限流 + 统一错误格式 | — |
 | 知识库问答三接口 `/api/kb/*`（需配 env，见 8.6） | — |
 
 ### 8.5 目录速查
@@ -252,6 +303,7 @@ ls data/work/                                               # 在页面上新建
 | 宿主机 80 端口被别的服务占用 | — | 改 compose 的 `ports`（如 `"8080:80"`） |
 | Chroma 数据存哪 | 命名卷，不在仓库里 | 实测镜像 `1.4.4` 的 `persist_path` 是 **`/data`**（不是 `/chroma/chroma`），已挂 `vbcd_chroma-data` |
 | 换 Embedding 模型后检索全乱 | 向量语义变了，但文档 hash 未变 → 不会重建 | 删 Chroma collection `buddy-notes` 与 `data/.kb-manifest.json`，再跑 `/api/kb/index` |
+| 宿主机能 ping 通容器 IP，但访问 80 端口被**重置**（容器本身一直 healthy） | 宿主机 sing-box（v2rayN 的 TUN 模式）把接口地址设成 `172.18.0.1/30`，与 Docker 的 `172.18.0.0/16` 撞车；`/30` 更具体 → `172.18.0.3`（web 容器）被当成广播地址 | `docker-compose.yml` 已把 `internal` 网段固定为 `172.30.0.0/16`（2026-09-26），**别再改回去** |
 | `docker` 报 `permission denied` | 当前用户不在 `docker` 组 | 永久：`sudo usermod -aG docker $USER` 后重新登录；临时：`sudo setfacl -m u:$USER:rw /var/run/docker.sock`（docker 服务重启后失效，需重跑） |
 
 **上线到服务器还差三步**（现只开了 80）：① 阿里云安全组放行 **443**；② 域名 A 记录指向服务器 IP；③ 加 `certbot` 证书段。
