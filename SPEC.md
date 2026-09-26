@@ -31,7 +31,7 @@ vbcd/
 │   └── package.json
 ├── server/              # 后端：Node.js + Express
 │   ├── src/
-│   │   ├── routes/      # 接口路由（对应第 3 章；kb.js = F9 问答）
+│   │   ├── routes/      # 接口路由（对应第 3 章；tasks.js/confirmations.js = F4–F6，kb.js = F9）
 │   │   ├── services/    # 业务逻辑（资料、任务、确认；kb.js 索引+问答、llm.js 模型装配）
 │   │   ├── storage/     # 存储适配层（见 7.3：将来换数据库只动这里）
 │   │   ├── middleware/  # 鉴权、错误处理、请求日志
@@ -82,7 +82,7 @@ vbcd/
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `id` | string | 主键 |
-| `type` | enum | `note`（记资料）/ `organize`（整理链接）/ `remind`（提醒） |
+| `type` | enum | `note`（记资料）/ `organize`（整理链接）/ `remind`（提醒）/ `delete_note`（删除资料，**高风险**：只生成待确认记录，须经 F6 确认才真删，见 3.3） |
 | `payload` | object | 任务参数（如 `{title, content}`） |
 | `status` | enum | `todo` / `doing` / `done` / `failed` / `attention`（见 5.4） |
 | `result` | string | 执行结果摘要（成功或失败原因） |
@@ -116,9 +116,10 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（**12 个**）
+## 3. API 列表（**13 个**）
 
-> 说明：原方案我提了 7 个，**漏了 F5 需要的"任务列表"接口**，故实为 8 个（此处如实修正）；2026-09-25 为 F9 知识库问答追加 3 个、为个人主页追加 1 个，共 12 个。
+> 说明：原方案我提了 7 个，**漏了 F5 需要的"任务列表"接口**，故实为 8 个（此处如实修正）；2026-09-25 为 F9 知识库问答追加 3 个、为个人主页追加 1 个；2026-09-26 为 F6 确认留痕追加 1 个，共 13 个。
+> **删除资料不单独开接口**：它复用任务链路（`POST /api/tasks` + `type=delete_note`），并强制走 3.3 的确认流。
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 流式接口除外，见 3.1）。资料接口**默认公开**；启用隐私模块（`AUTH_ENABLED=1`）后，除登录外全部要求已登录。
 
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
@@ -128,13 +129,14 @@ vbcd/
 | 3 | `POST /api/notes` | 新建资料（F1） | `title, category, content, tags?, source_url?` | `201 {id, path, hash}` | `VALIDATION_FAILED`、`DUPLICATE` |
 | 4 | `GET /api/notes` | 列表与检索（F2/F3） | `q?, category?, from?, to?, sort?, limit?, offset?` | `200 {total, items[], rebuilt_in_ms}` | `INTERNAL` |
 | 5 | `GET /api/notes/:id` | 读原文（F2） | — | `200 {meta, content}` | `NOT_FOUND` |
-| 6 | `POST /api/tasks` | 建任务（F4） | `type, payload` | `201 {id, status}` | `VALIDATION_FAILED` |
+| 6 | `POST /api/tasks` | 建任务（F4） | `type, payload, origin?` | `201 {task}` | `VALIDATION_FAILED`、`NOT_FOUND`（delete_note 指向的资料不存在） |
 | 7 | `GET /api/tasks` | 任务进度列表（F5） | `status?` | `200 {items[]}` | `AUTH_REQUIRED` |
-| 8 | `PATCH /api/tasks/:id` | 更新状态 / 提交确认（F5/F6） | `status?, decision?, summary?` | `200 {task}` | `CONFIRM_REQUIRED`（高风险动作未确认时返回 `428`） |
+| 8 | `PATCH /api/tasks/:id` | 更新状态 / 提交确认（F5/F6） | `status?`、`decision?`（两者二选一；`summary` 由服务端生成，不接受传入） | `200 {task}` | `VALIDATION_FAILED`、`CONFIRM_REQUIRED`（高风险动作未确认时返回 `428`） |
 | 9 | `POST /api/kb/query` | 知识库问答（F9） | `q`（必填，≤500 字）, `k?` | `200 {answer, sources[]}` | `VALIDATION_FAILED`、`KB_NOT_CONFIGURED`、`CHROMA_UNAVAILABLE`、`LLM_FAILED` |
 | 10 | `GET /api/kb/stream` | 流式问答（SSE，F9） | `?q=`、`?k=` | `text/event-stream` | 错误以 `event: error` 推送 |
 | 11 | `POST /api/kb/index` | 触发增量索引（F9） | 无 | `200 {added, updated, removed, unchanged, chunks}` | `KB_NOT_CONFIGURED`、`CHROMA_UNAVAILABLE`、`LLM_FAILED` |
 | 12 | `GET /api/me` | 个人主页（头像/昵称/简介/日程） | — | `200 {profile:{nickname,avatar,bio}, schedule:[{date,time,title}]}` | `INTERNAL` |
+| 13 | `GET /api/confirmations` | 确认留痕回看（F6） | `task_id?` | `200 {total, items[]}` | `INTERNAL` |
 
 ### 3.1 知识库问答（F9，2026-09-25 追加）
 
@@ -159,6 +161,22 @@ vbcd/
 - **`data/schedule.md`**：正文每行一条日程，格式 `- YYYY-MM-DD [HH:mm] 事项`（时间可省略表示全天）；不合法的行静默跳过；接口返回按日期+时间升序。
 - 两文件位于 `data/` **根级而非子目录**：`files.js:list()` 只遍历子目录，所以它们不会出现在资料列表，也不会进知识库向量索引。
 - 文件缺失或为空时接口照常返回 `200`（空 profile / 空 schedule），由前端降级展示。
+
+### 3.3 高风险动作的确认流（F6，2026-09-26 追加）
+
+**为什么要有它**：删除资料不可撤销。产品铁律要求「先展示后果、经使用者确认后再执行」，所以后端**不提供任何直接删除的入口**。
+
+**三步时序**：
+1. **请求**：`POST /api/tasks` 带 `type=delete_note` + `payload.note_id` → 校验资料存在 → 任务落 `attention` → 写一条 `Confirmation`（`action=delete_note`、`summary` 用大白话写明后果、`decision` 为空）→ **一个字节都不删**；
+2. **闸门**：只要该任务存在未决的 `Confirmation`，任何带 `status` 的 `PATCH /api/tasks/:id` 一律返回 **`428 CONFIRM_REQUIRED`**，不给绕过确认的口子（前端页面只是「提交决定」的地方，安全边界在后端）；
+3. **决定**：`PATCH /api/tasks/:id` 带 `decision=approved|rejected` → **先把决定与时间写回 `Confirmation`（留痕），再按决定执行或取消**：
+   - `approved` → 执行动作（当前只有 `delete_note`）→ 任务 `done`；执行前会再确认一次资料是否还在，不在则 `failed`；
+   - `rejected` → **不执行任何动作** → 任务 `failed`，`result` 写明「你在 <时间> 拒绝了这次操作，未做任何改动」；
+   - 重复提交同一确认 → `400`（已无待确认记录），对应「不重复处理」铁律。
+
+**删除成功后的一致性**：索引缓存（`data/.index.json`）按目录指纹自动重建，无需手工清理；知识库向量库里的旧 chunk 由下一次 `POST /api/kb/index` 的增量逻辑清掉（本期不自动触发）。
+
+**留痕口径**：`GET /api/confirmations` 按请求时间倒序返回全部记录（可 `?task_id=` 过滤）；记录**不写「谁」**（单人使用），只写「何时请求、将要发生什么、何时决定、决定了什么」。
 
 ## 4. 数据流
 
@@ -290,6 +308,6 @@ vbcd/
 ## 8. 本文档待确认项（草案部分需你勾选）
 
 1. **第 2 章字段**：`tags`、`source_url`、`excerpt` 长度（120 字）是否都保留？有没有多余字段想删？
-2. **第 3 章接口**：8 个够用吗？是否需要"删除资料"接口（当前没有——符合"本期不做"）？
+2. **第 3 章接口**：现为 13 个（原 8 个 + F9 的 3 个 + 个人主页 1 个 + 确认留痕 1 个）。「删除资料」已于 2026-09-26 实现，但**不新增独立接口** —— 复用任务链路（`type=delete_note`）并强制走 F6 确认流（见 3.3）。
 3. **第 6 章环境变量**：键名与默认值是否符合你的习惯？
 4. **第 7.3 迁移**：触发条件（1000 条 / 2 秒）是否接受？
