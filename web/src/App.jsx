@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import HomePage from './pages/HomePage.jsx'
 import NoteListPage from './pages/NoteListPage.jsx'
 import TaskListPage from './pages/TaskListPage.jsx'
+import TaskConfirmPage from './pages/TaskConfirmPage.jsx'
 import NoteCreatePage from './pages/NoteCreatePage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
 import KbAskPage from './pages/KbAskPage.jsx'
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/notes" element={<NoteListPage />} />
           <Route path="/tasks" element={<TaskListPage />} />
+          <Route path="/tasks/:id/confirm" element={<TaskConfirmPage />} />
           <Route path="/new" element={<NoteCreatePage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
           <Route path="/ask" element={<KbAskPage />} />

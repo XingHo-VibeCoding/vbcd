@@ -3,7 +3,7 @@
 // · 状态推进走 PATCH /api/tasks/:id；高风险任务（attention）在确认前推不动，后端会回 428
 // · origin 按 UA 判断手机/电脑，显式传给后端（后端不猜 UA）
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { createTask, listTasks, updateTaskStatus } from '../api/tasks'
 
 const CATEGORIES = [
@@ -292,7 +292,11 @@ export default function TaskListPage() {
               </div>
               {task.result ? <p className="note-item-excerpt">{task.result}</p> : null}
               {task.status === 'attention' ? (
-                <p className="hint">这条任务在等确认，确认通过后才会执行（确认页在下一步接入）</p>
+                <div className="task-actions">
+                  <Link className="btn-primary" to={`/tasks/${encodeURIComponent(task.id)}/confirm`}>
+                    去确认
+                  </Link>
+                </div>
               ) : (
                 <div className="task-actions">
                   {(NEXT_STATUS[task.status] ?? []).map(([next, label]) => (

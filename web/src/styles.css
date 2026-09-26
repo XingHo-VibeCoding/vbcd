@@ -1002,3 +1002,27 @@ body {
   background: #fff4e0;
   color: #8a5300;
 }
+
+/* ===== 板块 4 · 确认页（F6）===== */
+
+/* 待确认的动作：左侧橙色竖线，视觉上一眼看出「这是一件需要你决策的事」 */
+.confirm-block {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-left: 4px solid #d9822b;
+  border-radius: var(--radius);
+  padding: var(--sp-3) var(--sp-4);
+  margin: var(--sp-3) 0;
+}
+
+.confirm-summary {
+  font-size: var(--fs-4);
+  line-height: 1.6;
+  margin: 0 0 var(--sp-2);
+}
+
+/* 确认页的「返回 / 留痕」是 <a> 按钮：去掉链接默认下划线 */
+.form-actions a {
+  text-decoration: none;
+  text-align: center;
+}
