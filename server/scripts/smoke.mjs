@@ -131,14 +131,130 @@ if (kbIndex.status === 503 && kbIndex.json?.error?.code === 'KB_NOT_CONFIGURED')
   check('KB GET /api/kb/stream → SSE 事件流', streamRes.status === 200 && /event: (token|error|done)/.test(streamText), `status=${streamRes.status}`)
 }
 
-if (authEnabled) {
-  // ⑪ 登出 → 204
-  const logout = await req('POST', '/api/logout', { cookie })
-  check('⑪ 登出 → 204', logout.status === 204, `status=${logout.status}`)
+// ===== 任务与确认链路（F4 发起 / F5 进度 / F6 确认）=====
+// 注意：⑳ 会真的删除文件，所以专建一条「待删」资料，不动前面的冒烟资料。
 
-  // ⑫ 登出后旧会话失效 → 401
+// ⑪ 建提醒类任务（本期无自动执行器）→ 201 待办
+const taskTodo = await req('POST', '/api/tasks', {
+  body: { type: 'remind', payload: { text: `冒烟提醒-${UNIQ}` }, origin: 'phone' },
+  cookie,
+})
+check(
+  '⑪ POST /api/tasks(remind) → 201 待办',
+  taskTodo.status === 201 && taskTodo.json?.data?.status === 'todo' && taskTodo.json?.data?.origin === 'phone',
+  taskTodo.json?.data?.result,
+)
+
+// ⑫ 建资料类任务 → 同步执行 → 完成
+const taskNote = await req('POST', '/api/tasks', {
+  body: { type: 'note', payload: { title: `任务建的资料-${UNIQ}`, category: 'life', content: `任务正文 ${UNIQ}` }, origin: 'phone' },
+  cookie,
+})
+check(
+  '⑫ POST /api/tasks(note) → 同步归档完成',
+  taskNote.status === 201 && taskNote.json?.data?.status === 'done',
+  taskNote.json?.data?.result,
+)
+
+// ⑬ 重复提交同一内容 → 落一条 failed 任务（不重复写入）
+const taskDup = await req('POST', '/api/tasks', {
+  body: { type: 'note', payload: { title: `任务建的资料-${UNIQ}`, category: 'life', content: `任务正文 ${UNIQ}` }, origin: 'phone' },
+  cookie,
+})
+check(
+  '⑬ 重复内容 → 任务 failed + 查重原因',
+  taskDup.status === 201 && taskDup.json?.data?.status === 'failed' && /已存在/.test(taskDup.json?.data?.result ?? ''),
+  taskDup.json?.data?.result,
+)
+
+// ⑭ 任务列表 + 按状态过滤
+const taskList = await req('GET', '/api/tasks?status=todo', { cookie })
+const todoHit = Boolean(taskList.json?.data?.items?.some((t) => t.id === taskTodo.json?.data?.id))
+check(
+  '⑭ GET /api/tasks?status=todo → 命中且只含 todo',
+  taskList.status === 200 && todoHit && taskList.json?.data?.items?.every((t) => t.status === 'todo'),
+  `total=${taskList.json?.data?.total}`,
+)
+
+// ⑮ 非法状态迁移（已完成 → 待办）→ 400
+const badMove = await req('PATCH', `/api/tasks/${taskNote.json?.data?.id}`, { body: { status: 'todo' }, cookie })
+check(
+  '⑮ 已完成→待办 → 400 VALIDATION_FAILED',
+  badMove.status === 400 && badMove.json?.error?.code === 'VALIDATION_FAILED',
+  badMove.json?.error?.message,
+)
+
+// ⑯ 专建一条待删资料，发起删除 → 任务 attention（此时尚未删除）
+const victim = await req('POST', '/api/notes', {
+  body: { title: `待删资料-${UNIQ}`, category: 'work', content: `待删正文 ${UNIQ}` },
+  cookie,
+})
+const victimId = victim.json?.data?.id
+const delTask = await req('POST', '/api/tasks', {
+  body: { type: 'delete_note', payload: { note_id: victimId }, origin: 'phone' },
+  cookie,
+})
+check(
+  '⑯ 发起删除 → 任务 attention（还没删）',
+  delTask.status === 201 && delTask.json?.data?.status === 'attention',
+  delTask.json?.data?.result,
+)
+
+// ⑰ 未确认就想改状态 → 428（确认前的闸门）
+const bypass = await req('PATCH', `/api/tasks/${delTask.json?.data?.id}`, { body: { status: 'done' }, cookie })
+check(
+  '⑰ 未确认改状态 → 428 CONFIRM_REQUIRED',
+  bypass.status === 428 && bypass.json?.error?.code === 'CONFIRM_REQUIRED',
+  bypass.json?.error?.message?.slice(0, 30),
+)
+
+// ⑱ 确认留痕可读，且带大白话 summary
+const confs = await req('GET', `/api/confirmations?task_id=${delTask.json?.data?.id}`, { cookie })
+const pendingConf = confs.json?.data?.items?.[0]
+check(
+  '⑱ GET /api/confirmations → 待确认 + summary',
+  confs.status === 200 && Boolean(pendingConf) && pendingConf.decision === '' && /永久删除/.test(pendingConf.summary ?? ''),
+  pendingConf?.summary?.slice(0, 30),
+)
+
+// ⑲ 拒绝 → 任务 failed，且资料原封不动
+const rejected = await req('PATCH', `/api/tasks/${delTask.json?.data?.id}`, { body: { decision: 'rejected' }, cookie })
+const stillThere = await req('GET', `/api/notes/${encodeURIComponent(victimId)}`, { cookie })
+check(
+  '⑲ 拒绝执行 → failed 且资料仍在',
+  rejected.status === 200 && rejected.json?.data?.status === 'failed' && stillThere.status === 200,
+  rejected.json?.data?.result,
+)
+
+// ⑳ 重新发起并确认 → 资料才真正被删除
+const delTask2 = await req('POST', '/api/tasks', {
+  body: { type: 'delete_note', payload: { note_id: victimId }, origin: 'phone' },
+  cookie,
+})
+const approved = await req('PATCH', `/api/tasks/${delTask2.json?.data?.id}`, { body: { decision: 'approved' }, cookie })
+const gone = await req('GET', `/api/notes/${encodeURIComponent(victimId)}`, { cookie })
+check(
+  '⑳ 确认执行 → done 且资料已删除',
+  approved.status === 200 && approved.json?.data?.status === 'done' && gone.status === 404,
+  approved.json?.data?.result,
+)
+
+// ㉑ 重复确认 → 400（同一确认提交两次应被拒）
+const again = await req('PATCH', `/api/tasks/${delTask2.json?.data?.id}`, { body: { decision: 'approved' }, cookie })
+check(
+  '㉑ 重复确认 → 400（已无待确认）',
+  again.status === 400 && again.json?.error?.code === 'VALIDATION_FAILED',
+  again.json?.error?.message,
+)
+
+if (authEnabled) {
+  // ㉒ 登出 → 204
+  const logout = await req('POST', '/api/logout', { cookie })
+  check('㉒ 登出 → 204', logout.status === 204, `status=${logout.status}`)
+
+  // ㉓ 登出后旧会话失效 → 401
   const afterLogout = await req('GET', '/api/notes', { cookie })
-  check('⑫ 登出后旧会话 → 401', afterLogout.status === 401, afterLogout.json?.error?.code)
+  check('㉓ 登出后旧会话 → 401', afterLogout.status === 401, afterLogout.json?.error?.code)
 }
 
 console.log(`\n结果：✅ ${passed} 通过 ｜ ❌ ${failed} 失败`)
