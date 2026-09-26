@@ -230,9 +230,24 @@ export async function put(note) {
   return { id, path: `${note.category}/${id}.md`, hash: note.hash }
 }
 
-/** 本期不做删除（PRD「本期不做」清单）；保留方法名以维持适配层契约 */
-export async function remove() {
-  throw Object.assign(new Error('本期不做删除资料'), { status: 501, code: 'NOT_IMPLEMENTED' })
+/**
+ * 删除一条资料（F6：只有经使用者明确确认后才会调用本方法，路由层不会自行删除）。
+ * 返回被删条目的 { id, path } 供业务层写进任务结果；资料不存在返回 null（由业务层转 NOT_FOUND）。
+ * 索引缓存无需手工失效：index-store 按目录指纹判断，下次请求会自动重建。
+ */
+export async function remove(id) {
+  const { items } = await list()
+  const hit = items.find((item) => item.id === id)
+  if (!hit) return null
+
+  try {
+    await unlink(path.join(DATA_DIR, hit.path))
+  } catch (err) {
+    if (err.code === 'ENOENT') return null // 文件已不在（被手工删掉等）：按不存在处理
+    throw storageError(`删除 ${hit.path} 失败：${err.message}`)
+  }
+
+  return { id: hit.id, path: hit.path }
 }
 
 /** 第 3 周接 Gitea 私有仓后，这里变成 git pull/commit/push；当前无远端，故为空操作 */
