@@ -1,4 +1,9 @@
 :root {
+  /* 主题（F10）：浅色为默认值；深色由 index.html 的首屏脚本写入
+     <html data-theme="dark"> 后，靠下面的覆盖块生效。
+     两套主题共用同一组变量名，组件规则里不出现硬编码色值。 */
+  color-scheme: light;
+
   /* ===== 颜色（Day 9 步骤 1：值不变，先把散落的内联色值收进 token）===== */
   --bg: #f7f7f5;
   --surface: #ffffff;
@@ -17,6 +22,16 @@
   --danger-text: #b3261e;
   --danger-border: #f5c6c2;
   --text-on-accent: #ffffff; /* 强调色上的文字（按钮）*/
+
+  /* ===== F10 追加：把原来写死在组件规则里的状态色收进 token，深色主题才能整体换 ===== */
+  --text-on-disabled: #ffffff; /* 禁用按钮文字（浅色下与 --text-on-accent 同值）*/
+  --ok-bg: #e8f4ea; /* 成功条 / 已完成徽章底 */
+  --ok-text: #1f6b39;
+  --ok-border: #bcdcc4;
+  --warn-bg: #fff4e0; /* 需确认徽章底 */
+  --warn-text: #8a5300;
+  --warn-line: #d47c22; /* 确认区块的左侧警示竖线（原 #d9822b 对白底仅 2.93:1，加深一档到 3.13:1）*/
+  --danger-bg-hover: #fbdcd8; /* 危险按钮 hover 底 */
 
   /* ===== 字号：7 档，关键相邻差 ≥2px（Day 9 · P1/P2）=====
      正文基准 = --fs-3（15px）；12px 档取消（最小为 13px）。 */
@@ -43,6 +58,40 @@
   --sp-5: 24px;
   --sp-6: 32px;
   --sp-7: 48px;
+}
+
+/* ===== 深色主题（F10）：同名 token 全覆盖，组件规则一行都不用改 =====
+   对比度按 WCAG 相对亮度公式核算（正文/次要文字/徽章/按钮/禁用态 ≥4.5:1，
+   作为 UI 边界的 --warn-line ≥3:1）。改色值前先复核对比度，别凭眼睛调。 */
+:root[data-theme='dark'] {
+  color-scheme: dark; /* 滚动条、select 下拉、文本框等原生控件跟随深色 */
+
+  --bg: #14161a;
+  --surface: #1e2126;
+  --surface-subtle: #24282e;
+  --border: #3c424b;
+  --text: #e9ebee;
+  --muted: #a9aeb6; /* surface 上 7.2:1，bg 上 8.1:1 */
+  --accent: #8ab4f8; /* surface 上 7.7:1 */
+  --accent-hover: #a5c6fa;
+  --accent-soft: #1d2b3b;
+  --surface-hover: #2a2e35;
+  --disabled-bg: #3a3f47;
+  --code-bg: #23272e;
+  --pre-bg: #1a1d22;
+  --danger-bg: #3a2020;
+  --danger-text: #f2a8a2; /* danger-bg 上 7.8:1 */
+  --danger-border: #6b3a36;
+  --danger-bg-hover: #4a2725;
+  /* 深色下强调色是浅蓝底，反白字会看不清 → 改用深色字 */
+  --text-on-accent: #10141a;
+  --text-on-disabled: #b9bec6; /* disabled-bg 上 5.7:1 */
+  --ok-bg: #1b2f22;
+  --ok-text: #86d3a1; /* ok-bg 上 8.0:1 */
+  --ok-border: #2f5138;
+  --warn-bg: #3a2c12;
+  --warn-text: #f0c070; /* warn-bg 上 8.1:1 */
+  --warn-line: #e0a24b; /* surface 上 7.3:1 */
 }
 
 * {
@@ -364,8 +413,9 @@ body {
 
 .btn-primary:disabled {
   /* Day 9 · P5：不再用 opacity(.6)（白字对比度仅约 3.4:1），
-     改用深灰底 + 白字 = 7.4:1，仍可读且 cursor 表明不可点 */
+     改用深灰底 + 专属文字色（浅色 7.4:1 / 深色 5.7:1），仍可读且 cursor 表明不可点 */
   background: var(--disabled-bg);
+  color: var(--text-on-disabled);
   cursor: not-allowed;
 }
 
@@ -932,9 +982,9 @@ body {
 /* ===== 板块 3 · 任务页（F4/F5）===== */
 
 .ok-bar {
-  background: #e8f4ea;
-  color: #1f6b39;
-  border: 1px solid #bcdcc4;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border: 1px solid var(--ok-border);
   border-radius: var(--radius);
   padding: var(--sp-2) var(--sp-3);
   font-size: var(--fs-2);
@@ -989,8 +1039,8 @@ body {
 }
 
 .badge--done {
-  background: #e8f4ea;
-  color: #1f6b39;
+  background: var(--ok-bg);
+  color: var(--ok-text);
 }
 
 .badge--failed {
@@ -999,8 +1049,8 @@ body {
 }
 
 .badge--attention {
-  background: #fff4e0;
-  color: #8a5300;
+  background: var(--warn-bg);
+  color: var(--warn-text);
 }
 
 /* ===== 板块 4 · 确认页（F6）===== */
@@ -1009,7 +1059,7 @@ body {
 .confirm-block {
   background: var(--surface-subtle);
   border: 1px solid var(--border);
-  border-left: 4px solid #d9822b;
+  border-left: 4px solid var(--warn-line);
   border-radius: var(--radius);
   padding: var(--sp-3) var(--sp-4);
   margin: var(--sp-3) 0;
@@ -1047,7 +1097,7 @@ body {
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #fbdcd8;
+  background: var(--danger-bg-hover);
 }
 
 .btn-danger:disabled {

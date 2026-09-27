@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>buddy — 会成长的个人助手</title>
+    <script>
+      // 首屏前定好主题，避免先渲染浅色再跳深色（F10）。
+      // 逻辑与 web/src/theme.js 一致：有用户选择用选择，否则跟随系统。
+      ;(function () {
+        try {
+          var saved = localStorage.getItem('buddy-theme')
+          var theme = saved === 'light' || saved === 'dark' ? saved : null
+          if (!theme) {
+            theme =
+              window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+          }
+          document.documentElement.dataset.theme = theme
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
