@@ -1086,6 +1086,61 @@ body {
   }
 }
 
+/* ===== Day 11 · 交互反馈：复制路径 + 短暂提示条（SPEC 5.3.1）===== */
+
+/* 「文件路径」一行：路径 + 复制按钮；窄屏允许换行 */
+.detail-path {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* 比 .btn-ghost 小一档，跟在一行路径后面不抢视线（窄屏的 44px 触控高度
+   由已有媒体查询统一给 .btn-ghost） */
+.btn-copy {
+  padding: var(--sp-1) var(--sp-3);
+}
+
+/* 提示条：固定在视口右上角；出现/消失瞬时，无过渡动画。
+   右上角会短暂压住顶部标题区，但 pointer-events: none 保证不档任何点击 */
+.toast-slot {
+  position: fixed;
+  top: var(--sp-4);
+  right: var(--sp-4);
+  z-index: 20;
+  width: max-content;
+  max-width: min(92vw, 360px);
+  pointer-events: none; /* 空着的时候不档任何点击 */
+}
+
+/* 窄屏：贴紧右边一点，宽度按视口算，不让长路径溢出 */
+@media (max-width: 720px) {
+  .toast-slot {
+    right: var(--sp-2);
+    max-width: calc(100vw - var(--sp-4));
+  }
+}
+
+.toast {
+  display: block;
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--ok-border);
+  border-radius: var(--radius);
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  font-size: var(--fs-2);
+  text-align: center;
+  word-break: break-all; /* 长路径换行，不撑破视口 */
+}
+
+/* 失败提示用危险色：与 .error-bar / .badge--failed 同一套 token */
+.toast--error {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
 /* ===== 板块 3 · 任务页（F4/F5）===== */
 
 .ok-bar {
