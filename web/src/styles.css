@@ -845,6 +845,67 @@ body {
   gap: var(--sp-4);
 }
 
+/* 桌面两列布局：左列 = 个人卡（第 1 行）+ 主题方格（第 2 行），右列 = 日历卡跨两行。
+   主题方格在 DOM 里排在最后（窄屏顺序更自然），靠显式定位坐进左列剩余空间。 */
+.profile-card {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.cal-card {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+/* ===== F10 · 主题方格（主页）=====
+   外观与 .card 同一套底/描边/圆角：不加渐变、不加圆形图标底，也不加任何过渡。 */
+.theme-tile {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 180px;
+  padding: var(--sp-5);
+  text-align: center;
+  cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  font: inherit;
+}
+
+/* hover 口径与 .btn-ghost:hover 一致：不位移、不缩放、无过渡 */
+.theme-tile:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.theme-tile-icon {
+  display: block;
+  color: var(--accent);
+}
+
+.theme-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  align-items: center;
+}
+
+.theme-tile-title {
+  font-size: var(--fs-5);
+  font-weight: 600;
+}
+
+.theme-tile-sub {
+  font-size: var(--fs-2);
+  color: var(--muted);
+}
+
 .profile-card {
   display: flex;
   gap: var(--sp-4);
@@ -976,6 +1037,28 @@ body {
 @media (max-width: 720px) {
   .home-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* 单列时清掉桌面的显式定位，否则 grid-column: 2 会撑出一个隐式第二列 */
+  .profile-card,
+  .cal-card,
+  .theme-tile {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  /* 窄屏方格改成紧凑横排：图标在左、两行文字在右，触控高度 ≥44px */
+  .theme-tile {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--sp-3);
+    min-height: 88px;
+    padding: var(--sp-4);
+    text-align: left;
+  }
+
+  .theme-tile-text {
+    align-items: flex-start;
   }
 }
 

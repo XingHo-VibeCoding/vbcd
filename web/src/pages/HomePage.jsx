@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { getMe } from '../api/me.js'
 import { listTasks } from '../api/tasks.js'
+import { getTheme, toggleTheme, watchOtherTabs, watchSystemTheme } from '../theme.js'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 
@@ -56,12 +57,38 @@ function weekDates(base) {
   })
 }
 
+/** 主题方格的图标：纯线条、无装饰底，颜色继承 .theme-tile-icon 的 currentColor */
+function NightIcon() {
+  return (
+    <svg className="theme-tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" fill="currentColor" />
+      <path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function DayIcon() {
+  return (
+    <svg className="theme-tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="4.2" fill="currentColor" />
+      <path
+        d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 export default function HomePage() {
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [tasks, setTasks] = useState([])
   const [error, setError] = useState('')
   const [avatarBroken, setAvatarBroken] = useState(false) // 头像加载失败 → 降级首字母色块
+  // 主题（F10）：初值取首屏脚本已写好的 <html data-theme>
+  const [theme, setTheme] = useState(getTheme)
 
   // 日历视图：缺省为周视图（7 列），?cal=month 才是月视图 —— 与 /notes?view=dir 同一套做法：
   // 写进地址栏而不是 state，刷新、前进后退、把链接发到手机都能保持同一个视图。
@@ -97,6 +124,16 @@ export default function HomePage() {
     }
   }, [navigate])
 
+  // 主题同步：未保存过选择时跟随系统；其他标签页切换后本页也跟随（见 theme.js）
+  useEffect(() => {
+    const stopWatchingSystem = watchSystemTheme(setTheme)
+    const stopWatchingTabs = watchOtherTabs(setTheme)
+    return () => {
+      stopWatchingSystem()
+      stopWatchingTabs()
+    }
+  }, [])
+
   if (error) return <div className="error-bar">{error}</div>
   if (!data) return <div className="loading">载入中…</div>
 
@@ -114,6 +151,8 @@ export default function HomePage() {
   const rangeLabel = isMonthView
     ? `${today.getFullYear()} 年 ${today.getMonth() + 1} 月`
     : `${week[0].getMonth() + 1} 月 ${week[0].getDate()} 日 – ${week[6].getMonth() + 1} 月 ${week[6].getDate()} 日`
+
+  const isDark = theme === 'dark'
 
   // 主页任务列表只显示「还要做的事」：已完成的在 /tasks 里翻
   const pendingTasks = tasks
@@ -230,6 +269,20 @@ export default function HomePage() {
           <Link to="/tasks">全部任务 →</Link>
         </p>
       </section>
+
+      {/* 主题方格（F10）：文案写的是「点下去会变成什么」，不是当前状态 */}
+      <button
+        type="button"
+        className="theme-tile"
+        aria-label={isDark ? '切换到日间模式' : '切换到夜间模式'}
+        onClick={() => setTheme(toggleTheme())}
+      >
+        {isDark ? <DayIcon /> : <NightIcon />}
+        <span className="theme-tile-text">
+          <span className="theme-tile-title">{isDark ? '日间模式' : '夜间模式'}</span>
+          <span className="theme-tile-sub">{isDark ? '阳光洒满的窗台' : '流萤飞舞的深空'}</span>
+        </span>
+      </button>
     </div>
   )
 }
