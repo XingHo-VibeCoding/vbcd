@@ -40,7 +40,7 @@ npm run dev                 # :5173，/api 代理到 :3000
 
 | 路径 | 页面 | 说明 |
 |---|---|---|
-| `/` | 个人主页 | 头像 / 昵称 / 简介；日历周视图（默认）/ 月视图切换（`?cal=month`）；待办任务列表 |
+| `/` | 个人主页 | 头像 / 昵称 / 简介；日历周视图（默认）/ 月视图切换（`?cal=month`）；待办任务列表；深色模式方格开关（F10） |
 | `/notes` | 资料列表 | 卡片 / 目录两种视图（`?view=dir`），关键词与分类筛选 |
 | `/new` | 新建资料 | Markdown 实时预览 |
 | `/notes/:id` | 资料详情 | 正文 + 文件路径；底部「删除这条资料」入口（F6） |
@@ -59,6 +59,7 @@ npm run dev                 # :5173，/api 代理到 :3000
 | 删除资料：详情页发起 → 确认页看后果 → 确认后才真删（F6） | smail 邮箱关联、ehall 事务（第 2–3 期） |
 | 确认留痕：每次请求与决定可回看（F6） | 多用户与权限、原生 App、自动后台记录 |
 | 个人主页；知识库问答 `/ask` | RAG 进阶：混合检索 / Rerank / 多轮记忆 |
+| 全站深浅主题：主页方格开关，偏好存浏览器本地，首次跟随系统（F10） | 主题跨设备同步；跟随系统 / 浅 / 深 三态切换；切换动画 |
 | 查重：内容完全相同则拒绝写入 | 公网 HTTPS 部署（见 8.7） |
 
 ## 5. 数据存哪
@@ -94,7 +95,8 @@ web/
 └── src/
     ├── main.jsx           # React 挂载 + 路由
     ├── App.jsx            # 路由表
-    ├── styles.css
+    ├── styles.css        # 颜色 token：浅色在 :root、深色在 :root[data-theme='dark']
+    ├── theme.js           # 主题读写/切换（localStorage 键：buddy-theme）
     ├── pages/             # 首页 / 列表 / 新建 / 详情 / 任务 / 确认页 / 留痕 / 问答 / 登录
     ├── api/               # client.js 统一请求；notes / tasks / me / kb / auth
     └── components/        # MarkdownContent / NoteFileList

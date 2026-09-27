@@ -28,6 +28,7 @@ vbcd/
 │   └── src/
 │       ├── pages/       # 首页 / 列表 / 新建 / 详情 / 任务 / 确认页 / 留痕 / 问答 / 登录
 │       ├── components/  # MarkdownContent / NoteFileList
+│       ├── theme.js     # 深浅主题的读写与切换（F10）
 │       └── api/         # 接口封装（唯一与后端通信的出口）
 ├── server/              # 后端 Node.js + Express
 │   ├── Dockerfile
@@ -44,6 +45,14 @@ vbcd/
 - 公开仓只放代码与文档，个人资料不进公开仓；
 - 资料目录 `data/` 已被 `.gitignore` 根锚定排除（根锚定写法，避免误伤 `web/src/data/`）；
 - 线上资料目录是服务器 `DATA_DIR`（数据私有仓的克隆），与代码目录分开。
+
+## 1.1 前端主题（F10）
+
+- **颜色只有一处定义**：`web/src/styles.css` 的 `:root`（浅色）与 `:root[data-theme='dark']`（深色覆盖），两套同名 token；组件规则里不出现硬编码色值。
+- **真值**：`<html data-theme="light|dark">`；首屏由 `web/index.html` 的内联脚本在渲染前写好（避免浅色闪一下），运行期读写归 `web/src/theme.js`。
+- **默认与持久化**：无 `localStorage['buddy-theme']` 时跟随系统 `prefers-color-scheme`；用户点过之后固定，写入该键（仅 `light`/`dark`，写失败静默不报错）。
+- **服务端不参与**：不写 `data/profile.md`，不新增接口（接口仍 13 个），不跨设备同步。
+- **无动画**：不引入 `transition` / `animation` / `@keyframes`；深色下原生控件由 `color-scheme` 跟随。
 
 ## 2. 数据对象及字段
 
