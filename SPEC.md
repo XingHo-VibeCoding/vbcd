@@ -26,7 +26,7 @@ vbcd/
 ├── web/                 # 前端 React + Vite
 │   ├── nginx.conf       # 生产：SPA 回退 + SSE 关缓冲
 │   └── src/
-│       ├── pages/       # 首页 / 列表 / 新建 / 详情 / 任务 / 确认页 / 留痕 / 问答 / 登录
+│       ├── pages/       # 首页 / 列表 / 新建 / 详情 / 任务 / 确认页 / 留痕 / 问答 / 登录 / 关于
 │       ├── components/  # MarkdownContent / NoteFileList
 │       ├── theme.js     # 深浅主题的读写与切换（F10）
 │       └── api/         # 接口封装（唯一与后端通信的出口）
@@ -53,6 +53,7 @@ vbcd/
 - **默认与持久化**：无 `localStorage['buddy-theme']` 时跟随系统 `prefers-color-scheme`；用户点过之后固定，写入该键（仅 `light`/`dark`，写失败静默不报错）。
 - **服务端不参与**：不写 `data/profile.md`，不新增接口（接口仍 13 个），不跨设备同步。
 - **无动画**：不引入 `transition` / `animation` / `@keyframes`；深色下原生控件由 `color-scheme` 跟随。
+- **关于页热力图色（F11）**：两套主题各 3 个 `--contrib-*`（0 档复用 `--surface-hover`）。
 
 ## 2. 数据对象及字段
 

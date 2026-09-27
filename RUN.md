@@ -48,6 +48,7 @@ npm run dev                 # :5173，/api 代理到 :3000
 | `/tasks/:id/confirm` | 确认页 | 高风险动作的后果说明 + 确认 / 取消（F6） |
 | `/confirmations` | 确认留痕 | 回看每次请求与决定（F6） |
 | `/ask` | 知识库问答 | 需配 KB env，见 8.6 |
+| `/about` | 关于 | 自我介绍 / 研究动态页签（`?tab=activity`）；热力图按资料 date 聚合，时间线取最新 8 条（F11） |
 | `/login` | 登录 | 仅 `AUTH_ENABLED=1` 时可达 |
 
 ## 4. 功能边界
@@ -60,6 +61,7 @@ npm run dev                 # :5173，/api 代理到 :3000
 | 确认留痕：每次请求与决定可回看（F6） | 多用户与权限、原生 App、自动后台记录 |
 | 个人主页；知识库问答 `/ask` | RAG 进阶：混合检索 / Rerank / 多轮记忆 |
 | 全站深浅主题：主页方格开关，偏好存浏览器本地，首次跟随系统（F10） | 主题跨设备同步；跟随系统 / 浅 / 深 三态切换；切换动画 |
+| 关于页：自我介绍 / 研究动态（F11） | 真实横幅图、热力图按天点击查看资料 |
 | 查重：内容完全相同则拒绝写入 | 公网 HTTPS 部署（见 8.7） |
 
 ## 5. 数据存哪
@@ -97,7 +99,7 @@ web/
     ├── App.jsx            # 路由表
     ├── styles.css        # 颜色 token：浅色在 :root、深色在 :root[data-theme='dark']
     ├── theme.js           # 主题读写/切换（localStorage 键：buddy-theme）
-    ├── pages/             # 首页 / 列表 / 新建 / 详情 / 任务 / 确认页 / 留痕 / 问答 / 登录
+    ├── pages/             # 首页 / 列表 / 新建 / 详情 / 任务 / 确认页 / 留痕 / 问答 / 登录 / 关于
     ├── api/               # client.js 统一请求；notes / tasks / me / kb / auth
     └── components/        # MarkdownContent / NoteFileList
 ```
