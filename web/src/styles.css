@@ -33,6 +33,11 @@
   --warn-line: #d47c22; /* 确认区块的左侧警示竖线（原 #d9822b 对白底仅 2.93:1，加深一档到 3.13:1）*/
   --danger-bg-hover: #fbdcd8; /* 危险按钮 hover 底 */
 
+  /* ===== F11 追加：贡献热力图三档绿（GitHub 色系，0 档直接用 --surface-hover）===== */
+  --contrib-1: #9be9a8;
+  --contrib-2: #40c463;
+  --contrib-3: #216e39;
+
   /* ===== 字号：7 档，关键相邻差 ≥2px（Day 9 · P1/P2）=====
      正文基准 = --fs-3（15px）；12px 档取消（最小为 13px）。 */
   --fs-1: 13px; /* 元信息 / 页脚 / 标签 / md code */
@@ -92,6 +97,10 @@
   --warn-bg: #3a2c12;
   --warn-text: #f0c070; /* warn-bg 上 8.1:1 */
   --warn-line: #e0a24b; /* surface 上 7.3:1 */
+
+  --contrib-1: #0e4429;
+  --contrib-2: #006d32;
+  --contrib-3: #26a641;
 }
 
 * {
@@ -1262,4 +1271,321 @@ body {
 .agenda-more {
   margin: var(--sp-2) 0 0;
   font-size: var(--fs-1);
+}
+
+/* ===== F11 · 关于页（/about）=====
+   布局照参考图：纯色横幅 + 圆形头像压缝 + 大标题/英文副标题 + 右侧胶囊页签。
+   全部走 token，深浅主题自动适配；不加渐变、不加任何过渡动画。 */
+
+.about-banner {
+  height: 96px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-bottom: none; /* 与下面卡片共用这条边界 */
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+/* 卡片整体向上压横幅一半，头像再向上压出卡片，头像正好骑在横幅与卡片的分界上 */
+.about-card {
+  margin-top: -48px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.about-head {
+  display: flex;
+  align-items: flex-end; /* 标题、页签与头像底边对齐（参考图构图）*/
+  gap: var(--sp-4);
+}
+
+.about-avatar {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  margin-top: -56px; /* 40px 在横幅上、56px 在卡片里 */
+  background: var(--surface);
+}
+
+.about-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--fs-6);
+  font-weight: 600;
+}
+
+.about-title {
+  min-width: 0;
+}
+
+.about-name {
+  margin: 0 0 var(--sp-1);
+  font-size: var(--fs-6);
+  font-weight: 600;
+}
+
+.about-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+
+.about-tabs {
+  margin-left: auto;
+}
+
+.about-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: var(--sp-4) 0;
+}
+
+/* 自我介绍正文 */
+.about-intro {
+  font-size: var(--fs-3);
+}
+
+.intro-sec h3 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-4);
+  font-weight: 600;
+}
+
+.intro-sec p {
+  margin: 0 0 var(--sp-1);
+}
+
+.intro-sec ul {
+  margin: var(--sp-2) 0 var(--sp-3);
+  padding-left: var(--sp-5);
+}
+
+.intro-sec + .intro-sec {
+  margin-top: var(--sp-4);
+}
+
+/* 贡献热力图卡片 */
+.contrib-card {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-5);
+}
+
+.contrib-title {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-4);
+  font-weight: 600;
+}
+
+/* 外层负责横向滚动：月份标签文字可以向右溢出自身 10px 格，被父容器吃掉 */
+.contrib-scroll {
+  overflow-x: auto;
+}
+
+.contrib-graph {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* 月份行与方格同参数网格，左缩进 = 星期列宽 + body 的间隔，自然对齐每一列 */
+.contrib-months {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 10px;
+  gap: var(--sp-1);
+  margin-left: 32px;
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+
+.contrib-months span {
+  white-space: nowrap;
+}
+
+.contrib-body {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.contrib-weekdays {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+
+.contrib-weekdays span {
+  width: 24px;
+  height: 10px;
+  line-height: 10px;
+}
+
+.contrib-cells {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 10px);
+  grid-auto-columns: 10px;
+  gap: var(--sp-1);
+}
+
+.contrib-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--surface-hover); /* 0 档 = 空格 */
+}
+
+.contrib-cell--1 {
+  background: var(--contrib-1);
+}
+
+.contrib-cell--2 {
+  background: var(--contrib-2);
+}
+
+.contrib-cell--3 {
+  background: var(--contrib-3);
+}
+
+.contrib-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+  margin-top: var(--sp-3);
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+
+/* 活动时间线：左竖线 + 圆点 + 行 */
+.activity-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-2) 0 var(--sp-2) 24px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.activity-item {
+  position: relative;
+}
+
+/* 圆点骑在竖线上：内容盒距竖线 24px（padding）+2px（线宽），把 dot 向左偏 30px，
+   其中心（+5px）正好落在竖线中轴（内容区左缘 -25px）上 */
+.activity-dot {
+  position: absolute;
+  left: -30px;
+  top: 19px; /* 卡片首行 12px 内衬 + 24px 头像的中心高度 - 半径 5px */
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+}
+
+.activity-card {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.activity-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.activity-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--fs-1);
+}
+
+.activity-name {
+  font-weight: 600;
+}
+
+.activity-act {
+  color: var(--accent);
+}
+
+.activity-title {
+  color: var(--text);
+  text-decoration: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-title:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.activity-date {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: var(--fs-1);
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  padding: 1px var(--sp-2); /* 例外：与 badge 同口径的文字内衬 */
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-empty {
+  margin: var(--sp-3) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-2);
+}
+
+/* 窄屏：页签折到标题行下，热力图允许横向拖动 */
+@media (max-width: 720px) {
+  .about-banner {
+    height: 64px;
+  }
+
+  .about-card {
+    margin-top: -32px;
+  }
+
+  .about-avatar {
+    width: 72px;
+    height: 72px;
+    margin-top: -40px; /* 36 在横幅上、36 在卡片里 */
+  }
+
+  .about-head {
+    flex-wrap: wrap;
+  }
+
+  .about-tabs {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+
+  .about-tabs .tab {
+    min-height: 44px; /* 触控目标 */
+  }
 }

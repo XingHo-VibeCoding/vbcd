@@ -8,6 +8,7 @@ import ConfirmHistoryPage from './pages/ConfirmHistoryPage.jsx'
 import NoteCreatePage from './pages/NoteCreatePage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
 import KbAskPage from './pages/KbAskPage.jsx'
+import AboutPage from './pages/AboutPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { logout } from './api/auth.js'
 import { request } from './api/client.js'
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/new" element={<NoteCreatePage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
           <Route path="/ask" element={<KbAskPage />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route path="/login" element={authEnabled ? <LoginPage /> : <Navigate to="/" replace />} />
         </Routes>
       </main>
