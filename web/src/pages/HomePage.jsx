@@ -161,7 +161,8 @@ export default function HomePage() {
 
   return (
     <div className="home-grid">
-      <section className="card profile-card">
+      {/* 个人卡整块可点：点进去就是「关于」页（F11） */}
+      <Link className="card profile-card" to="/about" aria-label="查看关于页">
         {profile.avatar && !avatarBroken ? (
           <img
             className="profile-avatar"
@@ -178,7 +179,10 @@ export default function HomePage() {
           <h2 className="profile-name">{nickname}</h2>
           {profile.bio ? <p className="profile-bio">{profile.bio}</p> : null}
         </div>
-      </section>
+        <span className="profile-card-cta" aria-hidden="true">
+          关于 →
+        </span>
+      </Link>
 
       <section className="card cal-card">
         <div className="cal-head">

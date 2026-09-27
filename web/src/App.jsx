@@ -52,6 +52,7 @@ export default function App() {
           <Link to="/confirmations">确认记录</Link>
           <Link to="/new">新建资料</Link>
           <Link to="/ask">知识库问答</Link>
+          <Link to="/about">关于</Link>
           {authEnabled ? <LogoutButton /> : null}
         </nav>
       </header>
