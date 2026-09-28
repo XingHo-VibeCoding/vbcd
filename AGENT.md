@@ -9,7 +9,7 @@
 | 动作 | 现有实现 | 页面入口 |
 |---|---|---|
 | 归档一条资料 | `POST /api/notes` | 主页「归档」卡 |
-| 发起任务（记资料/提醒/整理链接/删除资料） | `POST /api/tasks` | 「日志」页 · 任务页签、资料详情页「删除这条资料」 |
+| 发起任务（记资料/提醒/整理链接/删除资料/视频转写） | `POST /api/tasks`（`transcribe_url` 走 asr 微服务异步执行） | 「日志」页 · 任务页签、资料详情页「删除这条资料」；转写暂只有 curl 入口 |
 | 推进任务状态 | `PATCH /api/tasks/:id` | 「日志」页 · 任务页签 |
 | 高风险动作确认 | `PATCH /api/tasks/:id`（`decision`） | `/tasks/:id/confirm` 确认页 |
 | 回看确认留痕 | `GET /api/confirmations` | 「日志」页 · 确认留痕页签 |
@@ -24,6 +24,7 @@
 |---|---|---|
 | `archive_note` | `services/notes.js` | "把这段整理成资料归档" → 定标题/分类/标签后落盘 |
 | `create_task` | `services/tasks.js` | "提醒我周五交报告" → 建 remind 任务 |
+| `transcribe_media` | `services/transcribe.js` + `asr/` 微服务 | "把这个视频转成笔记" → 建 `transcribe_url` 任务，异步转写后归档 |
 | `advance_task` | `routes/tasks.js` 的迁移校验 | "把那条整理链接标完成" |
 | `request_confirmation` | `storage/confirmations.js` | 高风险动作先登记待确认——**闸门留在后端，agent 不能绕过** |
 | `search_notes` | `services/notes.js` 索引 | 检索自家资料库 |
@@ -40,3 +41,4 @@
 
 - 「agent」页当前只是「知识库问答」改名——自然语言驱动全站动作是后续期数的事，本文件只定方向，不承诺排期。
 - 后端 13 个接口保持原样（「保留接口」）：agent 化是**在接口之上加一层工具编排**，不推翻现有链路。
+- `transcribe_url` 已是现成的长任务模板：agent 调它时同样走「提交 → 轮询 → 归档」任务链路，写操作无需新闸门（归档与 F1 同级）。

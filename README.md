@@ -10,7 +10,7 @@
 | 手机端联动 | 手机发起任务、查看进度、确认操作，不依赖桌面端 |
 | 能力组合 | 五项共享上下文，跑通一条可反复使用的完整流程 |
 
-本期只做两项：个人数据库（F1–F3、F9）+ 手机端联动（F4–F6），外加数据自托管（F7）。其余见 `PRD.md` 第 6 章。
+本期只做两项：个人数据库（F1–F3、F9）+ 手机端联动（F4–F6），外加数据自托管（F7）、深浅主题（F10）、关于页（F11）与视频转写归档（F13：`asr/` 独立 fun-asr 微服务，走任务链路 `transcribe_url`）。其余见 `PRD.md` 第 6 章。
 
 外部操作（发邮件、提交表单、退课等）一律先展示后果再等确认；密钥与个人资料不进公开仓。
 
@@ -24,6 +24,7 @@
 | `TECH_DESIGN.md` | 技术选型、数据流 |
 | `SPEC.md` | 接口与数据结构 |
 | `RUN.md` | 怎么跑起来 |
+| `asr/PROBE.md` | fun-asr 上游返回结构与上限的实测结论 |
 
 ## 仓库结构
 
@@ -31,7 +32,8 @@
 vbcd/
 ├── web/                 # 前端 React + Vite
 ├── server/              # 后端 Node.js + Express
+├── asr/                 # 转写微服务：Python + FastAPI（F13），仅 compose 内网
 ├── data/                # 个人资料，不进公开仓
-├── docker-compose.yml   # 部署：Nginx + server + Chroma
-└── *.md                 # 文档
+├── docker-compose.yml   # 部署：Nginx + server + Chroma + asr
+└── *.md                 # 文档（PLAN.md 为转写服务的原始设计方案）
 ```

@@ -66,6 +66,7 @@ npm run dev                 # :5174，/api 代理到 :3100
 | 个人主页；知识库问答 `/ask` | RAG 进阶：混合检索 / Rerank / 多轮记忆 |
 | 全站深浅主题：主页方格开关，偏好存浏览器本地，首次跟随系统（F10） | 主题跨设备同步；跟随系统 / 浅 / 深 三态切换；切换动画 |
 | 关于页：自我介绍 / 研究动态（F11） | 真实横幅图、热力图按天点击查看资料 |
+| 视频转写：curl 提交 `transcribe_url` 任务 → 自动转写归档（F13，见 8.8） | 前端表单入口、上传文件转写、说话人分离 |
 | 查重：内容完全相同则拒绝写入 | 公网 HTTPS 部署（见 8.7） |
 
 ## 5. 数据存哪
@@ -76,6 +77,7 @@ npm run dev                 # :5174，/api 代理到 :3100
 | 索引缓存 | `data/.index.json` | 派生数据，删了下次重建 |
 | 任务、确认记录 | `data/.runtime/tasks.json`、`data/.runtime/confirmations.json` | 删了只丢任务与留痕，不影响资料 |
 | 个人主页 | `data/profile.md`（`nickname` / `avatar` / `bio`）、`data/schedule.md`（每行 `- YYYY-MM-DD [HH:mm] 事项`） | 根级文件，不进资料索引 |
+| 转写临时产物 | `asr/data/jobs/`（本机）或命名卷 `asr-jobs`（compose） | 临时媒体终态即删；只剩小体积 job JSON，TTL 30 分钟 GC |
 
 `data/` 不进公开仓（`.gitignore` 已排除），换机器 `git clone` 不会带过去。
 
@@ -111,6 +113,7 @@ web/
 ## 8. 后端（`server/`）
 
 冒烟测试：`node scripts/smoke.mjs` —— 公开模式 19/19、隐私模式 23/23 通过（按 `/api/health` 的 `auth_enabled` 自适应）。隐私模式临时口令哈希：`node scripts/hash-password.js "口令" | head -1`（第二行是提示文字，只取第一行）。
+转写链路冒烟（后端以 `ASR_SERVICE_URL=http://127.0.0.1:8099 ASR_SERVICE_TOKEN=fake-token ASR_POLL_INTERVAL_MS=1000` 启动后）：`SMOKE_FAKE_ASR_PORT=8099 node scripts/smoke.mjs` —— 自动拉起 `scripts/fake-asr.mjs` 桩，追加 9 条断言（成功/查重/部分转写/失败/404/重试/非法 payload），公开 28/28、隐私 32/32。
 
 ### 8.1 前提
 
@@ -211,6 +214,7 @@ curl -i -X POST http://localhost:3000/api/login \
 | `/api/confirmations`：确认留痕 | 会话持久化：存内存，重启服务需重新登录 |
 | `/api/me`：个人主页数据 | 直接删除资料的接口（只能经 F6 确认流触发） |
 | `/api/kb/*`：问答三接口（需配 env，见 8.6） | 公网 HTTPS 部署（见 8.7） |
+| 转写：`type=transcribe_url` 任务（需配 env，见 8.8） | 独立的转写对外接口（复用任务链路，共 13 个接口） |
 
 ### 8.5 目录速查（后端）
 
@@ -220,13 +224,14 @@ server/
 ├── .env.example           # 配置样例（.env 自建，不入库）
 ├── scripts/
 │   ├── hash-password.js   # 生成口令哈希
+│   ├── fake-asr.mjs       # 假 ASR 服务桩（转写链路冒烟用）
 │   └── smoke.mjs          # 端到端冒烟
 └── src/
-    ├── index.js           # 读 .env → 建资料目录 → 监听端口
+    ├── index.js           # 读 .env → 建资料目录 → 启动转写轮询器 → 监听端口
     ├── app.js             # 装配中间件与路由
     ├── middleware/        # auth / errors / request-log
     ├── routes/            # health / auth / notes / tasks / confirmations / me / kb
-    ├── services/          # notes / tasks / me / index-store / sessions / kb / llm / errors
+    ├── services/          # notes / tasks / transcribe(+runner) / asr(客户端) / me / index-store / sessions / kb / llm / errors
     └── storage/           # files.js / tasks.js / confirmations.js
 ```
 
@@ -261,14 +266,14 @@ curl -N "http://localhost:3000/api/kb/stream?q=WSL"     # 流式
 | 换 Embedding 模型后检索全乱 | 向量维度变了 | 删 Chroma collection `buddy-notes` 与 `data/.kb-manifest.json`，重跑 `/api/kb/index` |
 | Chroma 裸奔公网 | 没配认证 | 设 `CHROMA_SERVER_AUTHN_CREDENTIALS` + `CHROMA_AUTH_TOKEN`，或安全组只放后端 IP |
 
-### 8.7 Docker 部署（Nginx + 后端 + Chroma）
+### 8.7 Docker 部署（Nginx + 后端 + Chroma + ASR）
 
 彩排与上线同一份 `docker-compose.yml`。
 
 ```bash
 cd /home/bird/work/vbcd
 docker compose up -d --build
-docker compose ps            # web(80) / server(仅内网 3000) / chroma(仅内网 8000)
+docker compose ps            # web(80) / server(仅内网 3000) / chroma(仅内网 8000) / asr(仅内网 8000)
 ```
 
 访问 http://localhost/ （前端静态站 + `/api` 反代，同源，Cookie 零配置）。后端 3000 与 Chroma 8000 都不发布到宿主机，Chroma 不会裸奔公网。
@@ -279,6 +284,7 @@ Docker Hub 直连不通时拉镜像（不改 `daemon.json`）：
 docker pull docker.m.daocloud.io/library/node:22-alpine && docker tag docker.m.daocloud.io/library/node:22-alpine node:22-alpine
 docker pull docker.m.daocloud.io/library/nginx:alpine && docker tag docker.m.daocloud.io/library/nginx:alpine nginx:alpine
 docker pull docker.m.daocloud.io/chromadb/chroma:latest && docker tag docker.m.daocloud.io/chromadb/chroma:latest chromadb/chroma:latest
+docker pull docker.m.daocloud.io/library/python:3.11-slim && docker tag docker.m.daocloud.io/library/python:3.11-slim python:3.11-slim   # asr 基础镜像
 ```
 
 镜像站：`docker.m.daocloud.io`（示例）、`docker.1ms.run`、`hub.rat.dev`；`registry.cn-hangzhou.aliyuncs.com` 需带命名空间。
@@ -307,9 +313,56 @@ ls data/work/                                                # 主页「归档�
 | Chroma 数据存哪 | 命名卷，不在仓库里 | 镜像 `1.4.4` 的 `persist_path` 是 `/data`，已挂 `vbcd_chroma-data` |
 | 换 Embedding 模型后检索全乱 | 向量语义变了但文档 hash 未变，不会重建 | 删 Chroma collection `buddy-notes` 与 `data/.kb-manifest.json`，重跑 `/api/kb/index` |
 | 宿主机 ping 通容器 IP，访问 80 端口被重置（容器本身 healthy） | 宿主机 sing-box（v2rayN TUN）把接口地址设成 `172.18.0.1/30`，与 Docker 的 `172.18.0.0/16` 撞车，`/30` 更具体 → `172.18.0.3`（web 容器）被当成广播地址 | compose 已把 `internal` 网段固定为 `172.30.0.0/16`，别改回去 |
+| `docker compose config` / `up` 报 `asr/.env not found` | `asr` 服务的 `env_file` 指向 `asr/.env`，只拷了 `.env.example` | `cp asr/.env.example asr/.env` 填入 `DASHSCOPE_API_KEY` 与 `SERVICE_TOKEN` |
+| `docker compose build asr` 拉不到 `python:3.11-slim` | Docker Hub 直连不通 | 用上面的镜像站前缀拉取再 `docker tag` |
+| `curl localhost:8000/healthz` 连接被拒但容器是 Up | asr **刻意不发布端口**（防 API Key 通道裸奔） | 从 server 容器里访问：`docker compose exec server node -e "fetch('http://asr:8000/healthz').then(r=>r.json()).then(console.log)"` |
 | `docker` 报 `permission denied` | 当前用户不在 `docker` 组 | `sudo usermod -aG docker $USER` 后重新登录；临时：`sudo setfacl -m u:$USER:rw /var/run/docker.sock`（docker 重启后失效） |
 
 上线到服务器还差三步：① 阿里云安全组放行 443；② 域名 A 记录指向服务器 IP；③ 加 certbot 证书段。
+
+### 8.8 视频转写（F13）
+
+`asr/` 是独立的 fun-asr 转写微服务（FastAPI 单进程，4 个端点）；buddy 侧不新增接口，走 `type=transcribe_url` 任务。
+
+```bash
+# ① 本机跑：装依赖（Python 3.11+）+ 起服务
+python3 -m venv asr/.venv && asr/.venv/bin/pip install -r asr/requirements.txt
+cp asr/.env.example asr/.env        # 填 DASHSCOPE_API_KEY 与 SERVICE_TOKEN
+asr/.venv/bin/python -m uvicorn asr.app:app --host 127.0.0.1 --port 8000   # 仓库根执行
+
+# 健康检查（无需鉴权）；SERVICE_TOKEN 未设时只允许绑 127.0.0.1 并打 WARN
+curl http://127.0.0.1:8000/healthz
+
+# ② 服务端接入：server/.env 加
+#   ASR_SERVICE_URL=http://127.0.0.1:8000   （compose 内则是 http://asr:8000）
+#   ASR_SERVICE_TOKEN=<与 asr/.env 相同>
+
+# ③ 提交转写任务（暂无前端表单，用 curl）
+curl -X POST http://localhost:3100/api/tasks -H 'Content-Type: application/json' \
+  -d '{"type":"transcribe_url","payload":{"url":"https://www.bilibili.com/video/BVxxxx","category":"learning","tags":["视频转写"]},"origin":"desktop"}'
+# → 201 status=doing；GET /api/tasks 看「转写中：正在转写（n/m，x%）」；
+#   完成后 status=done、result=「已归档到 learning/….md」；B 站分 P 传 "part": 2
+
+# 归档后若要进知识库问答，需手工触发一次增量索引：
+curl -X POST http://localhost:3100/api/kb/index
+
+# ④ 测试（不烧 Key）：单元 + respx mock 集成
+asr/.venv/bin/python -m pytest asr/tests          # 仓库根执行，37 个用例
+
+# ⑤ 探针（改上游参数前先跑）：asr/scripts/probe_funasr.py，结论写在 asr/PROBE.md
+```
+
+ASR 服务的 4 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返回 job）、`GET|DELETE /v1/jobs/{id}`、`GET /healthz`；`/v1/*` 需 `Authorization: Bearer $SERVICE_TOKEN`。临时媒体终态即删，job JSON TTL 30 分钟后 GC。
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 任务立刻 `failed`：「转写服务未配置」 | `ASR_SERVICE_URL` 未设 | 补齐 `server/.env` 后重启后端 |
+| 任务 `failed`：「提交转写失败：…401」 | 两侧 token 不一致 | `ASR_SERVICE_TOKEN` 与 `asr/.env` 的 `SERVICE_TOKEN` 对齐 |
+| 任务 `failed`：「提交转写失败：服务不可达」 | asr 没起 / 地址错 | `curl $ASR_SERVICE_URL/healthz`；compose 内用 `http://asr:8000` |
+| 任务 `failed`：「下载失败」 | yt-dlp 抓取失效 / 会员内容 | 升 yt-dlp（`pip -U yt-dlp`）；会员视频配 `YTDLP_COOKIES_FILE` |
+| 转写慢卡在「正在下载」 | B 站限速 | 正常现象（70s 视频下载约 30s）；超时阈值 60 分钟内都算正常 |
+| 想重跑一次 | `failed→todo` 合法迁移 | `PATCH /api/tasks/:id {"status":"todo"}`，轮询器自动重提交 |
+
 
 ## 9. 用 Obsidian 查看资料（F1）
 

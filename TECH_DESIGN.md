@@ -1,6 +1,6 @@
 # TECH_DESIGN.md — buddy 技术设计（MVP · 第 1 期）
 
-> 上游依据：`PRD.md` v1.3（F1–F9 与 31 条验收标准）。本文只写「为什么这么选」，具体怎么做见 `SPEC.md`。
+> 上游依据：`PRD.md` v1.7（F1–F13 与验收标准）。本文只写「为什么这么选」，具体怎么做见 `SPEC.md`。
 > 原则：能跑通 > 花哨；数据自有 > 平台便利；每层可替换 > 一次到位。
 
 ## 1. 设计目标与约束
@@ -44,6 +44,7 @@
 | 12 | AI 编排（F9） | LangChain.js（`@langchain/core` + `@langchain/openai` + `@langchain/textsplitters`），向量库直连 chromadb 官方客户端 | 流式 API 与 splitter 现成；不引 `@langchain/community`（其 peer 依赖与 dotenv@18 冲突） | LangGraph / 手写 fetch：本期只要检索+生成，图编排是杀鸡用牛刀；手写 fetch 要自造切分与流式轮子 |
 | 13 | 向量库（F9） | Chroma 自托管（Docker，token 认证或安全组限源） | 数据自有，符合 F7；向量是派生数据，坏了可由 `data/` 重建 | Chroma Cloud 托管：把资料交给第三方，违背数据自有 |
 | 14 | 模型端点（F9） | OpenAI 兼容端点统一供 Chat + Embedding（`OPENAI_BASE_URL` 可切；Embedding 可单独配 `EMBED_BASE_URL`） | 一套代码支持 OpenAI / DashScope 兼容模式 / Ollama，改 env 即换模型 | 锁定某家 SDK：DeepSeek 无 embeddings，双端点设计就是为这个坑留的口子 |
+| 15 | 转写服务（F13） | 独立 Python + FastAPI 微服务（`asr/`），fun-asr-flash 多模态端点逐片调用；buddy 侧走任务链路异步推进 | 转写是分钟级长任务且依赖 ffmpeg/yt-dlp，与 Node 后端技术栈不同——独立服务才不拖垮主进程；任务链路复用现成的进度可见与重试语义 | 后端内嵌 Python 子进程：状态管理、限流与清理都黏在主进程；filetrans 异步兜底：本期 fun-asr-flash 已够用，仅留扩展位 |
 
 **一句话技术路线**：
 > 前端 React（Vite 构建）→ 后端 Node.js + Express（REST/JSON）→ 存储为 Git 仓库里的 Markdown 文件与 JSON 索引 → 部署在阿里云 ECS（Docker + Nginx + HTTPS）。
@@ -102,7 +103,25 @@ flowchart TD
     I["data/ 下 .md 资料"] -->|"7  POST /api/kb/index：切分 → Embedding → 写 Chroma<br/>（增量：hash 对比 manifest，变了才重写）"| C
 ```
 
-### 4.5 备份链路
+### 4.5 转写链路（F13）
+
+```mermaid
+flowchart LR
+    U[用户 curl / 手机] -->|POST /api/tasks type=transcribe_url| S[buddy-server]
+    S -->|POST /v1/transcribe| A[asr 微服务]
+    A -->|yt-dlp 取音轨 → ffmpeg 16k 单声道 → 静音对齐切片| A
+    A -->|逐片 POST fun-asr-flash，429/5xx 退避重试| M[上游 ASR]
+    R[transcribe-runner 轮询器] -->|GET /v1/jobs/:id 每 5s| A
+    R -->|succeeded → 组装资料 + LLM 摘要| S
+    S -->|createNote| D[(data/<分类>/*.md)]
+    R -->|终态后 DELETE /v1/jobs/:id| A
+```
+
+- asr 服务把「下载 → 归一化 → 切片 → 逐片转写 → 按实际片长偏移合并」封成一个 job；buddy 只认 job 信封，不碰 ffmpeg/yt-dlp 细节；
+- 单片段最终失败时 job `failed` 但 `error.details.partial` 带已完成片段——buddy 仍归档为「部分转写」资料，不全量白跑；
+- 同源结果缓存（TTL 1800s）+ 单飞：重复提交同一 URL 不重新下载、不烧二次 ASR 额度。
+
+### 4.6 备份链路
 
 ```mermaid
 flowchart LR
@@ -161,6 +180,8 @@ flowchart TB
 | 不引入数据库 | 避免双写一致性问题 | 出现并发写或多端冲突时 |
 | 无自动化测试、无 CI | 单人项目，验收靠文档清单 | 第 4 周（测试与部署阶段） |
 | 资料私有仓尚未搭建（Gitea） | 先跑通链路 | 第 3 周 |
+| asr 为单进程 + 磁盘 job 状态 | 单机部署够用，不引队列/Redis | 多副本部署时需要共享 job 存储与队列 |
+| 转写归档不自动进向量库 | 避免长任务后静默烧 Embedding 额度 | 使用者确认频次后改为索引钩 |
 
 ### 5.6 AI Native 层（规则与记忆）
 
@@ -185,3 +206,4 @@ flowchart TB
 | 2026-09-19 | v1.0 | 初版：设计目标与约束、三层分工、技术路线（10 条选型）、数据流图（3 张 Mermaid） |
 | 2026-09-19 | v1.1 | 前端由原生 JS 改为 React（Vite 构建）；新增第 5 章架构原则与演化策略 |
 | 2026-09-25 | v1.2 | 追加 F9 技术方案：选型 +3、RAG 数据流图、技术债条目修订 |
+| 2026-09-28 | v1.3 | 追加 F13 转写链路：选型 +1（独立 FastAPI 微服务）、转写数据流图（4.5，原备份链路顺延为 4.6）、技术债 +2；上游依据升至 PRD v1.7 |

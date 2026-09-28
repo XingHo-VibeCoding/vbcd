@@ -1,6 +1,6 @@
 # SPEC.md — buddy 实现规格（MVP · 第 1 期）
 
-> 上游依据：`PRD.md` v1.3（F1–F9 与 31 条验收标准）、`TECH_DESIGN.md` v1.2（技术路线、数据流、架构原则、F9 方案）
+> 上游依据：`PRD.md` v1.7（F1–F13 与验收标准）、`TECH_DESIGN.md` v1.3（技术路线、数据流、架构原则、F9/F13 方案）
 > 本文只写「怎么做」，不重复「为什么」（见 PRD / TECH_DESIGN）。
 
 ## 0. 前置事实
@@ -22,7 +22,7 @@ vbcd/
 ├── TECH_DESIGN.md       # 技术设计
 ├── SPEC.md              # 本文件
 ├── README.md / RUN.md   # 项目说明 / 运行说明
-├── docker-compose.yml   # 部署（Nginx + server + Chroma）
+├── docker-compose.yml   # 部署（Nginx + server + Chroma + asr）
 ├── web/                 # 前端 React + Vite
 │   ├── nginx.conf       # 生产：SPA 回退 + SSE 关缓冲
 │   └── src/
@@ -39,6 +39,17 @@ vbcd/
 │       ├── services/    # 业务逻辑
 │       ├── storage/     # 存储适配层（换数据库只动这里，见 7.3）
 │       └── middleware/  # 鉴权、错误处理、请求日志
+├── asr/                 # 转写微服务（F13）：Python + FastAPI，单进程，4 个端点，仅 compose 内网
+│   ├── app.py / api.py  # 入口与路由（/v1/transcribe、/v1/jobs/{id}、/healthz）
+│   ├── config.py        # env 驱动配置（JOBS_DIR 默认 asr/data/jobs，不进资料库）
+│   ├── sources.py       # 来源校验（SSRF 黑名单）+ yt-dlp / 直链下载
+│   ├── audio.py         # ffprobe / 归一化 / 静音对齐切片 / 时间轴合并
+│   ├── providers/funasr.py  # fun-asr-flash 主通道（逐片、退避重试、partial 透传）
+│   ├── jobs.py / cache.py   # job 状态机 + 单飞 + TTL GC；同源结果缓存
+│   ├── scripts/probe_funasr.py  # 一次性探针（结论见 PROBE.md）
+│   ├── PROBE.md         # 上游返回结构与上限的实测结论（改上游前先读）
+│   ├── tests/           # pytest 单测 + respx mock 集成（不烧 Key）
+│   └── Dockerfile       # python:3.11-slim + ffmpeg，非 root
 └── .env.example         # 环境变量样例（不含真实值，可入库）
 ```
 
@@ -91,8 +102,9 @@ vbcd/
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `id` | string | 主键 |
-| `type` | enum | `note`（记资料）/ `organize`（整理链接）/ `remind`（提醒）/ `delete_note`（删除资料，高风险：只生成待确认记录，须经 F6 确认才真删，见 3.3） |
-| `payload` | object | 任务参数（如 `{title, content}`） |
+| `type` | enum | `note`（记资料）/ `organize`（整理链接）/ `remind`（提醒）/ `delete_note`（删除资料，高风险：只生成待确认记录，须经 F6 确认才真删，见 3.3）/ `transcribe_url`（转写归档，F13：异步执行，见 3.4） |
+| `payload` | object | 任务参数（如 `{title, content}`；transcribe_url 为 `{url, category?, tags?, language?, part?}`） |
+| `asr` | object | 可选；仅 `transcribe_url` 存在：`{job_id, stage, done, total, percent, submitted_at, last_error}`（不写转写正文，避免运行时文件膨胀） |
 | `status` | enum | `todo` / `doing` / `done` / `failed` / `attention`（见 5.4） |
 | `result` | string | 执行结果摘要（成功或失败原因） |
 | `origin` | enum | `phone` / `desktop` |
@@ -189,6 +201,25 @@ vbcd/
 
 **留痕口径**：`GET /api/confirmations` 按请求时间倒序返回全部记录（可 `?task_id=` 过滤）；只写「何时请求、将要发生什么、何时决定、决定了什么」，不写「谁」。
 
+### 3.4 视频/音频转写链路（F13）
+
+**入口**：`POST /api/tasks` 带 `type=transcribe_url` + `payload={url, category?, tags?, language?, part?}`——**不新增对外接口**（仍 13 个）。归档是 F1 同级写操作，不设确认闸门；高风险外部动作规则不变。
+
+**payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work`；`part` 为 B 站分 P 序号（≥1 整数）；`tags` ≤10 个。
+
+**时序**：
+1. **提交**：校验 → `POST {ASR_SERVICE_URL}/v1/transcribe`（`wait_seconds=0`，Bearer `ASR_SERVICE_TOKEN`）→ 任务 `status=doing`、`result="已提交转写，等待结果"`、`task.asr.job_id` 落盘；服务不可达 / 未配 `ASR_SERVICE_URL` / 4xx → **不返回 5xx**，落 `failed` 任务写中文原因（与 `note` 执行器同口径，F5 进度可见）；
+2. **轮询**：`services/transcribe-runner.js` 每 `ASR_POLL_INTERVAL_MS`（默认 5000）扫 `type=transcribe_url` 且 `status in (todo,doing)` 的任务，单进程单飞、一轮只推进一个：`GET /v1/jobs/{id}` 刷新 `task.asr` 与 `result`（如「转写中：正在转写（3/5，46%）」）；
+3. **归档**：`succeeded` → `createNote()` → `done`，`result="已归档到 <path>"` → 立即 `DELETE /v1/jobs/{id}`（best-effort）；同 URL 已归档过则 `done` + `result="已归档过 <path>"`，不写第二份（不重复处理）；
+4. **失败**：job `failed` 且 `error.details.partial` 带非空文本 → 仍归档（正文顶部加「部分转写」告警块）并 `done`；否则 `failed` 写原因。job 404 或超 `ASR_JOB_MAX_WAIT_MINUTES`（默认 60）→ `failed`，`result` 提示「可把任务退回待办重试」；
+5. **重试**：`PATCH` 退回 `todo` 时清空 `task.asr`，轮询器下一轮重新提交（复用既有 `failed→todo` 合法迁移，无新接口）。
+
+**资料格式**（全文始终来自转写，不由 LLM 生成）：标题取 `source.title`（空则 `<platform>-<id>`，≤80 字）；frontmatter `source_url` = 原链接；正文 = 来源行（URL/平台/时长/转写日期）→ `## 摘要`（3–5 句）→ `## 要点`（3–7 条）→ `## 全文（带时间戳）`（相邻 segment 间隔 <2s 合并成段，`[mm:ss]` 或 ≥1h 的 `[h:mm:ss]`）。LLM 未配置/失败 → 去掉摘要/要点两节，改一行「⚠️ 本次未做模型整理（原因：…）」并 `done`。
+
+**LLM 整理**：复用 `services/llm.js` 的 `getChatModel(timeoutMs)`（独立实例，超时 `NOTE_LLM_TIMEOUT_MS` 默认 120s）；输入截断 `LLM_TRANSCRIPT_MAX_CHARS`（默认 12000 = 头 2/3 + 尾 1/3），截断时在资料里注明。
+
+**向量索引**：归档后 `POST /api/kb/index` 仍需手工触发（本期不自动入库），RUN.md 8.8 有说明。
+
 ## 4. 数据流
 
 完整图见 `TECH_DESIGN.md` 第 4 章，此处只列要点：
@@ -220,6 +251,8 @@ vbcd/
 | `KB_NOT_CONFIGURED` | 503 | 知识库问答未配置（缺 `OPENAI_API_KEY` / `CHROMA_URL`） |
 | `LLM_FAILED` | 503 | 模型端点异常（Chat 或 Embedding） |
 | `CHROMA_UNAVAILABLE` | 503 | 向量库连不上或异常 |
+| `ASR_NOT_CONFIGURED` | 503 | 转写服务未配置（缺 `ASR_SERVICE_URL`），仅出现在任务 result，不作响应码 |
+| `ASR_UNAVAILABLE` | 503 | 转写服务不可达 / 超时（同上：落任务 result，接口仍返回 201） |
 | `INTERNAL` | 500 | 其他未预期错误 |
 
 ### 5.3 用户可见文案
@@ -296,6 +329,15 @@ vbcd/
 | `CHROMA_AUTH_TOKEN` | 随机串 | Chroma token 认证（`X-Chroma-Token` 头）；服务端开了才需要 | 🟡 |
 | `KB_TOP_K` | `3` | 检索段落数（1–10） | ⬜ |
 | `KB_MAX_DISTANCE` | （可空） | 距离阈值：命中距离大于它即丢弃 | ⬜ |
+| `ASR_SERVICE_URL` | `http://asr:8000` | F13 转写微服务地址（compose 内网服务名）；缺省 = 功能关闭 |
+| `ASR_SERVICE_TOKEN` | 随机串 | 调 ASR 的 Bearer token，与 `asr/.env` 的 `SERVICE_TOKEN` 一致 | 🔴 |
+| `ASR_HTTP_TIMEOUT_MS` | `15000` | 调 ASR 单次请求超时 | ⬜ |
+| `ASR_POLL_INTERVAL_MS` | `5000` | 转写轮询器间隔 | ⬜ |
+| `ASR_JOB_MAX_WAIT_MINUTES` | `60` | job 超此时长未完成判超时 | ⬜ |
+| `NOTE_LLM_TIMEOUT_MS` | `120000` | 转写笔记整理的模型超时（比问答慢，允许分钟级） | ⬜ |
+| `LLM_TRANSCRIPT_MAX_CHARS` | `12000` | 喂给模型的转写文本上限（超长截头留尾） | ⬜ |
+
+`asr/` 服务侧变量见 `asr/.env.example`（`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / 切片与并发 / `JOBS_DIR` / `YTDLP_*` / 缓存 TTL）。
 
 **密钥管理**：Git 拉取用服务器上的 deploy key（SSH），不放 `.env` 明文；`.env` 权限 600，只属于部署用户。
 
@@ -304,7 +346,7 @@ vbcd/
 ### 7.1 部署步骤（服务器 `47.85.210.76`）
 1. 基础环境：`apt install docker.io docker-compose`；
 2. 目录：创建 `/srv/buddy/{data,logs}`，`data` 为私有仓克隆（deploy key）；
-3. 应用：`docker compose up -d`（后端 3000 仅绑 `127.0.0.1`）；
+3. 应用：`docker compose up -d`（后端 3000 仅绑 `127.0.0.1`；asr 8000 仅 compose 内网，不发布端口）；
 4. 入口：Nginx 反代 + certbot 申请证书（443 未开，需放行安全组）；
 5. 自启：`systemctl enable docker`（+ compose restart 策略）；
 6. 备份：每日 `git clone --mirror` 到本地 + 阿里云快照；
@@ -314,6 +356,7 @@ vbcd/
 > 本期隐私模块默认关闭：站点公开可读写。需要门禁时才设 `AUTH_ENABLED=1`。
 - [ ] 只对外开放 80/443；22 建议改端口或限制来源 IP
 - [ ] 后端端口不对公网暴露
+- [ ] `asr` 不发布端口且 `SERVICE_TOKEN` 已设（否则仅允许绑 127.0.0.1）；`asr/.env` 权限 600
 - [ ] Gitea：强密码 + 两步验证 + 关闭公开注册
 - [ ] `.env` 权限 600；密钥不进 Git
 - [ ] 服务器系统与 Docker 定期更新
