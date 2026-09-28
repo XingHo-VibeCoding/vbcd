@@ -5,6 +5,7 @@ import NoteListPage from './pages/NoteListPage.jsx'
 import LogPage from './pages/LogPage.jsx'
 import TaskConfirmPage from './pages/TaskConfirmPage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
+import ArchivePage from './pages/ArchivePage.jsx'
 import KbAskPage from './pages/KbAskPage.jsx'
 import AboutPage from './pages/AboutPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -60,8 +61,9 @@ export default function App() {
           <Route path="/log" element={<LogPage />} />
           <Route path="/tasks/:id/confirm" element={<TaskConfirmPage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
-          {/* 旧入口重定向：新建资料 → 主页归档卡；任务 / 确认记录 → 日志页 */}
-          <Route path="/new" element={<Navigate to="/#archive" replace />} />
+          <Route path="/archive" element={<ArchivePage />} />
+          {/* 旧入口重定向：新建资料 → 归档页；任务 / 确认记录 → 日志页 */}
+          <Route path="/new" element={<Navigate to="/archive" replace />} />
           <Route path="/tasks" element={<Navigate to="/log" replace />} />
           <Route path="/confirmations" element={<Navigate to="/log?tab=confirm" replace />} />
           <Route path="/ask" element={<KbAskPage />} />

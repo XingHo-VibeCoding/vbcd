@@ -866,13 +866,6 @@ body {
   grid-row: 1 / span 2;
 }
 
-/* 归档卡（原 /new 表单）：桌面占满整行（grid 自动放置到下一块空行，
-   落在个人卡 + 日历卡之下）；窄屏单列自然堆叠。 */
-.archive-card {
-  grid-column: 1 / -1;
-  scroll-margin-top: var(--sp-4); /* /#archive 直达时留一点上边距 */
-}
-
 /* 日志页标题行：h2 与页签切换同排（与 .toolbar 同一套间距） */
 .log-head {
   display: flex;
@@ -886,11 +879,18 @@ body {
   margin: 0;
 }
 
-/* ===== F10 · 主题方格（主页）=====
-   外观与 .card 同一套底/描边/圆角：不加渐变、不加圆形图标底，也不加任何过渡。 */
-.theme-tile {
+/* 归档方格 + 主题方格：左列第二行两块并排（窄屏堆叠，见 720px 断点） */
+.tile-row {
   grid-column: 1;
   grid-row: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+}
+
+/* ===== 主页方格（F10 主题 + 归档跳转）=====
+   两块共用一套外观：与 .card 同一套底/描边/圆角；不加渐变、不加圆形图标底，也不加任何过渡。 */
+.tile {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -905,32 +905,33 @@ body {
   border-radius: var(--radius-lg);
   color: var(--text);
   font: inherit;
+  text-decoration: none; /* 归档方格是 <a>：去掉链接下划线 */
 }
 
 /* hover 口径与 .btn-ghost:hover 一致：不位移、不缩放、无过渡 */
-.theme-tile:hover {
+.tile:hover {
   background: var(--surface-hover);
   border-color: var(--accent);
 }
 
-.theme-tile-icon {
+.tile-icon {
   display: block;
   color: var(--accent);
 }
 
-.theme-tile-text {
+.tile-text {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
   align-items: center;
 }
 
-.theme-tile-title {
+.tile-title {
   font-size: var(--fs-5);
   font-weight: 600;
 }
 
-.theme-tile-sub {
+.tile-sub {
   font-size: var(--fs-2);
   color: var(--muted);
 }
@@ -1086,13 +1087,18 @@ body {
   /* 单列时清掉桌面的显式定位，否则 grid-column: 2 会撑出一个隐式第二列 */
   .profile-card,
   .cal-card,
-  .theme-tile {
+  .tile-row {
     grid-column: 1;
     grid-row: auto;
   }
 
+  /* 窄屏下两块方格改纵向堆叠，避免 375px 屏幕上并排挤在一起 */
+  .tile-row {
+    grid-template-columns: 1fr;
+  }
+
   /* 窄屏方格改成紧凑横排：图标在左、两行文字在右，触控高度 ≥44px */
-  .theme-tile {
+  .tile {
     flex-direction: row;
     justify-content: flex-start;
     gap: var(--sp-3);
@@ -1101,7 +1107,7 @@ body {
     text-align: left;
   }
 
-  .theme-tile-text {
+  .tile-text {
     align-items: flex-start;
   }
 }

@@ -85,7 +85,7 @@ export default function NoteListPage() {
             目录
           </button>
         </div>
-        <Link className="btn-primary" to="/#archive">
+        <Link className="btn-primary" to="/archive">
           + 归档
         </Link>
       </div>

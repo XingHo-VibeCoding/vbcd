@@ -1,10 +1,9 @@
 // 个人主页（替换原 / 首页）：左个人卡（头像/昵称/简介）+ 右日历卡（当月月历 + 近期日程）。
 // 数据来自 GET /api/me → data/profile.md + data/schedule.md；文件缺失时各项有默认值，不报错。
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { getMe } from '../api/me.js'
 import { listTasks } from '../api/tasks.js'
-import NoteArchiveForm from '../components/NoteArchiveForm.jsx'
 import { getTheme, toggleTheme, watchOtherTabs, watchSystemTheme } from '../theme.js'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
@@ -58,19 +57,48 @@ function weekDates(base) {
   })
 }
 
-/** 主题方格的图标：纯线条、无装饰底，颜色继承 .theme-tile-icon 的 currentColor */
+/** 方格的图标：纯线条、无装饰底，颜色继承 .tile-icon 的 currentColor */
 function NightIcon() {
   return (
-    <svg className="theme-tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+    <svg className="tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
       <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" fill="currentColor" />
       <path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" fill="currentColor" />
     </svg>
   )
 }
 
+/** 归档方格的图标：归档盒 + 向下箭头（“存进去”），线条风格与主题方格一致 */
+function ArchiveIcon() {
+  return (
+    <svg className="tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+      <path
+        d="M4 8.2h16v10.3a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4 8.2l1.9-3.4h12.2L20 8.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 11.4v4.4m0 0l-2-2m2 2l2-2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 function DayIcon() {
   return (
-    <svg className="theme-tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+    <svg className="tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
       <circle cx="12" cy="12" r="4.2" fill="currentColor" />
       <path
         d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8"
@@ -84,7 +112,6 @@ function DayIcon() {
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const location = useLocation()
   const [data, setData] = useState(null)
   const [tasks, setTasks] = useState([])
   const [error, setError] = useState('')
@@ -135,18 +162,6 @@ export default function HomePage() {
       stopWatchingTabs()
     }
   }, [])
-
-  // #archive 锚点：React Router 的 hash 导航不会自动滚动，
-  // 「档案」页「+ 归档」按钮带 /#archive 跳回来，这里手动滚到归档卡。
-  useEffect(() => {
-    if (location.hash === '#archive') {
-      // 等下一帧：确保卡片已渲染完成（数据未加载完也先滚，布局稳定即可）
-      const raf = requestAnimationFrame(() => {
-        document.getElementById('archive')?.scrollIntoView({ block: 'start' })
-      })
-      return () => cancelAnimationFrame(raf)
-    }
-  }, [location.hash])
 
   if (error) return <div className="error-bar">{error}</div>
   if (!data) return <div className="loading">载入中…</div>
@@ -288,26 +303,30 @@ export default function HomePage() {
         </p>
       </section>
 
-      {/* 归档卡（原 /new 新建资料页表单）：桌面占满整行，窄屏堆在日历卡之后 */}
-      <section className="card archive-card" id="archive">
-        <h2>归档</h2>
-        <p className="hint">写一条资料存入本项目 data/ 目录，Obsidian 里也能看到</p>
-        <NoteArchiveForm />
-      </section>
+      {/* 左列第二行：归档方格（跳转入口）+ 主题方格，两块并排（窄屏堆叠） */}
+      <div className="tile-row">
+        <Link className="tile" to="/archive">
+          <ArchiveIcon />
+          <span className="tile-text">
+            <span className="tile-title">归档</span>
+            <span className="tile-sub">写一条资料存进 data/</span>
+          </span>
+        </Link>
 
-      {/* 主题方格（F10）：文案写的是「点下去会变成什么」，不是当前状态 */}
-      <button
-        type="button"
-        className="theme-tile"
-        aria-label={isDark ? '切换到日间模式' : '切换到夜间模式'}
-        onClick={() => setTheme(toggleTheme())}
-      >
-        {isDark ? <DayIcon /> : <NightIcon />}
-        <span className="theme-tile-text">
-          <span className="theme-tile-title">{isDark ? '日间模式' : '夜间模式'}</span>
-          <span className="theme-tile-sub">{isDark ? '阳光洒满的窗台' : '流萤飞舞的深空'}</span>
-        </span>
-      </button>
+        {/* 主题方格（F10）：文案写的是「点下去会变成什么」，不是当前状态 */}
+        <button
+          type="button"
+          className="tile"
+          aria-label={isDark ? '切换到日间模式' : '切换到夜间模式'}
+          onClick={() => setTheme(toggleTheme())}
+        >
+          {isDark ? <DayIcon /> : <NightIcon />}
+          <span className="tile-text">
+            <span className="tile-title">{isDark ? '日间模式' : '夜间模式'}</span>
+            <span className="tile-sub">{isDark ? '阳光洒满的窗台' : '流萤飞舞的深空'}</span>
+          </span>
+        </button>
+      </div>
     </div>
   )
 }

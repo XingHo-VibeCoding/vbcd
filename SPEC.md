@@ -26,9 +26,9 @@ vbcd/
 ├── web/                 # 前端 React + Vite
 │   ├── nginx.conf       # 生产：SPA 回退 + SSE 关缓冲
 │   └── src/
-│       ├── pages/       # 主页(含归档卡) / 档案 / 日志(任务+留痕) / 确认页 / 详情 / agent(问答) / 登录 / 关于
+│       ├── pages/       # 主页(归档/主题方格) / 档案 / 归档 / 日志(任务+留痕) / 确认页 / 详情 / agent(问答) / 登录 / 关于
 │       ├── components/  # MarkdownContent / NoteFileList / NoteArchiveForm / Toast
-│       # 前端路由口径：/new /tasks /confirmations 重定向 → /#archive /log /log?tab=confirm
+│       # 前端路由口径：/new /tasks /confirmations 重定向 → /archive /log /log?tab=confirm
 │       ├── theme.js     # 深浅主题的读写与切换（F10）
 │       └── api/         # 接口封装（唯一与后端通信的出口）
 ├── server/              # 后端 Node.js + Express
