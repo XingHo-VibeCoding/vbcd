@@ -350,6 +350,8 @@ vbcd/
 | `OPENAI_API_KEY` | `sk-…` | F9 必填：OpenAI 兼容端点 key | 🔴 |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Chat 端点；可换 DashScope 兼容模式 / Ollama `/v1` | ⬜ |
 | `LLM_MODEL` | `gpt-4o-mini` | 聊天模型 | ⬜ |
+| `LLM_TIMEOUT_MS` | `30000` | 单次模型调用超时。**必须 < Nginx `proxy_read_timeout`（60s）**，否则用户看到英文 504 页 | ⬜ |
+| `LLM_MAX_RETRIES` | `1` | 模型调用失败的重试次数（配合上面的超时一起控制最坏等待） | ⬜ |
 | `EMBED_MODEL` | `text-embedding-3-small` | Embedding 模型 | ⬜ |
 | `EMBED_BASE_URL` | （可空） | Embedding 端点；空 = 与 `OPENAI_BASE_URL` 同端点（DeepSeek 无 embeddings，需单独配） | ⬜ |
 | `EMBED_API_KEY` | （可空） | Embedding key；空 = 与 `OPENAI_API_KEY` 相同 | 🔴 |
@@ -357,6 +359,7 @@ vbcd/
 | `CHROMA_AUTH_TOKEN` | 随机串 | Chroma token 认证（`X-Chroma-Token` 头）；服务端开了才需要 | 🟡 |
 | `KB_TOP_K` | `3` | 检索段落数（1–10） | ⬜ |
 | `KB_MAX_DISTANCE` | （可空） | 距离阈值：命中距离大于它即丢弃 | ⬜ |
+| `INDEX_CACHE` | `1` | 资料索引缓存开关；设 `0` 强制重建 `data/.index.json` | ⬜ |
 | `ASR_SERVICE_URL` | `http://asr:8000` | F13 转写微服务地址（compose 内网服务名）；缺省 = 功能关闭 |
 | `ASR_SERVICE_TOKEN` | 随机串 | 调 ASR 的 Bearer token，与 `asr/.env` 的 `SERVICE_TOKEN` 一致 | 🔴 |
 | `ASR_HTTP_TIMEOUT_MS` | `15000` | 调 ASR 单次请求超时 | ⬜ |
@@ -373,7 +376,9 @@ vbcd/
 | `ORGANIZE_MAX_ATTEMPTS` | `3` | 僵死重试上限，超过判 failed | ⬜ |
 | `ORGANIZE_ALLOW_LOOPBACK` | `0` | =1 时**只放行回环地址**（127.0.0.1/localhost/::1），仅供本地假服务器自测；内网与云元数据地址恒拦 | 🟡 |
 
-`asr/` 服务侧变量见 `asr/.env.example`（`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / 切片与并发 / `JOBS_DIR` / `YTDLP_*` / 缓存 TTL）。
+`asr/` 服务侧变量见 `asr/.env.example`（`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / `ASR_CHUNK_SECONDS` / **`ASR_MAX_AUDIO_SECONDS=300`（上游单请求时长硬上限，启动时把 `ASR_CHUNK_SECONDS` 夹紧到 ≤ 本值）** / `ASR_HOST` `ASR_PORT` / `DOWNLOAD_TIMEOUT` `MAX_DOWNLOAD_MB` / `JOBS_DIR` / `YTDLP_*` / `CACHE_TTL_SECONDS`）。
+
+> ⚠️ **本表里有几个键目前代码不读**（属部署期预留，尚未启用）：`PUBLIC_ORIGIN` / `DATA_REPO_URL` / `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` / `TZ` / `LOG_DIR` / `TRUST_PROXY`。2026-09-29 由 `buddy-doc-sync` 核对发现（代码 0 处读取，`.env.example` 里也没有）——填入无害但也无效，启用对应功能时需同时补实现与文档。
 
 **密钥管理**：Git 拉取用服务器上的 deploy key（SSH），不放 `.env` 明文；`.env` 权限 600，只属于部署用户。
 
@@ -424,3 +429,4 @@ vbcd/
 | A5 | 开通 443 + certbot 证书自动化 | ⬜ 待做 |
 | A6 | 服务器安全组与 SSH 加固（改端口 / 限来源） | ⬜ 待做 |
 | A7 | F13 转写链路的三项验证（>20 分钟多片 `chunks ≥ 5`、TTL 内 `cache_hit=true`、逐句 `[mm:ss]` 归档复跑） | ✅ **已完成**（2026-09-29）：`chunks=14` / `cache_hit=true`（0.127s）/ 归档 68 段带时间戳；留证见 `runs/2026-09-29-f13-live-verify.md`（含「asr 镜像必须先重建」的前置条件），探针结论见 `asr/PROBE.md` §A4 |
+| A8 | `GET /api/health` 是否计入「N 个接口」 | ⬜ **待使用者拍板**（2026-09-29 由 `buddy-doc-sync` 子 agent 独立核对时发现）：代码实际注册 **14** 个 `router.*`（含 health），文档统一口径是**不含 health** 的「13 个」——但本文件 §3 的表与正文从未收录 health，而 `RUN.md` §8.4 把「健康检查」写进「已有」，两份口径不齐。选项：① **维持 13**（推荐，改动最小）→ 在本文件 §3 表下加一行脚注「另有 `GET /api/health`（健康检查，无鉴权，不计入上表）」；② 改为计入 → 本文件 §3 标题 + `RUN.md` + `AGENT.md` + `TECH_DESIGN.md` + `PRD.md` **五处 13→14** 同步 |
