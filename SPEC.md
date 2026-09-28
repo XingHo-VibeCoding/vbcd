@@ -218,6 +218,8 @@ vbcd/
 
 **LLM 整理**：复用 `services/llm.js` 的 `getChatModel(timeoutMs)`（独立实例，超时 `NOTE_LLM_TIMEOUT_MS` 默认 120s）；输入截断 `LLM_TRANSCRIPT_MAX_CHARS`（默认 12000 = 头 2/3 + 尾 1/3），截断时在资料里注明。
 
+**句级时间戳的来源**（2026-09-28 实测，详见 `asr/PROBE.md`）：上游 `output.sentence` 是**整片一个对象**（毫秒），句级 `segments[]` 由该对象的 `words[]` 按标点重组（句末标点 `。！？!?…；;` 切分，start 取首词、end 取末词）；没有 `words[]` 时降级为整片一段并标 `timestamp_granularity="chunk"`（不谎报 sentence）。上游**单请求音频硬上限 300 秒**（305s 起 HTTP 400 + 空句子，与体积无关），故 `ASR_CHUNK_SECONDS` 默认 180 且启动时对硬上限夹紧。
+
 **向量索引**：归档后 `POST /api/kb/index` 仍需手工触发（本期不自动入库），RUN.md 8.8 有说明。
 
 ## 4. 数据流
