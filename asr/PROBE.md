@@ -71,12 +71,14 @@ Key 取环境变量 `DASHSCOPE_API_KEY` / `MAAS_API_KEY`，或 `asr/.env`（样�
 - `BV1iYea6zEVC`（70.5s）：job `succeeded`，`chunks=1`，`download_ms≈29s`（yt-dlp 取音轨，B 站限速明显）、`ffmpeg_ms≈0.1s`、`asr_ms≈16s`、`total_ms≈61s`。
 - buddy 侧同一视频：POST task → `doing` → 轮询器推进约 4 拍 → `done`，`data/learning/*.md` 落盘（含 LLM 摘要/要点 + `[mm:ss]` 分段全文）；同一 URL 二次提交返回「已归档过 …」，未写第二份。
 - 容器链路：compose 内 server → `http://asr:8000` 真实调用成功（Bearer 鉴权生效）；宿主机直连 `localhost:8000` 拒绝连接（未发布端口）。
-- ⏸ **本轮挂起（使用者 2026-09-28 决定先跳过）**：以下三项验证**没做**，恢复办法已写明，随时可拣起：
-  1. **多片链路**：另下一个 >20 分钟的视频（本地 `t1.mp3` 只有 70.6 秒；`--repeat` 拼出来的是重复内容，不适合验「内容覆盖全片」）→ 期望 `stats.chunks ≥ 5`、各片均成功、`text` 覆盖全片；
-  2. **缓存命中**：同一 URL 在 `CACHE_TTL_SECONDS`（默认 1800）内第二次提交 → 期望 `stats.cache_hit=true`、无重新下载；
-  3. **逐句 `[mm:ss]` 归档复跑**：用新的句级重组（`words[]` → 句）跑一次 `transcribe_url` 归档（**换一个没归档过的 URL**，否则命中查重只会返回「已归档过」）→ 看 `data/learning/*.md` 的「全文（带时间戳）」是否逐句。
+- ✅ **三项验证已于 2026-09-29 全部跑完（不再挂起）**，完整留证见 `runs/2026-09-29-f13-live-verify.md`：
+  1. **多片链路**：`BV1Eb411u7Fw` p15（宋浩高数 1.8 节，视频 39:26 = 2367s）→ `stats.chunks=14`（静音对齐，均长 ≈169s）、终态 `succeeded`无 partial；首句 `1.0s` → 末句 `2364.253s`、时间轴单调、**364 句**（句级重组生效）、语句覆盖 1907/2367s = 81%；耗时 `download 14.8s + ffmpeg 1.6s + asr 211s`；
+  2. **缓存命中**：同一 URL（70s 视频）TTL 内第二次提交 → `stats.cache_hit=true`、**墙钟 0.127s**，`stats` 与首次逐字段一致（`download_ms=3937`）证明未重新下载；
+  3. **逐句 `[mm:ss]` 归档复跑**：换未归档的 p15 走 `transcribe_url` → 任务 `1790637103273-8c23` 约 30s `done`（走 ASR 缓存），落 `data/learning/2026-09-29-高等数学-同济版-2024年更新-宋浩老师-p15-1-8-函数的连续性与间断点.md`；首行 `[00:01]` → 末行 `[38:21]`；**注意口径**：ASR 返回 364 句，写盘时按 `transcribe.js:segmentsToTranscript` 的既定规则「相邻间隔 <2s 合并成一段」，落成 **68 段**（不是 364 行，`SPEC.md` §3.4 已写明该规则）。
 
-  挂起状态同时记在 `SPEC.md` §7.5 行动项与 `AGENTS.md` §4 F13；命令与断言见 `RUN.md` 8.8。
+  ⚠️ **前置修复（否则是假通过）**：`vbcd-asr` 镜像构建于 2026-09-28 18:44，**早于**当晚落地的 `words[]` 句级重组修复——旧镜像同一 70s 视频只出 **1 个 segment**。本次先 `docker compose up -d --build asr` 重建（重建后 `/app/asr/providers/funasr.py` 命中 `words` 9 行）再验证。
+
+  挂起状态同步处：`SPEC.md` §7.5 行动项（A7 → ✅）与 `AGENTS.md` §4 F13（→ ✅）；命令与断言见 `RUN.md` 8.8。
 
 ## 对照 PLAN 的偏差记录
 

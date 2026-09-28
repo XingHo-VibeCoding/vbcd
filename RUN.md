@@ -112,8 +112,10 @@ web/
 
 ## 8. 后端（`server/`）
 
-冒烟测试：`node scripts/smoke.mjs` —— 公开模式 19/19、隐私模式 23/23 通过（按 `/api/health` 的 `auth_enabled` 自适应）。隐私模式临时口令哈希：`node scripts/hash-password.js "口令" | head -1`（第二行是提示文字，只取第一行）。
-转写链路冒烟（后端以 `ASR_SERVICE_URL=http://127.0.0.1:8099 ASR_SERVICE_TOKEN=fake-token ASR_POLL_INTERVAL_MS=1000` 启动后）：`SMOKE_FAKE_ASR_PORT=8099 node scripts/smoke.mjs` —— 自动拉起 `scripts/fake-asr.mjs` 桩，追加 9 条断言（成功/查重/部分转写/失败/404/重试/非法 payload），公开 28/28、隐私 32/32。
+冒烟测试：`node scripts/smoke.mjs` —— **公开模式 20/20、隐私模式 24/24** 通过（按 `/api/health` 的 `auth_enabled` 自适应；2026-09-29 实测复核，此前口径 19/23 已过时）。隐私模式临时口令哈希：`node scripts/hash-password.js "口令" | head -1`（第二行是提示文字，只取第一行）。
+转写链路冒烟（后端以 `ASR_SERVICE_URL=http://127.0.0.1:8099 ASR_SERVICE_TOKEN=fake-token ASR_POLL_INTERVAL_MS=1000` 启动后）：`SMOKE_FAKE_ASR_PORT=8099 node scripts/smoke.mjs` —— 自动拉起 `scripts/fake-asr.mjs` 桩，追加 9 条断言（成功/查重/部分转写/失败/404/重试/非法 payload），**公开 29/29、隐私 33/33**（2026-09-29 实测复核，此前口径 28/32 已过时）。
+> 两个档位都**需要先自起一个后端**（`smoke.mjs` 不会自己拉后端）：如 `DATA_DIR=/tmp/buddy-smoke PORT=3199 node src/index.js`，再 `BASE_URL=http://localhost:3199 node scripts/smoke.mjs`。用临时 `DATA_DIR` 可避免写到真实 `data/`。
+> **条数随开关变化**：不开 `ORGANIZE_ALLOW_LOOPBACK` 时会跳过「收②/收③」两条本地抓取断言（上列 20/24 与 29/33 即此口径）；开后为 **公开 31/31、隐私 35/35**（与 `AGENTS.md` §4 的 F14 条目一致）。SSRF 断言「收①」（元数据地址恒拦）**两个口径都跑**。
 
 ### 8.1 前提
 
@@ -360,7 +362,7 @@ asr/.venv/bin/python -m pytest asr
 
 ASR 服务的 4 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返回 job）、`GET|DELETE /v1/jobs/{id}`、`GET /healthz`；`/v1/*` 需 `Authorization: Bearer $SERVICE_TOKEN`。临时媒体终态即删，job JSON TTL 30 分钟后 GC。
 
-**未验证、已挂起（2026-09-28）**：多片链路（>20 分钟视频，期望 `stats.chunks ≥ 5`）、同 URL TTL 内第二次提交的 `cache_hit=true`、逐句 `[mm:ss]` 归档复跑。三项都需另下一个长视频 / 换一个未归档 URL，恢复步骤与断言见 `asr/PROBE.md` §A4。
+**三项验证已于 2026-09-29 跑完（不再挂起）**：多片链路 `stats.chunks=14`（`BV1Eb411u7Fw` p15，39:26）、同 URL TTL 内第二次提交 `cache_hit=true`（0.127s 墙钟）、逐句 `[mm:ss]` 归档复跑成功（68 段 / 364 句）。完整命令、原始输出与「asr 镜像必须先重建」的前置条件见 `runs/2026-09-29-f13-live-verify.md`；结论同步在 `asr/PROBE.md` §A4 与 `SPEC.md` §7.5（A7）。
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
