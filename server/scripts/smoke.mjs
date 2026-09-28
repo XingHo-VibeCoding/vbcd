@@ -10,6 +10,9 @@
 const BASE = process.env.BASE_URL || 'http://localhost:3000'
 const PASSWORD = process.env.SMOKE_PASSWORD || ''
 const UNIQ = `${Date.now()}` // 每次运行用唯一内容，避免与历史数据撞查重
+// 转写链路冒烟：设 SMOKE_FAKE_ASR_PORT（如 8099）时，自动拉起 scripts/fake-asr.mjs 桩并跑转写断言；
+// 需后端以 ASR_SERVICE_URL=http://127.0.0.1:<同一端口> ASR_SERVICE_TOKEN=fake-token ASR_POLL_INTERVAL_MS=1000 启动。
+const FAKE_ASR_PORT = process.env.SMOKE_FAKE_ASR_PORT || ''
 
 let passed = 0
 let failed = 0
@@ -50,6 +53,40 @@ function sidFrom(setCookie) {
 }
 
 console.log(`冒烟测试 → ${BASE}`)
+
+// ===== 按需拉起假 ASR 服务（转写断言用）=====
+import { spawn } from 'node:child_process'
+let fakeAsr = null
+async function startFakeAsr() {
+  if (!FAKE_ASR_PORT) return false
+  fakeAsr = spawn(process.execPath, [new URL('./fake-asr.mjs', import.meta.url).pathname], {
+    env: { ...process.env, ASR_PORT: FAKE_ASR_PORT, FAKE_TOKEN: 'fake-token' },
+    stdio: 'ignore',
+  })
+  for (let i = 0; i < 30; i += 1) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${FAKE_ASR_PORT}/healthz`)
+      if (r.ok) return true
+    } catch { /* 还没起来 */ }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  console.error('fake-asr 未能启动')
+  process.exit(2)
+}
+process.on('exit', () => { if (fakeAsr) fakeAsr.kill() })
+
+/** 轮询任务直到终态（done/failed）或超时；返回最后一次看到的任务对象 */
+async function waitTask(id, cookie, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs
+  let last = null
+  while (Date.now() < deadline) {
+    const res = await req('GET', '/api/tasks', { cookie })
+    last = res.json?.data?.items?.find((t) => t.id === id) ?? null
+    if (last && (last.status === 'done' || last.status === 'failed' || last.status === 'attention')) return last
+    await new Promise((r) => setTimeout(r, 400))
+  }
+  return last
+}
 
 // ① 健康检查（公开），顺带读 auth_enabled
 const health = await req('GET', '/api/health')
@@ -246,6 +283,126 @@ check(
   again.status === 400 && again.json?.error?.code === 'VALIDATION_FAILED',
   again.json?.error?.message,
 )
+
+// ===== 视频转写链路（F13，可选）=====
+// 触发条件：SMOKE_FAKE_ASR_PORT 已设 且 health.asr_configured 为真。
+if (FAKE_ASR_PORT) {
+  const fakeUp = await startFakeAsr()
+  const h2 = await req('GET', '/api/health')
+  if (!h2.json?.data?.asr_configured) {
+    console.log('  ⏭️  后端未配 ASR_SERVICE_URL，跳过转写断言（fake-asr 已起但未接入）')
+  } else {
+    check('转① health.asr_configured → true', h2.json?.data?.asr_configured === true)
+
+    // ㉕ 成功链路：提交 → 轮询器归档 → 资料落盘（含摘要/要点区块或回退说明 + 带时间戳全文）
+    const okUrl = `https://example.com/v/${UNIQ}-ok`
+    const t1 = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: okUrl, category: 'learning', tags: ['转写'] } },
+      cookie,
+    })
+    const t1done = t1.status === 201 ? await waitTask(t1.json.data.id, cookie) : null
+    check(
+      '转② transcribe_url → done 且归档到 data/*.md',
+      t1.status === 201 && t1done?.status === 'done' && /已归档到 .+\.md/.test(t1done?.result ?? ''),
+      t1done?.result,
+    )
+    const notePath = /已归档到 (\S+\.md)/.exec(t1done?.result ?? '')?.[1]
+    const noteId = notePath ? notePath.split('/').pop().replace(/\.md$/, '') : ''
+    const noteDetail = noteId ? await req('GET', `/api/notes/${encodeURIComponent(noteId)}`, { cookie }) : null
+    check(
+      '转③ 归档资料含 frontmatter source_url + 带时间戳全文',
+      noteDetail?.status === 200 &&
+        noteDetail.json?.data?.meta?.source_url === okUrl &&
+        /## 全文（带时间戳）/.test(noteDetail.json?.data?.content ?? '') &&
+        /\[\d{2}:\d{2}\]/.test(noteDetail.json?.data?.content ?? ''),
+      noteId,
+    )
+
+    // 转④ 同一 URL 二次提交：不写第二份文件，任务 done 且提示已归档过
+    const t1b = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: okUrl, category: 'learning' } },
+      cookie,
+    })
+    const t1bdone = t1b.status === 201 ? await waitTask(t1b.json.data.id, cookie) : null
+    check(
+      '转④ 同一 URL 二次提交 → done 且不再写文件',
+      t1b.status === 201 && t1bdone?.status === 'done' && /已归档过/.test(t1bdone?.result ?? ''),
+      t1bdone?.result,
+    )
+
+    // ㉘ partial：job failed 但带已完成片段 → 仍归档 + 部分转写告警
+    const pUrl = `https://example.com/v/${UNIQ}-partial`
+    const t2 = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: pUrl } },
+      cookie,
+    })
+    const t2done = t2.status === 201 ? await waitTask(t2.json.data.id, cookie) : null
+    const pPath = /已归档到 (\S+\.md)|已归档过 (\S+\.md)/.exec(t2done?.result ?? '')
+    const pNoteId = pPath ? (pPath[1] || pPath[2]).split('/').pop().replace(/\.md$/, '') : ''
+    const pNote = pNoteId ? await req('GET', `/api/notes/${encodeURIComponent(pNoteId)}`, { cookie }) : null
+    check(
+      '转⑤ 带 partial 的失败 → 归档成功 + 部分转写告警块',
+      t2.status === 201 && t2done?.status === 'done' && /部分转写/.test(t2done?.result ?? '') &&
+        /部分转写/.test(pNote?.json?.data?.content ?? ''),
+      t2done?.result,
+    )
+
+    // ㉙ 完全失败（无 partial）→ 任务 failed，不落资料
+    const fUrl = `https://example.com/v/${UNIQ}-fail`
+    const t3 = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: fUrl } },
+      cookie,
+    })
+    const t3done = t3.status === 201 ? await waitTask(t3.json.data.id, cookie) : null
+    check(
+      '转⑥ job 完全失败 → 任务 failed + 中文原因',
+      t3.status === 201 && t3done?.status === 'failed' && /失败/.test(t3done?.result ?? ''),
+      t3done?.result,
+    )
+
+    // 转⑦ job 消失（404）→ 任务 failed + 可重试提示
+    const gUrl = `https://example.com/v/${UNIQ}-gone`
+    const t4 = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: gUrl } },
+      cookie,
+    })
+    const t4done = t4.status === 201 ? await waitTask(t4.json.data.id, cookie) : null
+    check(
+      '转⑦ job 404 → 任务 failed 且提示可退回重试',
+      t4.status === 201 && t4done?.status === 'failed' && /退回待办重试/.test(t4done?.result ?? ''),
+      t4done?.result,
+    )
+
+    // ㉛ 退回重试：retry URL 首次 job 失败 → PATCH todo 重新提交 → 第二次成功归档
+    const rUrl = `https://example.com/v/${UNIQ}-retry`
+    const t5 = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: rUrl } },
+      cookie,
+    })
+    const t5fail = t5.status === 201 ? await waitTask(t5.json.data.id, cookie) : null
+    const retry = t5fail?.status === 'failed'
+      ? await req('PATCH', `/api/tasks/${t5fail.id}`, { body: { status: 'todo' }, cookie })
+      : null
+    const t5done = retry?.status === 200 ? await waitTask(t5fail.id, cookie) : null
+    check(
+      '转⑧ failed→todo 重试 → 重新提交并归档',
+      t5.status === 201 && t5fail?.status === 'failed' && retry?.status === 200 &&
+        t5done?.status === 'done' && /已归档/.test(t5done?.result ?? ''),
+      `first=${t5fail?.status} retried=${retry?.status} final=${t5done?.status} ${t5done?.result ?? ''}`,
+    )
+
+    // 转⑨ 非法 payload → 400（不落任务）
+    const bad = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: 'ftp://x' } },
+      cookie,
+    })
+    check(
+      '转⑨ 非 http(s) url → 400 VALIDATION_FAILED',
+      bad.status === 400 && bad.json?.error?.code === 'VALIDATION_FAILED',
+      bad.json?.error?.message,
+    )
+  }
+}
 
 if (authEnabled) {
   // ㉒ 登出 → 204
