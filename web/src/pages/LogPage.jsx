@@ -25,6 +25,7 @@ const TYPE_LABELS = {
   organize: '整理链接',
   remind: '提醒',
   delete_note: '删除资料',
+  transcribe_url: '视频转写',
 }
 
 const STATUS_LABELS = {
@@ -88,6 +89,7 @@ function summaryOf(task) {
   if (task.type === 'remind') return payload.text || '(空提醒)'
   if (task.type === 'organize') return payload.url || '(空链接)'
   if (task.type === 'delete_note') return `删除资料 ${payload.note_id ?? ''}`
+  if (task.type === 'transcribe_url') return `转写 ${payload.url ?? ''}`
   return task.type
 }
 

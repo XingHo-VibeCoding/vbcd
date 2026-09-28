@@ -7,9 +7,11 @@ import * as confirmationStore from '../storage/confirmations.js'
 import * as storage from '../storage/files.js'
 import { createNote, nowShanghai } from './notes.js'
 import { fail } from './errors.js'
+import { submitTranscribeTask } from './transcribe.js'
 
-// delete_note 是高风险类型：建任务只生成「待确认」记录，必须经 decision=approved 才会真删（F6）
-export const TASK_TYPES = ['note', 'organize', 'remind', 'delete_note']
+// delete_note 是高风险类型：建任务只生成「待确认」记录，必须经 decision=approved 才会真删（F6）。
+// transcribe_url 不是高风险：归档资料与 F1 同级，直接异步执行（SPEC 3.4）。
+export const TASK_TYPES = ['note', 'organize', 'remind', 'delete_note', 'transcribe_url']
 export const TASK_STATUSES = ['todo', 'doing', 'done', 'failed', 'attention']
 export const TASK_ORIGINS = ['phone', 'desktop']
 export const CONFIRM_DECISIONS = ['approved', 'rejected']
@@ -175,6 +177,7 @@ export async function createTask(input) {
 
   if (type === 'note') return executeNoteTask(task)
   if (type === 'delete_note') return requestDeleteTask(task)
+  if (type === 'transcribe_url') return submitTranscribeTask(task)
 
   // organize / remind：本期没有自动执行器，登记为待办，等使用者在页面上推进
   task.result = '本期无自动执行器，需人工推进'
@@ -242,5 +245,11 @@ export async function updateTask(id, patch = {}) {
 
   task.status = status
   task.updated_at = nowShanghai().iso
+
+  // transcribe_url 退回待办 = 重试：清掉旧 job 引用，轮询器下一轮会重新提交（SPEC 3.4）
+  if (task.type === 'transcribe_url' && status === 'todo') {
+    delete task.asr
+    task.result = '已退回待办，等待重新提交转写'
+  }
   return taskStore.put(task)
 }

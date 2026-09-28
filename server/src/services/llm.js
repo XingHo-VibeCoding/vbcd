@@ -5,6 +5,7 @@ import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai'
 import { fail } from './errors.js'
 
 let chatModel = null
+let noteModel = null   // 转写笔记整理专用：超时比问答长（NOTE_LLM_TIMEOUT_MS）
 let embedModel = null
 
 function env(name, fallback = '') {
@@ -22,21 +23,26 @@ export function kbConfigured() {
   return Boolean(env('OPENAI_API_KEY') && env('CHROMA_URL'))
 }
 
-/** 聊天模型：支持 DeepSeek / Qwen / Ollama 等，只要改 OPENAI_BASE_URL + LLM_MODEL */
-export function getChatModel() {
+/** 聊天模型：支持 DeepSeek / Qwen / Ollama 等，只要改 OPENAI_BASE_URL + LLM_MODEL。
+ *  传 timeoutMs 时使用独立的慢调用实例（转写笔记整理用，超时可放宽到分钟级）。 */
+export function getChatModel(timeoutMs) {
   if (!env('OPENAI_API_KEY')) {
     throw fail('KB_NOT_CONFIGURED', '知识库问答未配置：缺少 OPENAI_API_KEY', 503)
   }
-  if (!chatModel) {
-    chatModel = new ChatOpenAI({
+  const make = (timeout) =>
+    new ChatOpenAI({
       model: env('LLM_MODEL', 'gpt-4o-mini'),
       apiKey: env('OPENAI_API_KEY'),
       streaming: true,
-      timeout: TIMEOUT_MS,
+      timeout,
       maxRetries: MAX_RETRIES,
       configuration: { baseURL: env('OPENAI_BASE_URL', 'https://api.openai.com/v1') },
     })
+  if (timeoutMs !== undefined) {
+    if (!noteModel) noteModel = make(timeoutMs)
+    return noteModel
   }
+  if (!chatModel) chatModel = make(TIMEOUT_MS)
   return chatModel
 }
 
