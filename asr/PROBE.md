@@ -71,7 +71,12 @@ Key 取环境变量 `DASHSCOPE_API_KEY` / `MAAS_API_KEY`，或 `asr/.env`（样�
 - `BV1iYea6zEVC`（70.5s）：job `succeeded`，`chunks=1`，`download_ms≈29s`（yt-dlp 取音轨，B 站限速明显）、`ffmpeg_ms≈0.1s`、`asr_ms≈16s`、`total_ms≈61s`。
 - buddy 侧同一视频：POST task → `doing` → 轮询器推进约 4 拍 → `done`，`data/learning/*.md` 落盘（含 LLM 摘要/要点 + `[mm:ss]` 分段全文）；同一 URL 二次提交返回「已归档过 …」，未写第二份。
 - 容器链路：compose 内 server → `http://asr:8000` 真实调用成功（Bearer 鉴权生效）；宿主机直连 `localhost:8000` 拒绝连接（未发布端口）。
-- ⚠️ 待补：>20 分钟视频的多片链路（`stats.chunks ≥ 5`）与同 URL TTL 内二次调用的 `cache_hit=true`（本地素材只有 70.6 秒，需另下一个长视频）。
+- ⏸ **本轮挂起（使用者 2026-09-28 决定先跳过）**：以下三项验证**没做**，恢复办法已写明，随时可拣起：
+  1. **多片链路**：另下一个 >20 分钟的视频（本地 `t1.mp3` 只有 70.6 秒；`--repeat` 拼出来的是重复内容，不适合验「内容覆盖全片」）→ 期望 `stats.chunks ≥ 5`、各片均成功、`text` 覆盖全片；
+  2. **缓存命中**：同一 URL 在 `CACHE_TTL_SECONDS`（默认 1800）内第二次提交 → 期望 `stats.cache_hit=true`、无重新下载；
+  3. **逐句 `[mm:ss]` 归档复跑**：用新的句级重组（`words[]` → 句）跑一次 `transcribe_url` 归档（**换一个没归档过的 URL**，否则命中查重只会返回「已归档过」）→ 看 `data/learning/*.md` 的「全文（带时间戳）」是否逐句。
+
+  挂起状态同时记在 `SPEC.md` §7.5 行动项与 `AGENTS.md` §4 F13；命令与断言见 `RUN.md` 8.8。
 
 ## 对照 PLAN 的偏差记录
 

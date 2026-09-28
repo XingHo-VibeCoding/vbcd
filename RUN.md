@@ -352,13 +352,15 @@ curl -X POST http://localhost:3100/api/tasks -H 'Content-Type: application/json'
 # 归档后若要进知识库问答，需手工触发一次增量索引：
 curl -X POST http://localhost:3100/api/kb/index
 
-# ④ 测试（不烧 Key）：单元 + respx mock 集成
-asr/.venv/bin/python -m pytest asr/tests          # 仓库根执行，37 个用例
+# ④ 测试（不烧 Key）：单元 + respx mock 集成（仓库根执行，48 个用例）
+asr/.venv/bin/python -m pytest asr
 
 # ⑤ 探针（改上游参数前先跑）：asr/scripts/probe_funasr.py，结论写在 asr/PROBE.md
 ```
 
 ASR 服务的 4 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返回 job）、`GET|DELETE /v1/jobs/{id}`、`GET /healthz`；`/v1/*` 需 `Authorization: Bearer $SERVICE_TOKEN`。临时媒体终态即删，job JSON TTL 30 分钟后 GC。
+
+**未验证、已挂起（2026-09-28）**：多片链路（>20 分钟视频，期望 `stats.chunks ≥ 5`）、同 URL TTL 内第二次提交的 `cache_hit=true`、逐句 `[mm:ss]` 归档复跑。三项都需另下一个长视频 / 换一个未归档 URL，恢复步骤与断言见 `asr/PROBE.md` §A4。
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
