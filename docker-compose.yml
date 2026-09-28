@@ -1,4 +1,4 @@
-# buddy 单机部署编排（Nginx + 后端 + Chroma）
+# buddy 单机部署编排（Nginx + 后端 + Chroma + ASR 转写服务）
 # 用法（本机彩排 / 服务器上线同一份）：
 #   docker compose up -d --build
 #   docker compose ps
@@ -20,6 +20,22 @@ services:
     networks: [internal]
     # 刻意不写 ports：不给公网留入口
 
+  asr:
+    # fun-asr 转写微服务（F13）：视频/音频 URL → 结构化转写包，供 server 任务链路调用
+    build:
+      context: .            # 仓库根，Dockerfile 里 COPY asr/ 才能打进包
+      dockerfile: asr/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./asr/.env    # DASHSCOPE_API_KEY / SERVICE_TOKEN 等（.env.example 有样例）
+    environment:
+      JOBS_DIR: /app/jobs
+    volumes:
+      # 命名卷：临时媒体与 job JSON，不向宿主机 data/ 塞临时产物
+      - asr-jobs:/app/jobs
+    networks: [internal]
+    # 刻意不写 ports：只在 compose 内网被 server 调用，不对外发布
+
   server:
     build: ./server
     restart: unless-stopped
@@ -32,12 +48,15 @@ services:
       DATA_DIR: /app/data
       # 容器内用服务名访问 Chroma，覆盖 .env 里可能配置的公网地址
       CHROMA_URL: http://chroma:8000
+      # 转写服务走内网服务名；token 从 server/.env 的 ASR_SERVICE_TOKEN 读
+      ASR_SERVICE_URL: http://asr:8000
     volumes:
       # 资料目录绑定挂载：宿主机上也能直接备份/Obsidian 打开
       - ./data:/app/data
     networks: [internal]
     depends_on:
       - chroma
+      - asr
 
   web:
     build: ./web
@@ -62,3 +81,4 @@ networks:
 
 volumes:
   chroma-data:
+  asr-jobs:
