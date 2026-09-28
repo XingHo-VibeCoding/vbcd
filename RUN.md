@@ -40,14 +40,13 @@ npm run dev                 # :5173，/api 代理到 :3000
 
 | 路径 | 页面 | 说明 |
 |---|---|---|
-| `/` | 个人主页 | 头像 / 昵称 / 简介；日历周视图（默认）/ 月视图切换（`?cal=month`）；待办任务列表；深色模式方格开关（F10） |
-| `/notes` | 资料列表 | 卡片 / 目录两种视图（`?view=dir`），关键词与分类筛选 |
-| `/new` | 新建资料 | Markdown 实时预览 |
-| `/notes/:id` | 资料详情 | 正文 + 文件路径；底部「删除这条资料」入口（F6） |
-| `/tasks` | 任务 | 发起任务 + 查看/推进进度（F4/F5） |
+| `/` | 个人主页 | 头像 / 昵称 / 简介；日历周视图（默认）/ 月视图切换（`?cal=month`）；待办任务列表；**「归档」卡（原 /new 表单，`#archive` 锚点）**；深色模式方格开关（F10） |
+| `/notes` | 档案 | 卡片 / 目录两种视图（`?view=dir`），关键词与分类筛选；工具栏「+ 归档」按钮 → `/#archive` |
+| `/log` | 日志 | 任务与确认留痕合并页：`?tab=tasks`（默认，发起任务 + 进度推进，F4/F5）/ `?tab=confirm`（确认留痕回看，F6） |
 | `/tasks/:id/confirm` | 确认页 | 高风险动作的后果说明 + 确认 / 取消（F6） |
-| `/confirmations` | 确认留痕 | 回看每次请求与决定（F6） |
-| `/ask` | 知识库问答 | 需配 KB env，见 8.6 |
+| `/notes/:id` | 资料详情 | 正文 + 文件路径；底部「删除这条资料」入口（F6） |
+| `/new` `/tasks` `/confirmations` | — | 旧入口，重定向到 `/#archive`、`/log`、`/log?tab=confirm` |
+| `/ask` | agent · 知识库问答 | 需配 KB env，见 8.6（本期仅改名 agent，功能未动；方向见 `AGENT.md`） |
 | `/about` | 关于 | 自我介绍 / 研究动态页签（`?tab=activity`）；热力图按资料 date 聚合，时间线取最新 8 条（F11） |
 | `/login` | 登录 | 仅 `AUTH_ENABLED=1` 时可达 |
 
@@ -284,7 +283,7 @@ docker compose ps                                            # 三个 Up，serve
 curl -s http://localhost/api/health                          # {"ok":true,...}
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost/ask   # 200（SPA 回退生效）
 curl -sN 'http://localhost/api/kb/stream?q=test'             # 未配 key 应立刻回 event: error
-ls data/work/                                                # 页面上新建资料后能看到新 .md
+ls data/work/                                                # 主页「归档」卡提交一条后能看到新 .md
 ```
 
 已知事实：容器写盘落到宿主机且属主为 `bird`（容器内 `uid=1000(node)`）；`./data` 与 `vbcd_chroma-data` 整栈 `down`→`up` 后数据仍在；Chroma JS 客户端 `3.5.0` 与服务器 `1.4.4` 兼容。
@@ -322,7 +321,7 @@ ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
 验收清单：
 
 - [ ] Obsidian 的 `buddy/` 下能看到 4 条示例（atomic-commit / prd-review / proxy-502 / wsl-env）
-- [ ] 浏览器「新建资料」录一条 → `buddy/` 下立即出现对应 `.md`
+- [ ] 浏览器主页「归档」卡录一条 → `buddy/` 下立即出现对应 `.md`
 - [ ] Obsidian 里改一条正文 → 浏览器刷新列表，内容更新
 - [ ] `data/.index.json` 是隐藏文件，Obsidian 默认不显示（别删，删了只是下次重建）
 
