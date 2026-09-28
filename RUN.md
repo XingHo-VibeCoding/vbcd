@@ -10,13 +10,17 @@
 
 ## 2. 启动（两个终端，先起后端再起前端）
 
+> **端口说明（本机，2026-09-27 起）**：本机 `5173` 与 `3000` 已被其他项目占用，故本地 dev 改走
+> **前端 `5174` / 后端 `3100`**。前端端口写在 `web/vite.config.js`，后端端口写在 `server/.env`（不入库）；
+> 后端默认端口仍是 `3000`（`src/index.js` 与 `.env.example`），Docker 部署也仍走容器内 `3000`，均不受影响。
+
 后端（`server/.env` 见第 8 节）：
 
 ```bash
 cd server
 npm install
 cp .env.example .env        # PowerShell：Copy-Item .env.example .env
-npm run dev                 # :3000
+npm run dev                 # :3100（本机已改；默认仍 :3000）
 ```
 
 前端：
@@ -24,7 +28,7 @@ npm run dev                 # :3000
 ```bash
 cd web
 npm install
-npm run dev                 # :5173，/api 代理到 :3000
+npm run dev                 # :5174，/api 代理到 :3100
 ```
 
 生产构建：`npm run build`，产物在 `web/dist/`（不入库）。
@@ -33,8 +37,8 @@ npm run dev                 # :5173，/api 代理到 :3000
 
 | 入口 | 地址 |
 |---|---|
-| 本机 | http://localhost:5173 （打卡截图用这个） |
-| 手机 | http://<本机局域网IP>:5173 （同一 Wi-Fi，局域网预览；公网 HTTPS 见 8.7） |
+| 本机 | http://localhost:5174 （打卡截图用这个） |
+| 手机 | http://<本机局域网IP>:5174 （同一 Wi-Fi，局域网预览；公网 HTTPS 见 8.7） |
 
 页面清单：
 
@@ -81,9 +85,9 @@ npm run dev                 # :5173，/api 代理到 :3000
 | 页面打不开 | dev 服务没起 | 重新 `npm run dev` |
 | 改了代码页面没变 | 缓存 | Ctrl+F5 强制刷新 |
 | `npm install` 卡住或 502 | 环境变量里的代理已失效 | 清空 `HTTP_PROXY`、`HTTPS_PROXY` 后再装 |
-| 端口被占用 | 上次的服务还在跑 | Ctrl+C 停掉，或 `npm run dev -- --port 5174` |
+| 端口被占用 | 上次的服务还在跑 | Ctrl+C 停掉；本机 dev 已固定用 5174/3100 避开其他项目 |
 | 登录提示「口令错误」 | 哈希与口令不匹配，或后端没重启 | 重跑 `node scripts/hash-password.js "口令"` 换 `PASSWORD_HASH=`，重启后端 |
-| 列表「无法连接后端服务」 | 后端 :3000 没起 | 先 `cd server && npm run dev` |
+| 列表「无法连接后端服务」 | 后端 :3100 没起 | 先 `cd server && npm run dev` |
 
 ## 7. 目录速查（前端）
 
@@ -91,7 +95,7 @@ npm run dev                 # :5173，/api 代理到 :3000
 web/
 ├── index.html
 ├── package.json           # dev / build / preview
-├── vite.config.js         # :5173，host 打开，/api → :3000
+├── vite.config.js         # :5174，host 打开，/api → :3100
 ├── nginx.conf             # 生产：SPA 回退 + SSE 关缓冲
 └── src/
     ├── main.jsx           # React 挂载 + 路由
@@ -118,8 +122,10 @@ web/
 cd server
 npm install
 cp .env.example .env
-npm run dev                 # node --watch src/index.js，:3000
+npm run dev                 # node --watch src/index.js，默认 :3000（本机已在 .env 改成 :3100）
 ```
+
+> 下文 curl 示例里统一写 `:3000`（后端默认端口）。本机要是改了 `PORT`，把 `:3000` 换成实际端口（本机为 `:3100`）即可。
 
 不设 `AUTH_ENABLED` 即公开免登录。启用隐私模块：
 
