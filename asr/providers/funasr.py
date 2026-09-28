@@ -52,17 +52,65 @@ def _sentence_objects(body: dict) -> list[dict]:
     return []
 
 
+_SENTENCE_END_CHARS = "。！？!?…；;"
+
+
+def _sentences_from_words(words: list[dict], fallback_end: float) -> list[dict]:
+    """由词级时间戳重组句级 segments（A1 实测 2026-09-28）。
+
+    上游返回的 `sentence` 是**整片一个对象**，真正的时间戳在 `words[]` 里（词级、毫秒、带 `punctuation`）。
+    重组规则：遇到句末标点（。！？!?…；;）收一句，句 start 取首词 `begin_time`、end 取末词 `end_time`。
+    实测：300s 片 872 词 → 43 句，时间轴单调，重组文本合计与 `sentence.text` 完全一致。
+    """
+    out: list[dict] = []
+    buf: list[str] = []
+    start: float | None = None
+    end: float = 0.0
+
+    def flush() -> None:
+        nonlocal buf, start, end
+        text = "".join(buf).strip()
+        if text and start is not None:
+            out.append({"start": start, "end": end or start, "text": text, "speaker": None})
+        buf, start, end = [], None, 0.0
+
+    for w in words:
+        if not isinstance(w, dict):
+            continue
+        if start is None:
+            start = _to_seconds(w.get("begin_time"))
+        buf.append(str(w.get("text") or ""))
+        punct = str(w.get("punctuation") or "")
+        if punct:
+            buf.append(punct)
+        end = _to_seconds(w.get("end_time")) or end
+        if punct and any(ch in _SENTENCE_END_CHARS for ch in punct):
+            flush()
+    flush()
+    return out
+
+
 def parse_result(body: dict, chunk_duration: float) -> dict:
     """把上游响应解析成 {text, segments, granularity, language}。
     segments 时间为本片内相对时间（秒）；上游不给时间戳时降级为整片一段（granularity=chunk）。
-    实测（2026-09-28 探针）：返回 output.sentence{begin_time,end_time,text,words[]}，时间戳毫秒。"""
+
+    实测（2026-09-28 探针）：`output.sentence` 是**整片一个对象**（毫秒），句级时间戳要由 `words[]` 按标点重组；
+    没有 `words[]` 时只能整片一段，此时粒度标 `chunk`（不谎报 sentence）。"""
     output = (body or {}).get("output") or {}
     text, segments = "", []
+    reconstructed = 0
 
     sents = _sentence_objects(body)
     if sents:
         for s in sents:
             seg_text = str(s.get("text") or "").strip()
+            words = s.get("words")
+            if isinstance(words, list) and words:
+                parts = _sentences_from_words(words, _to_seconds(s.get("end_time")) or float(chunk_duration))
+                if parts:
+                    segments.extend(parts)
+                    reconstructed += len(parts)
+                    continue
             if not seg_text:
                 continue
             segments.append(
@@ -95,7 +143,8 @@ def parse_result(body: dict, chunk_duration: float) -> dict:
         raise ServiceError("ASR_FAILED", "上游返回结构中没有转写文本", retryable=False)
 
     if segments:
-        granularity = "sentence"
+        # 有词级重组才敢报 sentence；只有一个整片对象时如实报 chunk
+        granularity = "sentence" if (reconstructed or len(sents) > 1) else "chunk"
     else:
         # 只有整段文本：用整片边界作为唯一一段（A1 降级路径）
         segments = [{"start": 0.0, "end": float(chunk_duration), "text": text}]
@@ -133,6 +182,13 @@ def _classify_http(resp: httpx.Response) -> ServiceError:
         return ServiceError("RATE_LIMITED", f"上游限流（HTTP {resp.status_code} {code or ''}）".strip(), retryable=True)
     if resp.status_code >= 500:
         return ServiceError("ASR_FAILED", f"上游服务错误（HTTP {resp.status_code}）", retryable=True)
+    if resp.status_code == 400:
+        # 探针实测：超限是「400 + 空 sentence」，没有 code/message，只能给这种提示
+        return ServiceError(
+            "ASR_FAILED",
+            "上游拒绝请求（HTTP 400，未给错误码）",
+            hint="常见原因是音频超过 300 秒上限或格式不受支持：调小 ASR_CHUNK_SECONDS / 换 16k 单声道 wav",
+        )
     return ServiceError("ASR_FAILED", f"上游拒绝请求（HTTP {resp.status_code} {code or ''}）".strip(), retryable=False)
 
 
@@ -153,12 +209,21 @@ async def transcribe_chunk(
             hint="在 asr/.env 里填 DASHSCOPE_API_KEY 后重启",
         )
 
-    # 体积闸门：超过 10MB Base64 上限的片直接失败（不切到这里就不会超，双保险）
+    # 时长闸门：上游硬上限 300 秒（探针实测 305s 起返回 400 空 sentence，与体积无关）——
+    # 正常切片不会超（ASR_CHUNK_SECONDS 默认 180 且启动时校验），这里是双保险。
+    if chunk_duration and chunk_duration > settings.asr_max_audio_seconds:
+        raise ServiceError(
+            "ASR_FAILED",
+            f"切片 {chunk_duration:.0f} 秒超过上游 {settings.asr_max_audio_seconds} 秒上限",
+            hint="调小 ASR_CHUNK_SECONDS",
+        )
+
+    # 体积护栏（我方自设，不是上游限制：实测 300s wav 的 Base64 12.21MB 仍能通过）
     b64_bytes = wav.stat().st_size * 4 / 3
     if b64_bytes > settings.asr_max_b64_bytes:
         raise ServiceError(
             "ASR_FAILED",
-            f"切片 Base64 体积约 {b64_bytes/1048576:.1f}MB，超过上限 {settings.asr_max_b64_bytes/1048576:.0f}MB",
+            f"切片 Base64 体积约 {b64_bytes/1048576:.1f}MB，超过自设护栏上限 {settings.asr_max_b64_bytes/1048576:.0f}MB",
             hint="调小 ASR_CHUNK_SECONDS",
         )
 

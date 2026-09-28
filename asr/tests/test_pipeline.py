@@ -53,9 +53,21 @@ def fake_fetch(src_wav: str, seconds: float):
 
 
 def asr_body(text: str, begin_ms: int = 0, end_ms: int = 3000):
+    """按实测形状造响应：`sentence` 是整片一个对象，句级时间戳在 `words[]`（毫秒 + punctuation）里。
+    句级时间戳由 `parse_result` 从 words 重组（A1 结论），所以 mock 也必须带 words。"""
+    chars = list(text) or ["…"]
+    span = max(int((end_ms - begin_ms) / len(chars)), 1)
+    words: list[dict] = []
+    t = begin_ms
+    for ch in text:
+        if ch in "。！？，；" and words:
+            words[-1]["punctuation"] = ch      # 标点挂在前一个词上（与实测一致）
+            continue
+        words.append({"begin_time": t, "end_time": t + span, "text": ch, "punctuation": "", "speaker_id": None})
+        t += span
     return {
         "output": {
-            "sentence": {"begin_time": begin_ms, "end_time": end_ms, "text": text},
+            "sentence": {"begin_time": begin_ms, "end_time": end_ms, "text": text, "words": words},
             "text": text,
         },
         "usage": {},

@@ -30,9 +30,18 @@ def wav(tmp_path):
 
 
 def ok_body():
+    """实测形状：sentence 是整片一个对象，句级时间戳在 words[]（毫秒 + punctuation）里。"""
     return {
         "output": {
-            "sentence": {"begin_time": 0, "end_time": 1000, "text": "你好"},
+            "sentence": {
+                "begin_time": 0,
+                "end_time": 1000,
+                "text": "你好",
+                "words": [
+                    {"begin_time": 0, "end_time": 500, "text": "你", "punctuation": "", "speaker_id": None},
+                    {"begin_time": 500, "end_time": 1000, "text": "好", "punctuation": "。", "speaker_id": None},
+                ],
+            },
             "text": "你好",
         },
         "usage": {"duration": 1},

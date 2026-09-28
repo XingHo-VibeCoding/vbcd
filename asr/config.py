@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, fields
 from pathlib import Path
 
@@ -31,9 +32,12 @@ class Settings:
     # 调用方鉴权：未设时只应绑 127.0.0.1（api.py/app.py 会在启动日志告警）
     service_token: str = ""
 
-    # 切片与体积闸门：16kHz 单声道 pcm_s16le ≈ 32KB/s；180s ≈ 5.8MB raw ≈ 7.7MB base64
+    # 切片与体积护栏：16kHz 单声道 pcm_s16le ≈ 32KB/s；180s ≈ 5.5MiB raw
     asr_chunk_seconds: int = 180
-    asr_max_b64_bytes: int = 10 * 1024 * 1024  # 上游 10MB Base64 上限（PLAN §4）
+    # 上游硬上限：单请求音频 ≤ 300 秒（2026-09-28 探针实测：305s 起一律 HTTP 400 + 空 sentence，与体积无关）
+    asr_max_audio_seconds: int = 300
+    # 我方发送前护栏（**不是**上游限制：实测 300s wav 的 Base64 12.21MB 仍可通过）
+    asr_max_b64_bytes: int = 10 * 1024 * 1024
     asr_silence_window_seconds: int = 20       # 静音边界搜索窗口（标称切点前后）
     asr_chunk_concurrency: int = 1             # 片内并发（串行为 1）
     asr_global_concurrency: int = 3            # 全局同时在转的片数上限
@@ -96,4 +100,12 @@ def _load() -> Settings:
     s = Settings(**kwargs)
     if not s.dashscope_api_key:
         s.dashscope_api_key = os.environ.get("MAAS_API_KEY", "")
+    # 片长必须小于上游硬上限（探针实测 300s），否则每一片都白跑：夹紧并告警，不静默失败
+    if s.asr_chunk_seconds > s.asr_max_audio_seconds:
+        print(
+            f"[asr] 警告：ASR_CHUNK_SECONDS={s.asr_chunk_seconds} 超过上游 {s.asr_max_audio_seconds} 秒硬上限，"
+            f"已夹紧为 {s.asr_max_audio_seconds}",
+            file=sys.stderr,
+        )
+        s.asr_chunk_seconds = s.asr_max_audio_seconds
     return s
