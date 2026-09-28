@@ -364,6 +364,8 @@ asr/.venv/bin/python -m pytest asr
 
 ASR 服务的 4 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返回 job）、`GET|DELETE /v1/jobs/{id}`、`GET /healthz`；`/v1/*` 需 `Authorization: Bearer $SERVICE_TOKEN`。临时媒体终态即删，job JSON TTL 30 分钟后 GC。
 
+**时长硬上限（最常踩）**：上游单请求**音频硬上限 300 秒**（305s 起 400 + 空句子，与体积无关）→ `ASR_CHUNK_SECONDS` 默认 180，且启动时自动夹紧到 ≤ `ASR_MAX_AUDIO_SECONDS`（提交 999 会打印警告并生效为 300，2026-09-29 实测）。长媒体靠静音对齐切片 + 片偏移合并完成，不需要你手动切。
+
 **三项验证已于 2026-09-29 跑完（不再挂起）**：多片链路 `stats.chunks=14`（`BV1Eb411u7Fw` p15，39:26）、同 URL TTL 内第二次提交 `cache_hit=true`（0.127s 墙钟）、逐句 `[mm:ss]` 归档复跑成功（68 段 / 364 句）。完整命令、原始输出与「asr 镜像必须先重建」的前置条件见 `runs/2026-09-29-f13-live-verify.md`；结论同步在 `asr/PROBE.md` §A4 与 `SPEC.md` §7.5（A7）。
 
 | 现象 | 原因 | 处理 |
@@ -397,7 +399,7 @@ ls data/learning/ && sed -n '1,20p' data/learning/<刚生成的>.md
 本地自测（不烧 Key、不用起服务）：
 
 ```bash
-node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 重定向 / GBK 解码，24 条
+node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 重定向 / GBK 解码，38 条（2026-09-29 实跑复核：38 通过 / 0 失败）
 ```
 
 失败原因对照（都是任务 `result` 里的中文文案，不是接口报错）：

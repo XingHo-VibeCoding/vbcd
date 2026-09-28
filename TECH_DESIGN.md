@@ -211,12 +211,12 @@ flowchart TB
 |---|---|
 | `AGENTS.md` | 协作协议 + 产品铁律（规则版本化） |
 | `data/rules.md` | 使用者的每条纠正长期生效，新会话先读（本期未实现） |
-| `skills/` | 成功流程固化为可读可改的技能（尚未创建） |
+| `skills/` | 成功流程固化为可读可改的技能（已建：`skills/frontend-rules/SKILL.md`，前端样式检查清单；调用留证在 `skills/frontend-rules/runs/`） |
 | `drafts/` | 未确认产物不落地为正式知识（尚未创建） |
 
 ### 5.7 已知弱点
 
-1. **无自动化测试与 CI**：验收依赖人工照单检查（仅有一个冒烟脚本）；
+1. **无自动化测试与 CI**：验收依赖人工照单检查。现状（2026-09-29）：`server/scripts/` 下 3 个脚本（`smoke.mjs` 端到端冒烟、`link-selftest.mjs` 链接收敛自测、`fake-asr.mjs` 假 ASR 桩）+ `asr/tests/` 的 pytest **48 例**（单测 + respx mock）——**仍未接 CI**，靠人工跑；
 2. **资料私有仓未建**：`sync()` 仍是空操作，Git 备份链路未通；
 3. **服务器单点**：靠本地 mirror + 云快照兜底；
 4. **规则层靠「约定」执行**：AGENTS.md 无强制机制，只能靠每次会话先读与人工核对。

@@ -26,6 +26,7 @@
 | `RUN.md` | 怎么跑起来 |
 | `asr/PROBE.md` | fun-asr 上游返回结构与上限的实测结论 |
 | `AGENT.md` | 产品 agent 化的方向备忘（动作 ↔ 接口 ↔ 页面） |
+| `runs/` | 执行留证：子 agent 派出与长任务验证的原始证据（格式见 `AGENTS.md` §10.6） |
 
 ## 仓库结构
 
@@ -35,6 +36,9 @@ vbcd/
 ├── server/              # 后端 Node.js + Express
 ├── asr/                 # 转写微服务：Python + FastAPI（F13），仅 compose 内网
 ├── data/                # 个人资料，不进公开仓
+├── runs/                # 执行留证（子 agent 派出、长任务验证）
+├── skills/              # 固化下来的技能（frontend-rules 及其 runs/）
+├── .pi/agents/          # 项目级子 agent 定义（规则审计 / 文档核对 / 验证执行）
 ├── docker-compose.yml   # 部署：Nginx + server + Chroma + asr
 └── *.md                 # 文档（PLAN.md 为转写服务的原始设计方案）
 ```
