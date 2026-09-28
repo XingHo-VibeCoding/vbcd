@@ -60,7 +60,7 @@ npm run dev                 # :5174，/api 代理到 :3100
 | 能做 | 不能做 |
 |---|---|
 | 资料：新建 / 列表检索 / 详情看原文（F1–F3） | 编辑已有资料 |
-| 任务：发起（记资料 / 提醒 / 整理链接）+ 查看与推进状态（F4/F5） | `organize` / `remind` 的自动执行器：只登记待办，只有 `note` 会同步归档 |
+| 任务：发起（记资料 / 提醒 / 整理链接 / 删除资料 / 视频转写）+ 查看与推进状态（F4/F5） | `organize` / `remind` 的自动执行器：只登记待办；`note` 同步归档，`transcribe_url` 由轮询器异步归档（F13） |
 | 删除资料：详情页发起 → 确认页看后果 → 确认后才真删（F6） | smail 邮箱关联、ehall 事务（第 2–3 期） |
 | 确认留痕：每次请求与决定可回看（F6） | 多用户与权限、原生 App、自动后台记录 |
 | 个人主页；知识库问答 `/ask` | RAG 进阶：混合检索 / Rerank / 多轮记忆 |
@@ -194,6 +194,12 @@ curl -s -X PATCH http://localhost:3000/api/tasks/<任务id> \
 # ⑨ 留痕回看
 curl -s http://localhost:3000/api/confirmations
 # 200 {"ok":true,"data":{"total":N,"items":[...]}}
+
+# ⑩ 视频转写任务（F13，需先配 ASR env 与起 asr 服务，见 8.8）
+curl -s -X POST http://localhost:3000/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"type":"transcribe_url","payload":{"url":"https://www.bilibili.com/video/BVxxxx"}}'
+# 201 + status=doing；随后 GET /api/tasks 可见「转写中：正在转写（n/m，x%）」→「已归档到 learning/….md」
 ```
 
 隐私模式（`AUTH_ENABLED=1`）登录：
@@ -292,7 +298,7 @@ docker pull docker.m.daocloud.io/library/python:3.11-slim && docker tag docker.m
 验证：
 
 ```bash
-docker compose ps                                            # 三个 Up，server 应为 (healthy)
+docker compose ps                                            # 四个 Up（web/server/chroma/asr），server 应为 (healthy)
 curl -s http://localhost/api/health                          # {"ok":true,...}
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost/ask   # 200（SPA 回退生效）
 curl -sN 'http://localhost/api/kb/stream?q=test'             # 未配 key 应立刻回 event: error
