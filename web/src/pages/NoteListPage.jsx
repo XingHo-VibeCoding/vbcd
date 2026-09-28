@@ -27,6 +27,9 @@ export default function NoteListPage() {
   // 写进地址栏而不是 state/localStorage——刷新、前进后退、把链接发给手机都能保持视图。
   const [searchParams, setSearchParams] = useSearchParams()
   const isDirView = searchParams.get('view') === 'dir'
+  // Day 12：无结果时要区分「被筛掉了」和「本来就没资料」——前者该引导清空筛选，
+  // 后者才该引导去归档；两者共用一句「+ 归档」会把人带偏。
+  const hasFilter = q.trim() !== '' || category !== ''
 
   // 搜索 250ms 防抖；分类变化立即重新请求（F3：打开/输入即刷新）
   useEffect(() => {
@@ -99,7 +102,13 @@ export default function NoteListPage() {
       {loading && total === 0 ? (
         <div className="loading">载入中…</div>
       ) : total === 0 ? (
-        <div className="empty">没有找到{error ? '' : '，点上面「+ 归档」记一条吧'}</div>
+        <div className="empty">
+          {error
+            ? '没有找到'
+            : hasFilter
+              ? '没有匹配的资料，试试清空筛选条件'
+              : '没有找到，点上面「+ 归档」记一条吧'}
+        </div>
       ) : isDirView ? (
         // 目录视图与卡片视图共用同一份过滤结果（items），筛选行为完全一致
         <NoteFileList items={items} />
