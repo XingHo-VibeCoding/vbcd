@@ -1,6 +1,6 @@
 # TECH_DESIGN.md — buddy 技术设计（MVP · 第 1 期）
 
-> 上游依据：`PRD.md` v1.7（F1–F13 与验收标准）。本文只写「为什么这么选」，具体怎么做见 `SPEC.md`。
+> 上游依据：`PRD.md` v1.8（F1–F14 与验收标准）。本文只写「为什么这么选」，具体怎么做见 `SPEC.md`。
 > 原则：能跑通 > 花哨；数据自有 > 平台便利；每层可替换 > 一次到位。
 
 ## 1. 设计目标与约束
@@ -45,6 +45,7 @@
 | 13 | 向量库（F9） | Chroma 自托管（Docker，token 认证或安全组限源） | 数据自有，符合 F7；向量是派生数据，坏了可由 `data/` 重建 | Chroma Cloud 托管：把资料交给第三方，违背数据自有 |
 | 14 | 模型端点（F9） | OpenAI 兼容端点统一供 Chat + Embedding（`OPENAI_BASE_URL` 可切；Embedding 可单独配 `EMBED_BASE_URL`） | 一套代码支持 OpenAI / DashScope 兼容模式 / Ollama，改 env 即换模型 | 锁定某家 SDK：DeepSeek 无 embeddings，双端点设计就是为这个坑留的口子 |
 | 15 | 转写服务（F13） | 独立 Python + FastAPI 微服务（`asr/`），fun-asr-flash 多模态端点逐片调用；buddy 侧走任务链路异步推进 | 转写是分钟级长任务且依赖 ffmpeg/yt-dlp，与 Node 后端技术栈不同——独立服务才不拖垮主进程；任务链路复用现成的进度可见与重试语义 | 后端内嵌 Python 子进程：状态管理、限流与清理都黏在主进程；filetrans 异步兜底：本期 fun-asr-flash 已够用，仅留扩展位 |
+| 16 | 网页正文提取（F14） | `node-html-parser` + 自写启发式提取（删干扰标签 → 优先 article/main/#content → 取文本最长块） | 零 C 依赖（纯 JS，不引 jsdom 的 20+ 依赖与 DOM 模拟开销）、体积小、提取策略可读可调；对「大部分正常文章页」够用 | `@mozilla/readability`：算法更成熟但依赖 jsdom，为一个「够用就行」的提取器引入完整 DOM 实现不划算——若后期提取质量成为瓶颈，可在 `link.js` 内部把 extractArticle 换成 readability（对外接口不变） |
 
 **一句话技术路线**：
 > 前端 React（Vite 构建）→ 后端 Node.js + Express（REST/JSON）→ 存储为 Git 仓库里的 Markdown 文件与 JSON 索引 → 部署在阿里云 ECS（Docker + Nginx + HTTPS）。
@@ -121,7 +122,26 @@ flowchart LR
 - 单片段最终失败时 job `failed` 但 `error.details.partial` 带已完成片段——buddy 仍归档为「部分转写」资料，不全量白跑；
 - 同源结果缓存（TTL 1800s）+ 单飞：重复提交同一 URL 不重新下载、不烧二次 ASR 额度。
 
-### 4.6 备份链路
+### 4.6 链接收敛链路（F14）
+
+```mermaid
+flowchart LR
+    U[归档页「收敛」/ 手机] -->|POST /api/tasks type=organize| S[buddy-server]
+    S -->|置 doing + task.organize，即时返回 201| U
+    S -->|SSRF 闸门：只许公网 http(s)，逐跳重验| N[外部网页]
+    N -->|HTML ≤2MB，按 charset 解码| S
+    S -->|node-html-parser 剥干扰 → 取正文最长容器| S
+    S -->|按 source_url 查重（提交前 + 跳转后各一次）| D[(data/<分类>/*.md)]
+    S -->|正文截断 → LLM 摘要/要点（失败回退模板）| L[LLM 端点]
+    S -->|createNote| D
+    R[organize-runner 兜底轮询] -->|todo 重试 / doing 僵死恢复| S
+```
+
+- 抓取与提取是**同步快活儿**（秒级），所以选「提交即执行」而不是像转写那样排队等外部 job；轮询器只做残局兜底（重试与进程重启恢复）；
+- SSRF 闸门放在唯一的出站口（`link.js`），重定向逐跳校验——这是本项目第一次主动访问「用户给的地址」，闸门先于功能落地；
+- 查重提前到抓取前：同一 URL 二次收敛连请求都不发（既省流量，也符合「不重复处理」铁律）。
+
+### 4.7 备份链路
 
 ```mermaid
 flowchart LR
@@ -182,6 +202,8 @@ flowchart TB
 | 资料私有仓尚未搭建（Gitea） | 先跑通链路 | 第 3 周 |
 | asr 为单进程 + 磁盘 job 状态 | 单机部署够用，不引队列/Redis | 多副本部署时需要共享 job 存储与队列 |
 | 转写归档不自动进向量库 | 避免长任务后静默烧 Embedding 额度 | 使用者确认频次后改为索引钩 |
+| F14 正文提取是启发式规则 | 自写提取器比 readability 轻得多，正常文章页够用 | 提取成功率明显不足时，在 `link.js` 内换 `@mozilla/readability`（对外接口不变） |
+| F14 不做 robots.txt 协商与爬取节流 | 定位是「按需单次抓取自己贴的链接」，不是爬虫 | 真要做批量抓取时，加 robots 解析 + 域名级限速 |
 
 ### 5.6 AI Native 层（规则与记忆）
 
@@ -207,3 +229,4 @@ flowchart TB
 | 2026-09-19 | v1.1 | 前端由原生 JS 改为 React（Vite 构建）；新增第 5 章架构原则与演化策略 |
 | 2026-09-25 | v1.2 | 追加 F9 技术方案：选型 +3、RAG 数据流图、技术债条目修订 |
 | 2026-09-28 | v1.3 | 追加 F13 转写链路：选型 +1（独立 FastAPI 微服务）、转写数据流图（4.5，原备份链路顺延为 4.6）、技术债 +2；上游依据升至 PRD v1.7 |
+| 2026-09-28 | v1.4 | 追加 F14 链接收敛：选型 +1（node-html-parser + 自写提取）、数据流图 4.6（原备份链路顺延为 4.7）、技术债 +2（启发式提取 / 不做 robots）；上游依据升至 PRD v1.8 |

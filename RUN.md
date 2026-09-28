@@ -60,7 +60,7 @@ npm run dev                 # :5174，/api 代理到 :3100
 | 能做 | 不能做 |
 |---|---|
 | 资料：新建 / 列表检索 / 详情看原文（F1–F3） | 编辑已有资料 |
-| 任务：发起（记资料 / 提醒 / 收敛 / 删除资料 / 视频转写）+ 查看与推进状态（F4/F5） | `organize` / `remind` 的自动执行器：只登记待办；`note` 同步归档，`transcribe_url` 由轮询器异步归档（F13） |
+| 任务：发起（记资料 / 提醒 / 收敛 / 删除资料 / 视频转写）+ 查看与推进状态（F4/F5） | `remind` 的自动执行器：只登记待办；`note` 同步归档，`organize`（收敛）提交即异步整理归档（F14），`transcribe_url` 由轮询器异步归档（F13） |
 | 删除资料：详情页发起 → 确认页看后果 → 确认后才真删（F6） | smail 邮箱关联、ehall 事务（第 2–3 期） |
 | 确认留痕：每次请求与决定可回看（F6） | 多用户与权限、原生 App、自动后台记录 |
 | 个人主页；知识库问答 `/ask` | RAG 进阶：混合检索 / Rerank / 多轮记忆 |
@@ -371,6 +371,43 @@ ASR 服务的 4 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返�
 | 转写慢卡在「正在下载」 | B 站限速 | 正常现象（70s 视频下载约 30s）；超时阈值 60 分钟内都算正常 |
 | 想重跑一次 | `failed→todo` 合法迁移 | `PATCH /api/tasks/:id {"status":"todo"}`，轮询器自动重提交 |
 
+
+### 8.9 链接收敛（F14）
+
+归档页 `/archive` 默认停在「收敛」：贴一个链接（可选分类）→ 后端抓网页 → 提取正文 → LLM 整理 → 归档成资料。等价 curl（`server/.env` 里同样要配 `ASR_SERVICE_URL` 那套就绪后）：
+
+```bash
+# ① 提交（返回 201，status=doing，随即异步执行）
+curl -s -X POST http://localhost:3100/api/tasks -H 'Content-Type: application/json' \
+  -d '{"type":"organize","payload":{"url":"https://example.com/some-article","category":"learning","tags":["收敛"]}}'
+
+# ② 看进度（result 会从「正在抓取网页」→「正在让模型整理」→「已归档到 data/…」）
+curl -s 'http://localhost:3100/api/tasks?status=doing'
+
+# ③ 看成果：frontmatter 带 source_url，正文含摘要/要点/原文节选
+ls data/learning/ && sed -n '1,20p' data/learning/<刚生成的>.md
+```
+
+前置条件：无（未配 `OPENAI_API_KEY` 也能跑，只是资料里会写一行「本次未做模型整理」）。向量索引仍需手工 `POST /api/kb/index`。
+
+本地自测（不烧 Key、不用起服务）：
+
+```bash
+node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 重定向 / GBK 解码，24 条
+```
+
+失败原因对照（都是任务 `result` 里的中文文案，不是接口报错）：
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| `failed`「出于安全已阻止」 | 链接指向内网/回环/链路本地/云元数据/CGNAT 地址 | 换成公网链接（这是防 SSRF，不要关） |
+| `failed`「抓取返回 HTTP 403」 | 页面要登录或开了反爬 | 用「发散」页手动粘贴正文 |
+| `failed`「正文提取失败（只提取到 n 字）」 | JS 渲染的 SPA / 非文字页 / 页面改版 | 发散手动粘贴；视频链接改用视频转写（F13） |
+| `failed`「抓取超时」 | 站点慢或不可达 | 重试一次；仍失败则换源（可把任务退回待办重试） |
+| 资料里写「本次未做模型整理」 | `OPENAI_API_KEY` 未配或 LLM 超时/报错 | 资料仍然可用（含原文节选）；补 Key 后重跑即可 |
+| 任务卡在 `doing` 不动 | 进程执行中被重启 | 等 `ORGANIZE_STALE_MS`（默认 4 分钟）后兜底轮询器自动重试，超过 3 次会转 `failed` |
+
+测试专用开关：`ORGANIZE_ALLOW_PRIVATE_IP=1` 时放行私网（仅供 `link-selftest.mjs` / 本地冒烟打 `127.0.0.1` 用），**上线与日常开发一律不要开**。
 
 ## 9. 用 Obsidian 查看资料（F1）
 

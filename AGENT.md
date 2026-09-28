@@ -9,7 +9,7 @@
 | 动作 | 现有实现 | 页面入口 |
 |---|---|---|
 | 归档一条资料 | `POST /api/notes` | 主页「归档」卡 |
-| 发起任务（记资料/提醒/收敛/删除资料/视频转写） | `POST /api/tasks`（`transcribe_url` 走 asr 微服务异步执行） | 归档页·收敛、日志页·任务页签、资料详情页「删除这条资料」；转写暂只有 curl 入口 |
+| 发起任务（记资料/提醒/收敛/删除资料/视频转写） | `POST /api/tasks`（`organize` 收敛抓取整理、`transcribe_url` 走 asr 微服务，都是异步执行） | 归档页·收敛、日志页·任务页签、资料详情页「删除这条资料」；转写暂只有 curl 入口 |
 | 推进任务状态 | `PATCH /api/tasks/:id` | 「日志」页 · 任务页签 |
 | 高风险动作确认 | `PATCH /api/tasks/:id`（`decision`） | `/tasks/:id/confirm` 确认页 |
 | 回看确认留痕 | `GET /api/confirmations` | 「日志」页 · 确认留痕页签 |
@@ -23,6 +23,7 @@
 | agent 工具（拟） | 底层复用 | 说明 |
 |---|---|---|
 | `archive_note` | `services/notes.js` | "把这段整理成资料归档" → 定标题/分类/标签后落盘 |
+| `converge_link` | `services/link.js` + `organize.js` | "把这个链接收进来" → 抓取 → 提取正文 → LLM 整理 → 归档（已由 F14 的收敛链路实现，agent 化时直接包一层） |
 | `create_task` | `services/tasks.js` | "提醒我周五交报告" → 建 remind 任务 |
 | `transcribe_media` | `services/transcribe.js` + `asr/` 微服务 | "把这个视频转成笔记" → 建 `transcribe_url` 任务，异步转写后归档 |
 | `advance_task` | `routes/tasks.js` 的迁移校验 | "把那条收敛链接标完成" |

@@ -1,6 +1,6 @@
 # SPEC.md — buddy 实现规格（MVP · 第 1 期）
 
-> 上游依据：`PRD.md` v1.7（F1–F13 与验收标准）、`TECH_DESIGN.md` v1.3（技术路线、数据流、架构原则、F9/F13 方案）
+> 上游依据：`PRD.md` v1.8（F1–F14 与验收标准）、`TECH_DESIGN.md` v1.4（技术路线、数据流、架构原则、F9/F13/F14 方案）
 > 本文只写「怎么做」，不重复「为什么」（见 PRD / TECH_DESIGN）。
 
 ## 0. 前置事实
@@ -105,9 +105,10 @@ vbcd/
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `id` | string | 主键 |
-| `type` | enum | `note`（记资料）/ `organize`（收敛链接）/ `remind`（提醒）/ `delete_note`（删除资料，高风险：只生成待确认记录，须经 F6 确认才真删，见 3.3）/ `transcribe_url`（转写归档，F13：异步执行，见 3.4） |
-| `payload` | object | 任务参数（如 `{title, content}`；transcribe_url 为 `{url, category?, tags?, language?, part?}`） |
+| `type` | enum | `note`（记资料）/ `organize`（收敛链接，F14：异步执行，见 3.5）/ `remind`（提醒）/ `delete_note`（删除资料，高风险：只生成待确认记录，须经 F6 确认才真删，见 3.3）/ `transcribe_url`（转写归档，F13：异步执行，见 3.4） |
+| `payload` | object | 任务参数（如 `{title, content}`；transcribe_url 为 `{url, category?, tags?, language?, part?}`；organize 为 `{url, category?, tags?}`） |
 | `asr` | object | 可选；仅 `transcribe_url` 存在：`{job_id, stage, done, total, percent, submitted_at, last_error}`（不写转写正文，避免运行时文件膨胀） |
+| `organize` | object | 可选；仅 `organize` 存在：`{stage, attempts, started_at, last_error}`，`stage ∈ fetch\|parse\|organize\|archive`（不存正文，避免运行时文件膨胀） |
 | `status` | enum | `todo` / `doing` / `done` / `failed` / `attention`（见 5.4） |
 | `result` | string | 执行结果摘要（成功或失败原因） |
 | `origin` | enum | `phone` / `desktop` |
