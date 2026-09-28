@@ -1,4 +1,6 @@
 // 端到端冒烟测试（零依赖，用 Node 18+ 自带 fetch）
+import http from 'node:http'
+import { spawn } from 'node:child_process'
 // 用法：
 //   1) 先起后端（可用独立数据目录，避免污染真实资料）：
 //        公开模式（默认）：DATA_DIR=/tmp/buddy-smoke-data PORT=3000 npm run dev
@@ -55,7 +57,6 @@ function sidFrom(setCookie) {
 console.log(`冒烟测试 → ${BASE}`)
 
 // ===== 按需拉起假 ASR 服务（转写断言用）=====
-import { spawn } from 'node:child_process'
 let fakeAsr = null
 async function startFakeAsr() {
   if (!FAKE_ASR_PORT) return false
@@ -75,8 +76,9 @@ async function startFakeAsr() {
 }
 process.on('exit', () => { if (fakeAsr) fakeAsr.kill() })
 
-/** 轮询任务直到终态（done/failed）或超时；返回最后一次看到的任务对象 */
-async function waitTask(id, cookie, timeoutMs = 15000) {
+/** 轮询任务直到终态（done/failed/attention）或超时；返回最后一次看到的任务对象。
+ *  默认 60s：归档类任务可能含一次真实 LLM 整理（fallback 或慢端点都要打满等待预算）。 */
+async function waitTask(id, cookie, timeoutMs = 60000) {
   const deadline = Date.now() + timeoutMs
   let last = null
   while (Date.now() < deadline) {
@@ -403,6 +405,71 @@ if (FAKE_ASR_PORT) {
     )
   }
 }
+
+// ===== 链接收敛链路（F14）：SSRF 闸门 + 本地 fake-org 抓取 → 归档 =====
+// 收① 确定性断言：指向云元数据私网地址 → 任务 failed（不依赖任何环境变量）
+{
+  const metaUrl = 'http://169.254.169.254/latest/meta-data'
+  const t8 = await req('POST', '/api/tasks', {
+    body: { type: 'organize', payload: { url: metaUrl } },
+    cookie,
+  })
+  const t8done = t8.status === 201 ? await waitTask(t8.json.data.id, cookie) : null
+  const t8blocked = /内网|保留|阻止/.test(t8done?.result ?? '')
+  const t8unreachable = /抓取失败|超时|不可达|TIMEOUT/i.test(t8done?.result ?? '')
+  check(
+    '收① 内网/元数据地址 → failed（拦私网；开逃生门时则应为连接失败）',
+    t8.status === 201 && t8done?.status === 'failed' && (t8blocked || t8unreachable),
+    `${t8blocked ? 'SSRF 拦截' : t8unreachable ? '已放行但连不上（逃生门开启）' : '异常'}｜${t8done?.result ?? ''}`,
+  )
+
+  // 收② 起本地 fake-org（含正文 + 站点名）→ 走完整 抓取→整理→归档
+  const orgServer = http.createServer((req2, res2) => {
+    res2.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    res2.end(
+      '<!doctype html><html><head><title>冒烟-收敛-' + UNIQ + '</title>' +
+        '<meta property="og:site_name" content="冒烟站"></head><body><article>' +
+        `<p>${'这是供收敛链路抓取的文章正文，围绕一个主题说明来龙去脉。'.repeat(10)}</p>` +
+        '</article></body></html>',
+    )
+  })
+  await new Promise((r) => orgServer.listen(0, '127.0.0.1', r))
+  const orgUrl = `http://127.0.0.1:${orgServer.address().port}/article-${UNIQ}`
+
+  const t9 = await req('POST', '/api/tasks', {
+    body: { type: 'organize', payload: { url: orgUrl, category: 'work', tags: ['收敛'] } },
+    cookie,
+  })
+  const t9done = t9.status === 201 ? await waitTask(t9.json.data.id, cookie, 30000) : null
+
+  if (t9done?.status === 'failed' && /内网|保留|阻止/.test(t9done?.result ?? '')) {
+    console.log('  ⏭️  后端未开 ORGANIZE_ALLOW_PRIVATE_IP，跳过「收②/收③」的本地抓取断言（SSRF 按设计生效）')
+  } else {
+    const oPath = /已归档到 (\S+\.md)/.exec(t9done?.result ?? '')?.[1]
+    const oNoteId = oPath ? oPath.split('/').pop().replace(/\.md$/, '') : ''
+    const oNote = oNoteId ? await req('GET', `/api/notes/${encodeURIComponent(oNoteId)}`, { cookie }) : null
+    check(
+      '收② 本地页面 → done 且归档出带 source_url 的资料',
+      t9.status === 201 && t9done?.status === 'done' && !!oPath &&
+        oNote?.json?.data?.meta?.source_url === orgUrl &&
+        /原文节选/.test(oNote?.json?.data?.content ?? ''),
+      `${t9done?.status} ${t9done?.result ?? ''}`,
+    )
+
+    const t9b = await req('POST', '/api/tasks', {
+      body: { type: 'organize', payload: { url: orgUrl } },
+      cookie,
+    })
+    const t9bdone = t9b.status === 201 ? await waitTask(t9b.json.data.id, cookie, 30000) : null
+    check(
+      '收③ 同一 URL 二次收敛 → done 且提示已归档过（不写第二份）',
+      t9b.status === 201 && t9bdone?.status === 'done' && /已归档过/.test(t9bdone?.result ?? ''),
+      t9bdone?.result,
+    )
+  }
+  orgServer.close()
+}
+
 
 if (authEnabled) {
   // ㉒ 登出 → 204
