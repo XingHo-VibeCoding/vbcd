@@ -31,6 +31,10 @@ const blocked = [
   ['http://10.0.0.5/x', 'SSRF_BLOCKED'],
   ['http://192.168.1.1/x', 'SSRF_BLOCKED'],
   ['http://100.64.0.1/x', 'SSRF_BLOCKED'], // CGNAT
+  ['http://[fd00::1]/x', 'SSRF_BLOCKED'], // ULA
+  ['http://[fe80::1]/x', 'SSRF_BLOCKED'], // 链路本地
+  ['http://[2001:db8::1]/x', 'SSRF_BLOCKED'], // 文档段
+  ['http://[::ffff:192.168.1.1]/x', 'SSRF_BLOCKED'], // v4-mapped 私网
 ]
 // 私网检查只在 allowPrivate=0 时验
 for (const [url, want] of blocked) {
@@ -39,6 +43,17 @@ for (const [url, want] of blocked) {
   check(`拦 ${url || '(空)'} → ${want}`, code === want, code)
 }
 check('放行 example.com（仅解析层）', (() => { try { return !!parsePublicUrl('https://example.com/a', { allowPrivate: true }).host } catch { return false } })())
+
+// 公网 IPv6 不能误杀（实测踩过："所有 v6 一律拦" 会把带 AAAA 记录的正常站点全挡掉）
+const publicV6 = ['http://[2606:4700::6810:d483]/x', 'http://[2a00:1450:4001:80f::200e]/x', 'http://[2001:4860:4860::8888]/x']
+for (const u of publicV6) {
+  let ok = true
+  try { parsePublicUrl(u, { allowPrivate: false }) } catch { ok = false }
+  check(`放行公网 v6 ${u}`, ok)
+}
+let mappedOk = true
+try { parsePublicUrl('http://[::ffff:104.16.212.131]/x', { allowPrivate: false }) } catch { mappedOk = false }
+check('放行 v4-mapped 公网地址', mappedOk)
 
 // ===== B. extractArticle：容器选择、剥标签、标题、短文本失败 =====
 const ARTICLE_HTML = `

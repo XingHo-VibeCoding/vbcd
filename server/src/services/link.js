@@ -22,29 +22,88 @@ const VIDEO_HOSTS = /(^|\.)(bilibili\.com|b23\.tv|youtube\.com|youtu\.be|acfun\.
 
 // ---------- SSRF 闸门 ----------
 
+function isPrivateV4(ip) {
+  const [a, b] = String(ip).split('.').map(Number)
+  return (
+    a === 0 || // "this" 网段
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127) || // CGNAT
+    a >= 224 // 组播/保留
+  )
+}
+
+/** IPv6 → 8 个 16 位整数；解析不出来返回 null（调用方按「不信任」处理）。 */
+function expandV6(input) {
+  let ip = String(input).trim().toLowerCase().replace(/^\[|\]$/g, '')
+  let v4 = ''
+  const dotted = /(\d{1,3}(?:\.\d{1,3}){3})$/.exec(ip)
+  if (dotted) {
+    v4 = dotted[1]
+    ip = ip.slice(0, dotted.index).replace(/:$/, '')
+  }
+  const halves = ip.split('::')
+  if (halves.length > 2) return null
+  const head = halves[0] ? halves[0].split(':') : []
+  const rest = halves.length > 1 ? (halves[1] ? halves[1].split(':') : []) : null
+  let groups
+  if (rest === null) {
+    groups = head.slice()
+  } else {
+    const fill = 8 - head.length - rest.length - (v4 ? 2 : 0)
+    if (fill < 0) return null
+    groups = [...head, ...Array(fill).fill('0'), ...rest]
+  }
+  for (const g of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null
+  }
+  const nums = groups.map((g) => parseInt(g, 16))
+  if (v4) {
+    const parts = v4.split('.').map(Number)
+    if (parts.length !== 4 || parts.some((n) => n > 255)) return null
+    nums.push(...parts)
+  }
+  return nums.length === 8 ? nums : null
+}
+
+/**
+ * IPv6 私有/保留判定。原本「所有 IPv6 一律拦」会把带 AAAA 记录的正常公网站点全误杀
+ * （2026-09-28 实测：`en.wikipedia.org` 因解析出 `2001::1` 而被判内网），改成按段判。
+ * 转换机制（Teredo / 6to4 / NAT64）额外处理：能抽出内嵌 v4 的就查 v4，否则一律拦。
+ */
+function isPrivateV6(ip) {
+  const g = expandV6(ip)
+  if (!g) return true // 解析不出来就当私有：宁枉勿纵
+  const [h0, h1, h2, h3, h4, h5, h6, h7] = g
+
+  // IPv4 映射（::ffff:a.b.c.d）/ 兼容（::a.b.c.d）：看内嵌的 v4
+  if (g.slice(0, 5).every((n) => n === 0) && h5 === 0xffff) {
+    return isPrivateV4(`${h6 >> 8}.${h6 & 0xff}.${h7 >> 8}.${h7 & 0xff}`)
+  }
+  if (g.slice(0, 6).every((n) => n === 0)) {
+    if (h6 === 0 && (h7 === 0 || h7 === 1)) return true // :: 与 ::1
+    return isPrivateV4(`${h6 >> 8}.${h6 & 0xff}.${h7 >> 8}.${h7 & 0xff}`)
+  }
+
+  if ((h0 & 0xfe00) === 0xfc00) return true // fc00::/7 ULA
+  if ((h0 & 0xffc0) === 0xfe80) return true // fe80::/10 链路本地
+  if ((h0 & 0xff00) === 0xff00) return true // ff00::/8 组播
+  if (h0 === 0x2001 && h1 === 0x0db8) return true // 文档用段
+  if (h0 === 0x2001 && h1 === 0x0000) return true // Teredo
+  if (h0 === 0x0064 && h1 === 0xff9b) return true // NAT64（64:ff9b::/96）
+  if (h0 === 0x0100 && h1 === 0 && h2 === 0 && h3 === 0) return true // 100::/64 discard
+  if (h0 === 0x2002) return isPrivateV4(`${h1 >> 8}.${h1 & 0xff}.${h2 >> 8}.${h2 & 0xff}`) // 6to4
+  return false // 其余归公网全局单播（2000::/3 等）
+}
+
 function isPrivateIp(host) {
-  const trimmed = String(host).trim().toLowerCase().replace(/^\[|\]$/g, '')
-  let ip = trimmed
-  if (net.isIPv6(ip)) {
-    // IPv4-mapped IPv6（::ffff:1.2.3.4）：取出 v4 部分按 v4 判；其他 v6 一律拦（本期不接 v6 出站）
-    const m = ip.match(/::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)
-    if (m) ip = m[1]
-    else return true
-  }
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number)
-    return (
-      a === 0 || // "this" 网段
-      a === 10 ||
-      a === 127 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 100 && b >= 64 && b <= 127) || // CGNAT
-      a >= 224 // 组播/保留
-    )
-  }
-  return false
+  const ip = String(host).trim().toLowerCase().replace(/^\[|\]$/g, '')
+  if (net.isIPv4(ip)) return isPrivateV4(ip)
+  if (net.isIPv6(ip)) return isPrivateV6(ip)
+  return false // 不是 IP 字面量（域名，由 assertPublicUrl 解析后再判）
 }
 
 /** 私网拦截提示（探测值留痕时帮忙定位） */
