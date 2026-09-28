@@ -15,7 +15,9 @@ const MAX_HTML_BYTES = Number(env('ORGANIZE_MAX_HTML_BYTES', String(2 * 1024 * 1
 const MIN_TEXT_CHARS = Number(env('ORGANIZE_MIN_TEXT_CHARS', '200')) || 200
 const EXCERPT_CHARS = Number(env('ORGANIZE_EXCERPT_CHARS', '8000')) || 8000
 const MAX_REDIRECTS = 5
-const ALLOW_PRIVATE = env('ORGANIZE_ALLOW_PRIVATE_IP') === '1' // 测试逃生门：仅冒烟用，默认关
+// 测试逃生门：只放行**回环**（127.0.0.1 / localhost / ::1），给本地假服务器用；
+// 内网网段与云元数据地址（169.254.169.254）永远拦——否则冒烟就变成「把闸门关掉测一遍」。
+const ALLOW_LOOPBACK = env('ORGANIZE_ALLOW_LOOPBACK') === '1'
 const USER_AGENT = 'buddy-organize/0.1 (+https://github.com/bird-z/vbcd)'
 
 const VIDEO_HOSTS = /(^|\.)(bilibili\.com|b23\.tv|youtube\.com|youtu\.be|acfun\.cn|iqiyi\.com|youku\.com)$/i
@@ -106,13 +108,22 @@ function isPrivateIp(host) {
   return false // 不是 IP 字面量（域名，由 assertPublicUrl 解析后再判）
 }
 
+/** 回环地址判定（逃生门只放这一类） */
+function isLoopback(host) {
+  const ip = String(host).trim().toLowerCase().replace(/^\[|\]$/g, '')
+  if (net.isIPv4(ip)) return ip.startsWith('127.')
+  const g = expandV6(ip)
+  if (!g) return false
+  return g.slice(0, 7).every((n) => n === 0) && g[7] === 1
+}
+
 /** 私网拦截提示（探测值留痕时帮忙定位） */
 function privateHint(host) {
   return `来源 ${host} 指向内网/保留地址，出于安全已阻止`
 }
 
 /** URL → 规范化 {href, host, port}；非法、非 http(s)、私网一律抛带 code 的错误。 */
-export function parsePublicUrl(url, { allowPrivate = ALLOW_PRIVATE } = {}) {
+export function parsePublicUrl(url, { allowLoopback = ALLOW_LOOPBACK } = {}) {
   const raw = String(url ?? '').trim()
   if (!raw) throw fail('INVALID_SOURCE', '链接为空')
   let u
@@ -128,19 +139,18 @@ export function parsePublicUrl(url, { allowPrivate = ALLOW_PRIVATE } = {}) {
     throw fail('INVALID_SOURCE', '链接里不允许带用户名/密码')
   }
   const host = u.hostname.toLowerCase()
-  if (host === 'localhost' || host.endsWith('.localhost')) {
-    if (!allowPrivate) throw fail('SSRF_BLOCKED', privateHint(host))
-  }
-  if (!allowPrivate && isPrivateIp(host)) {
-    throw fail('SSRF_BLOCKED', privateHint(host))
+  const isLocalName = host === 'localhost' || host.endsWith('.localhost')
+  if (!(allowLoopback && (isLocalName || isLoopback(host)))) {
+    if (isLocalName) throw fail('SSRF_BLOCKED', privateHint(host))
+    if (isPrivateIp(host)) throw fail('SSRF_BLOCKED', privateHint(host))
   }
   return { href: u.href, host, port: u.port || (u.protocol === 'https:' ? '443' : '80') }
 }
 
-/** 域名 → 先解析再判断：任一解析结果是私网就拒（防 DNS 重绑定）。 */
-export async function assertPublicUrl(url, { allowPrivate = ALLOW_PRIVATE } = {}) {
-  const p = parsePublicUrl(url, { allowPrivate })
-  if (allowPrivate || net.isIP(p.host)) return p
+/** 域名 → 先解析再判断：任一解析结果是私网（回环在逃生门下除外）就拒（防 DNS 重绑定）。 */
+export async function assertPublicUrl(url, { allowLoopback = ALLOW_LOOPBACK } = {}) {
+  const p = parsePublicUrl(url, { allowLoopback })
+  if (net.isIP(p.host)) return p
 
   let addrs
   try {
@@ -149,7 +159,8 @@ export async function assertPublicUrl(url, { allowPrivate = ALLOW_PRIVATE } = {}
     throw fail('DOWNLOAD_FAILED', `域名解析失败：${p.host}（检查链接或网络）`)
   }
   if (!addrs.length) throw fail('DOWNLOAD_FAILED', `域名解析无结果：${p.host}`)
-  if (addrs.some((a) => isPrivateIp(a.address))) {
+  const offender = addrs.find((a) => isPrivateIp(a.address) && !(allowLoopback && isLoopback(a.address)))
+  if (offender) {
     throw fail('SSRF_BLOCKED', privateHint(p.host))
   }
   return p
@@ -214,10 +225,10 @@ function decodeHtml(buf, charset) {
  * 逐跳跟随重定向（每跳重验 SSRF），最多 MAX_REDIRECTS 跳。
  * 失败统一抛 code 错误（INVALID_SOURCE / SSRF_BLOCKED / DOWNLOAD_FAILED / TIMEOUT / EXTRACT_FAILED）。
  */
-export async function fetchHtml(url, { allowPrivate = ALLOW_PRIVATE } = {}) {
+export async function fetchHtml(url, { allowLoopback = ALLOW_LOOPBACK } = {}) {
   let current = String(url).trim()
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const p = await assertPublicUrl(current, { allowPrivate })
+    const p = await assertPublicUrl(current, { allowLoopback })
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     let resp

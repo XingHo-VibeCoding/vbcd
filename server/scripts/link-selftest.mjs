@@ -2,11 +2,11 @@
 //   node server/scripts/link-selftest.mjs
 // 覆盖：assertPublicUrl 拦截/放行、extractArticle（容器选择/剥标签/标题优先级/短文本失败）、
 //       fetchHtml 走本地 fake-org 服务器（重定向跟随、GBK 解码、非 HTML 拒绝、正文提取）。
-// ORGANIZE_ALLOW_PRIVATE_IP=1 只在本地 fake-org 打 127.0.0.1 时通过——真跑的默认仍拦私网。
+// ORGANIZE_ALLOW_LOOPBACK=1 只在本地 fake-org 打 127.0.0.1 时通过——内网网段与云元数据地址永远拦。
 import http from 'node:http'
 import { execFileSync } from 'node:child_process'
 
-process.env.ORGANIZE_ALLOW_PRIVATE_IP = '1' // 在 import link.js 前设置，让 fake-org 可过闸门
+process.env.ORGANIZE_ALLOW_LOOPBACK = '1' // 在 import link.js 前设置，让 fake-org 可过闸门
 
 const { assertPublicUrl, parsePublicUrl, extractArticle, fetchHtml } = await import('../src/services/link.js')
 
@@ -36,23 +36,33 @@ const blocked = [
   ['http://[2001:db8::1]/x', 'SSRF_BLOCKED'], // 文档段
   ['http://[::ffff:192.168.1.1]/x', 'SSRF_BLOCKED'], // v4-mapped 私网
 ]
-// 私网检查只在 allowPrivate=0 时验
+// 私网检查只在 allowLoopback=0 时验
 for (const [url, want] of blocked) {
   let code = ''
-  try { parsePublicUrl(url, { allowPrivate: false }) } catch (e) { code = e.code }
+  try { parsePublicUrl(url, { allowLoopback: false }) } catch (e) { code = e.code }
   check(`拦 ${url || '(空)'} → ${want}`, code === want, code)
 }
-check('放行 example.com（仅解析层）', (() => { try { return !!parsePublicUrl('https://example.com/a', { allowPrivate: true }).host } catch { return false } })())
+check('放行 example.com（仅解析层）', (() => { try { return !!parsePublicUrl('https://example.com/a', { allowLoopback: true }).host } catch { return false } })())
+
+// 逃生门只放回环：开了也仍然拦内网与云元数据
+for (const u of ['http://169.254.169.254/latest', 'http://10.1.2.3/x', 'http://192.168.0.9/x', 'http://172.16.0.9/x', 'http://[fd00::9]/x']) {
+  let code = ''
+  try { parsePublicUrl(u, { allowLoopback: true }) } catch (e) { code = e.code }
+  check(`逃生门开启仍拦 ${u}`, code === 'SSRF_BLOCKED', code)
+}
+let lb = ''
+try { lb = parsePublicUrl('http://127.0.0.1:8098/x', { allowLoopback: true }).host } catch (e) { lb = `ERR:${e.code}` }
+check('逃生门开启放行 127.0.0.1（本地假服务器）', lb === '127.0.0.1', lb)
 
 // 公网 IPv6 不能误杀（实测踩过："所有 v6 一律拦" 会把带 AAAA 记录的正常站点全挡掉）
 const publicV6 = ['http://[2606:4700::6810:d483]/x', 'http://[2a00:1450:4001:80f::200e]/x', 'http://[2001:4860:4860::8888]/x']
 for (const u of publicV6) {
   let ok = true
-  try { parsePublicUrl(u, { allowPrivate: false }) } catch { ok = false }
+  try { parsePublicUrl(u, { allowLoopback: false }) } catch { ok = false }
   check(`放行公网 v6 ${u}`, ok)
 }
 let mappedOk = true
-try { parsePublicUrl('http://[::ffff:104.16.212.131]/x', { allowPrivate: false }) } catch { mappedOk = false }
+try { parsePublicUrl('http://[::ffff:104.16.212.131]/x', { allowLoopback: false }) } catch { mappedOk = false }
 check('放行 v4-mapped 公网地址', mappedOk)
 
 // ===== B. extractArticle：容器选择、剥标签、标题、短文本失败 =====

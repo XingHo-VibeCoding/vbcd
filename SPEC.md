@@ -226,6 +226,28 @@ vbcd/
 
 **向量索引**：归档后 `POST /api/kb/index` 仍需手工触发（本期不自动入库），RUN.md 8.8 有说明。
 
+### 3.5 链接收敛链路（F14 / `organize`）
+
+**入口**：归档页「收敛」或 `POST /api/tasks` 带 `type=organize` + `payload={url, category?, tags?}`——**不新增对外接口**（仍 13 个）。归档是 F1 同级写操作，不设确认闸门（读取外部网页不算对外动作）。
+
+**payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work`；`tags` ≤10 个。
+
+**时序**：
+1. **提交即执行**：`createTask` → `services/organize.js:startOrganizeTask()` 校验 → 置 `doing`、`result="已提交，正在抓取链接"`、`task.organize={stage:'fetch',attempts:1,started_at}` 落盘并**即时返回 201**（异步触发，不阻塞请求）；
+2. **抓取**（`services/link.js`）：SSRF 闸门（只许 http(s)；IP 字面量与 DNS 解析结果的私有/保留段一律拒，含内网、回环、链路本地、CGNAT、云元数据；IPv6 按段判，v4-mapped 与 6to4 抽内嵌 v4 再判）→ `fetch` + `redirect:'manual'` **逐跳跟随**（≤5 跳，每跳重验）→ 超时 `ORGANIZE_FETCH_TIMEOUT_MS`(20s) → 只收 `text/html` → 体积封顶 `ORGANIZE_MAX_HTML_BYTES`(2MB，流式截断) → 按声明 charset 解码，乱码密度 >5% 自动重试 gb18030；
+3. **提取**：`node-html-parser` 删干扰标签 → 优先 `article/main/[role=main]/#content/.article/.post/.entry-content` 中文本最长者，否则 `body`；标题 `<title>` > `og:title` > `h1` > 域名（≤80 字）；正文 < `ORGANIZE_MIN_TEXT_CHARS`(200) → 失败并给出路（发散手动粘贴 / 视频改用转写）；
+4. **查重（两次）**：提交 URL 先查一次（命中就跳过抓取），抓取后的**最终 URL** 再查一次（短链/跳转归一）；命中 → `done`「已归档过 <path>」，不写第二份；
+5. **LLM 整理**：复用 `getChatModel(NOTE_LLM_TIMEOUT_MS)` + `truncateForLlm`（`LLM_TRANSCRIPT_MAX_CHARS`），失败回退模板（正文一行「未做模型整理」）并 `done`；
+6. **归档**：`buildLinkNote()` → `createNote()` → `done`「已归档到 <path>」；`createNote` 报 `DUPLICATE`（同内容）也算「已归档过」。
+
+**资料格式**（全文始终来自抓取的网页，不由 LLM 编造）：标题 ≤80 字；frontmatter `source_url` = 提交链接；正文 = 来源行（链接/重定向提示/站点/抓取日期，可选作者）→ 可选视频提示行 → `## 摘要` → `## 要点` → `## 原文节选（前 ORGANIZE_EXCERPT_CHARS=8000 字）`。
+
+**兜底轮询器**（`services/organize-runner.js`）：正常路径是提交即执行，轮询器只收两种残局——`todo`（`PATCH failed→todo` 重试，清空 `task.organize` 后重跑）与 `doing` 且 `updated_at` 超 `ORGANIZE_STALE_MS`(240s) 未动的僵死任务（`attempts < ORGANIZE_MAX_ATTEMPTS`(3) 则重跑，否则 `failed`）；单飞、一轮一个。
+
+**失败落点**（均写进 `task.result` 中文文案，不是 HTTP 错误码）：非 http(s) 提交时 400；内网/云元数据 → `failed`「出于安全已阻止」；下载失败/超时/非 HTML/正文不足 → `failed` 带原因与出路；LLM 失败 → 仍归档；`createNote` 失败 → `failed` 可退回重试。
+
+**与 F13 的边界**：视频站链接（bilibili/youtube 等）仍走本文通用抓取（拿到标题+简介），但会在正文里提示「要逐句时间戳请改用视频转写」；不做自动改走转写。
+
 ## 4. 数据流
 
 完整图见 `TECH_DESIGN.md` 第 4 章，此处只列要点：
@@ -341,7 +363,15 @@ vbcd/
 | `ASR_POLL_INTERVAL_MS` | `5000` | 转写轮询器间隔 | ⬜ |
 | `ASR_JOB_MAX_WAIT_MINUTES` | `60` | job 超此时长未完成判超时 | ⬜ |
 | `NOTE_LLM_TIMEOUT_MS` | `120000` | 转写笔记整理的模型超时（比问答慢，允许分钟级） | ⬜ |
-| `LLM_TRANSCRIPT_MAX_CHARS` | `12000` | 喂给模型的转写文本上限（超长截头留尾） | ⬜ |
+| `LLM_TRANSCRIPT_MAX_CHARS` | `12000` | 喂给模型的转写/正文文本上限（超长截头留尾） | ⬜ |
+| `ORGANIZE_FETCH_TIMEOUT_MS` | `20000` | 抓单个网页的超时（F14） | ⬜ |
+| `ORGANIZE_MAX_HTML_BYTES` | `2097152` | HTML 体积封顶（超过就截断，不爆内存） | ⬜ |
+| `ORGANIZE_MIN_TEXT_CHARS` | `200` | 正文少于此字数即判提取失败 | ⬜ |
+| `ORGANIZE_EXCERPT_CHARS` | `8000` | 资料里「原文节选」的字数上限 | ⬜ |
+| `ORGANIZE_SWEEP_INTERVAL_MS` | `15000` | organize 兜底轮询间隔 | ⬜ |
+| `ORGANIZE_STALE_MS` | `240000` | `doing` 超过此时长未动算僵死（须 > fetch+LLM 最坏耗时） | ⬜ |
+| `ORGANIZE_MAX_ATTEMPTS` | `3` | 僵死重试上限，超过判 failed | ⬜ |
+| `ORGANIZE_ALLOW_LOOPBACK` | `0` | =1 时**只放行回环地址**（127.0.0.1/localhost/::1），仅供本地假服务器自测；内网与云元数据地址恒拦 | 🟡 |
 
 `asr/` 服务侧变量见 `asr/.env.example`（`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / 切片与并发 / `JOBS_DIR` / `YTDLP_*` / 缓存 TTL）。
 

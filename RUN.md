@@ -407,7 +407,8 @@ node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 
 | 资料里写「本次未做模型整理」 | `OPENAI_API_KEY` 未配或 LLM 超时/报错 | 资料仍然可用（含原文节选）；补 Key 后重跑即可 |
 | 任务卡在 `doing` 不动 | 进程执行中被重启 | 等 `ORGANIZE_STALE_MS`（默认 4 分钟）后兜底轮询器自动重试，超过 3 次会转 `failed` |
 
-测试专用开关：`ORGANIZE_ALLOW_PRIVATE_IP=1` 时放行私网（仅供 `link-selftest.mjs` / 本地冒烟打 `127.0.0.1` 用），**上线与日常开发一律不要开**。
+测试专用开关：`ORGANIZE_ALLOW_LOOPBACK=1` 时**只放行回环地址**（127.0.0.1 / localhost / ::1，仅供 `link-selftest.mjs` 与本地冒烟打假服务器）；
+内网网段（10./172.16-31./192.168.）与云元数据地址（169.254.169.254）**无论如何都拦**。上线与日常开发一律不要开。
 
 ## 9. 用 Obsidian 查看资料（F1）
 

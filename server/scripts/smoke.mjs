@@ -415,12 +415,10 @@ if (FAKE_ASR_PORT) {
     cookie,
   })
   const t8done = t8.status === 201 ? await waitTask(t8.json.data.id, cookie) : null
-  const t8blocked = /内网|保留|阻止/.test(t8done?.result ?? '')
-  const t8unreachable = /抓取失败|超时|不可达|TIMEOUT/i.test(t8done?.result ?? '')
   check(
-    '收① 内网/元数据地址 → failed（拦私网；开逃生门时则应为连接失败）',
-    t8.status === 201 && t8done?.status === 'failed' && (t8blocked || t8unreachable),
-    `${t8blocked ? 'SSRF 拦截' : t8unreachable ? '已放行但连不上（逃生门开启）' : '异常'}｜${t8done?.result ?? ''}`,
+    '收① 内网/元数据地址 → failed + SSRF 拦截原因（逃生门只放回环，此处恒拦）',
+    t8.status === 201 && t8done?.status === 'failed' && /内网|保留|阻止/.test(t8done?.result ?? ''),
+    t8done?.result,
   )
 
   // 收② 起本地 fake-org（含正文 + 站点名）→ 走完整 抓取→整理→归档
@@ -443,7 +441,7 @@ if (FAKE_ASR_PORT) {
   const t9done = t9.status === 201 ? await waitTask(t9.json.data.id, cookie, 30000) : null
 
   if (t9done?.status === 'failed' && /内网|保留|阻止/.test(t9done?.result ?? '')) {
-    console.log('  ⏭️  后端未开 ORGANIZE_ALLOW_PRIVATE_IP，跳过「收②/收③」的本地抓取断言（SSRF 按设计生效）')
+    console.log('  ⏭️  后端未开 ORGANIZE_ALLOW_LOOPBACK，跳过「收②/收③」的本地抓取断言（SSRF 按设计生效）')
   } else {
     const oPath = /已归档到 (\S+\.md)/.exec(t9done?.result ?? '')?.[1]
     const oNoteId = oPath ? oPath.split('/').pop().replace(/\.md$/, '') : ''
