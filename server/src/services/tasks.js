@@ -1,6 +1,7 @@
 // 任务业务逻辑（SPEC 第 2.3 节字段 / 第 3 章接口 6–8）
 // 依赖方向：routes → services → storage。本文件不直接读写文件系统。
-// 执行器策略（已与使用者确认）：type=note 提交即同步执行；organize / remind 本期无执行器，登记为待办等人工推进。
+// 执行器策略（已与使用者确认）：type=note 提交即同步执行；organize（收敛）提交即异步执行（抓链接→整理→归档）；
+// remind 本期无执行器，登记为待办等人工推进；transcribe_url 由后台轮询器异步执行。
 import { randomBytes } from 'node:crypto'
 import * as taskStore from '../storage/tasks.js'
 import * as confirmationStore from '../storage/confirmations.js'
@@ -8,6 +9,7 @@ import * as storage from '../storage/files.js'
 import { createNote, nowShanghai } from './notes.js'
 import { fail } from './errors.js'
 import { submitTranscribeTask } from './transcribe.js'
+import { startOrganizeTask } from './organize.js'
 
 // delete_note 是高风险类型：建任务只生成「待确认」记录，必须经 decision=approved 才会真删（F6）。
 // transcribe_url 不是高风险：归档资料与 F1 同级，直接异步执行（SPEC 3.4）。
@@ -178,8 +180,9 @@ export async function createTask(input) {
   if (type === 'note') return executeNoteTask(task)
   if (type === 'delete_note') return requestDeleteTask(task)
   if (type === 'transcribe_url') return submitTranscribeTask(task)
+  if (type === 'organize') return startOrganizeTask(task)
 
-  // organize / remind：本期没有自动执行器，登记为待办，等使用者在页面上推进
+  // remind：本期没有自动执行器，登记为待办，等使用者在页面上推进
   task.result = '本期无自动执行器，需人工推进'
   return taskStore.put(task)
 }
@@ -246,10 +249,14 @@ export async function updateTask(id, patch = {}) {
   task.status = status
   task.updated_at = nowShanghai().iso
 
-  // transcribe_url 退回待办 = 重试：清掉旧 job 引用，轮询器下一轮会重新提交（SPEC 3.4）
+  // transcribe_url / organize 退回待办 = 重试：清掉执行状态，轮询器下一轮会重新执行（SPEC 3.4/3.5）
   if (task.type === 'transcribe_url' && status === 'todo') {
     delete task.asr
     task.result = '已退回待办，等待重新提交转写'
+  }
+  if (task.type === 'organize' && status === 'todo') {
+    delete task.organize
+    task.result = '已退回待办，等待重新整理链接'
   }
   return taskStore.put(task)
 }

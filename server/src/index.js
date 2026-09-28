@@ -3,6 +3,7 @@ import 'dotenv/config'
 import { createApp } from './app.js'
 import { DATA_DIR, ensureReady } from './storage/files.js'
 import { startTranscribeRunner } from './services/transcribe-runner.js'
+import { startOrganizeRunner } from './services/organize-runner.js'
 
 const PORT = Number(process.env.PORT || 3000)
 
@@ -13,6 +14,7 @@ console.log(`资料目录（DATA_DIR）：${DATA_DIR}`)
 const app = createApp()
 
 startTranscribeRunner()
+startOrganizeRunner()
 
 app.listen(PORT, () => {
   console.log(
