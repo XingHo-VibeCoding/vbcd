@@ -88,7 +88,7 @@ export default function TaskConfirmPage() {
       <div className="empty">
         {error || '没有找到这条待确认的操作。'}
         <br />
-        <Link to="/tasks">返回任务列表</Link>
+        <Link to="/log">返回日志</Link>
       </div>
     )
   }
@@ -140,10 +140,10 @@ export default function TaskConfirmPage() {
           </dl>
 
           <div className="form-actions">
-            <Link className="btn-primary" to="/tasks">
-              返回任务列表
+            <Link className="btn-primary" to="/log">
+              返回日志
             </Link>
-            <Link className="btn-ghost" to="/confirmations">
+            <Link className="btn-ghost" to="/log?tab=confirm">
               查看确认留痕
             </Link>
           </div>

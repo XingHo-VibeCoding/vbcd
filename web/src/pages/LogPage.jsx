@@ -1,10 +1,12 @@
-// 任务页（F4 手机端发起任务 / F5 查看进度）
-// · 提交后写入 data/.runtime/tasks.json；type=note 由后端同步归档成资料
+// 日志页：任务（F4 手机端发起 / F5 查看进度）与确认留痕（F6）合并为一个界面。
+// 页签写进地址栏 ?tab=tasks|confirm（默认 tasks）——与 ?cal / ?view / ?tab=activity 同一套做法：
+// 刷新、前进后退、把链接发到手机都能停在同一个页签。
+// · 提交任务后写入 data/.runtime/tasks.json；type=note 由后端同步归档成资料
 // · 状态推进走 PATCH /api/tasks/:id；高风险任务（attention）在确认前推不动，后端会回 428
-// · origin 按 UA 判断手机/电脑，显式传给后端（后端不猜 UA）
+// · 确认留痕只读：记录由 PATCH /api/tasks/:id 带 decision 时写入，这里不产生任何数据
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { createTask, listTasks, updateTaskStatus } from '../api/tasks'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { createTask, listConfirmations, listTasks, updateTaskStatus } from '../api/tasks'
 
 const CATEGORIES = [
   { value: 'learning', label: '学习' },
@@ -49,21 +51,34 @@ const NEXT_STATUS = {
   failed: [['todo', '重试']],
 }
 
+const ACTION_LABELS = { delete_note: '删除资料' }
+
+// 决定 → 展示文案与徽标配色（复用任务徽标那套 badge--* 颜色）
+const DECISION_META = {
+  approved: { label: '已确认', badge: 'badge--done' },
+  rejected: { label: '已取消', badge: 'badge--failed' },
+  '': { label: '待确认', badge: 'badge--attention' },
+}
+
+const TABS = [
+  { value: 'tasks', label: '任务' },
+  { value: 'confirm', label: '确认留痕' },
+]
+
 function isPhone() {
   return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
 }
 
-function fmtTime(iso) {
+function fmtTime(iso, withDate = false) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
+  return d.toLocaleString(
+    'zh-CN',
+    withDate
+      ? { hour12: false }
+      : { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false },
+  )
 }
 
 // 列表里一句话说明"这条任务是什么"：从 payload 里取最有信息量的字段
@@ -76,7 +91,8 @@ function summaryOf(task) {
   return task.type
 }
 
-export default function TaskListPage() {
+/** 任务页签：提交表单 + 任务列表（原 /tasks 页全部行为） */
+function TasksTab() {
   const navigate = useNavigate()
   const [type, setType] = useState('remind')
   const [title, setTitle] = useState('')
@@ -103,7 +119,7 @@ export default function TaskListPage() {
       })
       .catch((err) => {
         if (!alive) return
-        if (err.code === 'AUTH_REQUIRED') navigate('/login?from=/tasks', { replace: true })
+        if (err.code === 'AUTH_REQUIRED') navigate('/login?from=/log', { replace: true })
         else setError(err.message || '加载失败')
       })
       .finally(() => {
@@ -138,7 +154,7 @@ export default function TaskListPage() {
       setTick((n) => n + 1)
     } catch (err) {
       if (err.code === 'AUTH_REQUIRED') {
-        navigate('/login?from=/tasks', { replace: true })
+        navigate('/login?from=/log', { replace: true })
         return
       }
       setError(err.message || '提交失败')
@@ -156,7 +172,7 @@ export default function TaskListPage() {
       setTick((n) => n + 1)
     } catch (err) {
       if (err.code === 'AUTH_REQUIRED') {
-        navigate('/login?from=/tasks', { replace: true })
+        navigate('/login?from=/log', { replace: true })
         return
       }
       // 含 428 CONFIRM_REQUIRED：后端会把"接下来会发生什么"写进 message，这里原样显示
@@ -167,8 +183,7 @@ export default function TaskListPage() {
   const { total, items } = result
 
   return (
-    <section className="card">
-      <h2>任务</h2>
+    <>
       <p className="hint">手机浏览器打开这一页就能提交；提交后电脑端刷新也能看到同一条任务</p>
 
       <form onSubmit={handleSubmit} className="form">
@@ -315,6 +330,125 @@ export default function TaskListPage() {
           ))}
         </ul>
       )}
+    </>
+  )
+}
+
+/** 确认留痕页签：原 /confirmations 页全部行为（只读） */
+function ConfirmTab() {
+  const navigate = useNavigate()
+  const [result, setResult] = useState({ total: 0, items: [] })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError('')
+    listConfirmations()
+      .then((data) => {
+        if (alive) setResult(data)
+      })
+      .catch((err) => {
+        if (!alive) return
+        if (err.code === 'AUTH_REQUIRED')
+          navigate('/login?from=/log?tab=confirm', { replace: true })
+        else setError(err.message || '加载失败')
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [navigate])
+
+  const { total, items } = result
+
+  return (
+    <>
+      <p className="hint">
+        每次高风险动作的请求与决定都记在这里：请求时间、决定时间、决定了什么。不记录「谁」——单人使用。
+      </p>
+
+      {error ? <p className="error-bar">{error}</p> : null}
+
+      {loading && total === 0 ? (
+        <div className="loading">载入中…</div>
+      ) : items.length === 0 ? (
+        <div className="empty">
+          还没有确认记录。去资料详情页点一次「删除这条资料」就会产生一条待确认记录。
+        </div>
+      ) : (
+        <ul className="task-list">
+          {items.map((item) => {
+            const meta = DECISION_META[item.decision] ?? {
+              label: item.decision,
+              badge: 'badge--todo',
+            }
+            return (
+              <li key={item.id} className="task-item">
+                <div className="task-head">
+                  <span className="task-title">{ACTION_LABELS[item.action] ?? item.action}</span>
+                  <span className={`badge ${meta.badge}`}>{meta.label}</span>
+                </div>
+
+                <p className="confirm-line">{item.summary}</p>
+
+                <div className="note-item-meta">
+                  <span>请求于 {fmtTime(item.requestedAt, true)}</span>
+                  <span>·</span>
+                  <span>决定于 {item.confirmedAt ? fmtTime(item.confirmedAt, true) : '—（还没决定）'}</span>
+                </div>
+
+                <div className="task-actions">
+                  <Link
+                    className="btn-ghost"
+                    to={`/tasks/${encodeURIComponent(item.taskId)}/confirm`}
+                  >
+                    查看这次操作
+                  </Link>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </>
+  )
+}
+
+export default function LogPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get('tab') === 'confirm' ? 'confirm' : 'tasks'
+
+  function setTab(next) {
+    const params = new URLSearchParams(searchParams)
+    if (next === 'tasks') params.delete('tab') // 默认页签不写参数，地址栏保持干净
+    else params.set('tab', next)
+    setSearchParams(params)
+  }
+
+  return (
+    <section className="card">
+      <div className="log-head">
+        <h2>日志</h2>
+        <div className="view-switch" role="group" aria-label="日志页签">
+          {TABS.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              className={tab === t.value ? 'tab active' : 'tab'}
+              aria-pressed={tab === t.value}
+              onClick={() => setTab(t.value)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'tasks' ? <TasksTab /> : <ConfirmTab />}
     </section>
   )
 }

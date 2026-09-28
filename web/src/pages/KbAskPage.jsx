@@ -44,6 +44,7 @@ export default function KbAskPage() {
 
   return (
     <section>
+      <h2>agent · 知识库问答</h2>
       <form className="kb-ask-form" onSubmit={ask}>
         <input
           className="search-input"

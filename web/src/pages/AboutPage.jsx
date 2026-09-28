@@ -270,7 +270,7 @@ export default function AboutPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="activity-empty">最近一年还没有资料，去「新建资料」记一条吧</p>
+                <p className="activity-empty">最近一年还没有资料，去主页「归档」记一条吧</p>
               )}
             </>
           )

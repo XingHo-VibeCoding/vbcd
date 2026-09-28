@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import HomePage from './pages/HomePage.jsx'
 import NoteListPage from './pages/NoteListPage.jsx'
-import TaskListPage from './pages/TaskListPage.jsx'
+import LogPage from './pages/LogPage.jsx'
 import TaskConfirmPage from './pages/TaskConfirmPage.jsx'
-import ConfirmHistoryPage from './pages/ConfirmHistoryPage.jsx'
-import NoteCreatePage from './pages/NoteCreatePage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
 import KbAskPage from './pages/KbAskPage.jsx'
 import AboutPage from './pages/AboutPage.jsx'
@@ -47,11 +45,9 @@ export default function App() {
         <p className="subtitle">会成长的个人助手 · 第一版骨架</p>
         <nav className="nav">
           <Link to="/">主页</Link>
-          <Link to="/notes">资料列表</Link>
-          <Link to="/tasks">任务</Link>
-          <Link to="/confirmations">确认记录</Link>
-          <Link to="/new">新建资料</Link>
-          <Link to="/ask">知识库问答</Link>
+          <Link to="/notes">档案</Link>
+          <Link to="/log">日志</Link>
+          <Link to="/ask">agent</Link>
           <Link to="/about">关于</Link>
           {authEnabled ? <LogoutButton /> : null}
         </nav>
@@ -61,11 +57,13 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/notes" element={<NoteListPage />} />
-          <Route path="/tasks" element={<TaskListPage />} />
+          <Route path="/log" element={<LogPage />} />
           <Route path="/tasks/:id/confirm" element={<TaskConfirmPage />} />
-          <Route path="/confirmations" element={<ConfirmHistoryPage />} />
-          <Route path="/new" element={<NoteCreatePage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
+          {/* 旧入口重定向：新建资料 → 主页归档卡；任务 / 确认记录 → 日志页 */}
+          <Route path="/new" element={<Navigate to="/#archive" replace />} />
+          <Route path="/tasks" element={<Navigate to="/log" replace />} />
+          <Route path="/confirmations" element={<Navigate to="/log?tab=confirm" replace />} />
           <Route path="/ask" element={<KbAskPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/login" element={authEnabled ? <LoginPage /> : <Navigate to="/" replace />} />

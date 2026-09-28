@@ -1,9 +1,10 @@
 // 个人主页（替换原 / 首页）：左个人卡（头像/昵称/简介）+ 右日历卡（当月月历 + 近期日程）。
 // 数据来自 GET /api/me → data/profile.md + data/schedule.md；文件缺失时各项有默认值，不报错。
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getMe } from '../api/me.js'
 import { listTasks } from '../api/tasks.js'
+import NoteArchiveForm from '../components/NoteArchiveForm.jsx'
 import { getTheme, toggleTheme, watchOtherTabs, watchSystemTheme } from '../theme.js'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
@@ -83,6 +84,7 @@ function DayIcon() {
 
 export default function HomePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [data, setData] = useState(null)
   const [tasks, setTasks] = useState([])
   const [error, setError] = useState('')
@@ -133,6 +135,18 @@ export default function HomePage() {
       stopWatchingTabs()
     }
   }, [])
+
+  // #archive 锚点：React Router 的 hash 导航不会自动滚动，
+  // 「档案」页「+ 归档」按钮带 /#archive 跳回来，这里手动滚到归档卡。
+  useEffect(() => {
+    if (location.hash === '#archive') {
+      // 等下一帧：确保卡片已渲染完成（数据未加载完也先滚，布局稳定即可）
+      const raf = requestAnimationFrame(() => {
+        document.getElementById('archive')?.scrollIntoView({ block: 'start' })
+      })
+      return () => cancelAnimationFrame(raf)
+    }
+  }, [location.hash])
 
   if (error) return <div className="error-bar">{error}</div>
   if (!data) return <div className="loading">载入中…</div>
@@ -267,11 +281,18 @@ export default function HomePage() {
             ))}
           </ul>
         ) : (
-          <p className="agenda-empty">暂无待办任务，去「任务」页记一条吧</p>
+          <p className="agenda-empty">暂无待办任务，去「日志」页记一条吧</p>
         )}
         <p className="agenda-more">
-          <Link to="/tasks">全部任务 →</Link>
+          <Link to="/log">全部任务 →</Link>
         </p>
+      </section>
+
+      {/* 归档卡（原 /new 新建资料页表单）：桌面占满整行，窄屏堆在日历卡之后 */}
+      <section className="card archive-card" id="archive">
+        <h2>归档</h2>
+        <p className="hint">写一条资料存入本项目 data/ 目录，Obsidian 里也能看到</p>
+        <NoteArchiveForm />
       </section>
 
       {/* 主题方格（F10）：文案写的是「点下去会变成什么」，不是当前状态 */}

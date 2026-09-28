@@ -85,6 +85,9 @@ export default function NoteListPage() {
             目录
           </button>
         </div>
+        <Link className="btn-primary" to="/#archive">
+          + 归档
+        </Link>
       </div>
 
       <p className="meta">
@@ -96,7 +99,7 @@ export default function NoteListPage() {
       {loading && total === 0 ? (
         <div className="loading">载入中…</div>
       ) : total === 0 ? (
-        <div className="empty">没有找到{error ? '' : '，去「新建资料」记一条吧'}</div>
+        <div className="empty">没有找到{error ? '' : '，点上面「+ 归档」记一条吧'}</div>
       ) : isDirView ? (
         // 目录视图与卡片视图共用同一份过滤结果（items），筛选行为完全一致
         <NoteFileList items={items} />
