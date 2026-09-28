@@ -12,6 +12,12 @@ const MODES = [
   { value: 'diverge', label: '发散' },
 ]
 
+const CATEGORIES = [
+  { value: 'learning', label: '学习' },
+  { value: 'life', label: '生活' },
+  { value: 'work', label: '事务' },
+]
+
 function isPhone() {
   return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
 }
@@ -23,6 +29,7 @@ function isPhone() {
 function ConvergeForm() {
   const navigate = useNavigate()
   const [url, setUrl] = useState('')
+  const [category, setCategory] = useState('learning')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -36,11 +43,11 @@ function ConvergeForm() {
       const submittedUrl = url          // 清表单前先存下来，供提示条引用
       const task = await createTask({
         type: 'organize',
-        payload: { url },
+        payload: { url, category },
         origin: isPhone() ? 'phone' : 'desktop',
       })
       setUrl('')
-      // 不撒谎说「已整理」：直接透出后端 result（本期无自动执行器，需人工推进）
+      // 提示透出后端 result（「已提交，正在抓取链接」），进度去日志页看
       setNotice(`已登记：${submittedUrl}｜${task.result || '已提交'}`)
     } catch (err) {
       if (err.code === 'AUTH_REQUIRED') {
@@ -56,8 +63,8 @@ function ConvergeForm() {
   return (
     <form onSubmit={handleSubmit} className="form">
       <p className="hint">
-        贴一个链接，收进任务流（本期先登记待办、不抓内容，稍后到
-        <Link to="/log">日志</Link>里推进）。
+        贴一个链接，buddy 抓取正文并用模型整理成资料（失败会告诉你原因）；
+        任务进度去<Link to="/log">日志</Link>看。
       </p>
       <label>
         链接 *
@@ -68,6 +75,16 @@ function ConvergeForm() {
           placeholder="https://…"
           required
         />
+      </label>
+      <label>
+        分类
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          {CATEGORIES.map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
       </label>
       {error ? <p className="error-bar">{error}</p> : null}
       {notice ? (
@@ -91,7 +108,7 @@ export default function ArchivePage() {
   return (
     <section className="card">
       <h2>归档</h2>
-      <p className="hint">收敛：贴链接收进任务流（登记待办）｜发散：手动写一条资料</p>
+      <p className="hint">收敛：贴链接 → 抓取正文+模型整理 → 归档｜发散：手动写一条资料</p>
       <div className="view-switch" role="group" aria-label="归档方式">
         {MODES.map((m) => (
           <button
