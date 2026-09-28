@@ -93,9 +93,27 @@ curl -s -X POST http://localhost/api/tasks -H 'Content-Type: application/json' \
 | `BASE_URL=http://localhost:3199 node scripts/smoke.mjs` | **20 通过 / 0 失败** | 需自起后端（`smoke.mjs` 不拉后端）；用 `DATA_DIR=/tmp/...` 临时目录，未碰真实数据 |
 | 同上 + `SMOKE_FAKE_ASR_PORT=8099` | **29 通过 / 0 失败** | 转①–转⑨ 全绿 |
 
-## 6. 遗留 / 未做
+## 6. 补充验证：TTL 到期后缓存失效（同日补跑）
+
+§3 只验了「TTL 内命中」。为了不留半边，另起一个**临时 asr 容器**（同镜像、`CACHE_TTL_SECONDS=20`、端口只绑 `127.0.0.1:8098`，不碰正式服务）：
+
+```bash
+docker run -d --name asr-ttl-test --env-file asr/.env \
+  -e CACHE_TTL_SECONDS=20 -e JOBS_DIR=/app/jobs -p 127.0.0.1:8098:8000 vbcd-asr
+```
+
+| 次序 | 时机 | job_id | `stats` | 判定 |
+|---|---|---|---|---|
+| 第 1 次 | 冷启动 | `5a54692626c44127a9d1` | `{"download_ms":3871,"ffmpeg_ms":133,"asr_ms":11765,"chunks":1,"total_ms":27539}`（**无 `cache_hit`**） | 冷跑 |
+| 第 2 次 | **等 30s（> TTL 20s）后** | `419ac09d9f8449ab9710`（**全新 job**） | `{"download_ms":3313,"ffmpeg_ms":214,"asr_ms":7933,"chunks":1,"total_ms":19398}`（**无 `cache_hit`**） | ✅ 已失效、完整重跑 |
+
+两侧对照合起来才完整：**TTL 内**第二次是 0.127s 秒回 + `cache_hit:true`；**TTL 外**第二次是全新 job、重新下载（`download_ms` 重新出现）、无 `cache_hit`。验证后容器已 `docker rm -f`。
+
+附带收获：该临时容器（就是本次重建后的镜像）对同一 70s 视频给出 **12 句**，与 `asr/PROBE.md` 的探针复核结论一致（旧镜像为 1 段）——再次交叉印证句级重组已生效。
+
+## 7. 遗留 / 未做
 
 - 未验证 **`ASR_MAX_AUDIO_SECONDS` 护栏在真实链路的拒绝行为**（只验证了 300s 硬上限的探针结论，见 `asr/PROBE.md`）。
-- 未验证 **TTL 到期后缓存失效**（只验证了 TTL 内命中；要测需等 1800s 或临时调小 `CACHE_TTL_SECONDS` 重启 asr）。
+- ~~未验证 TTL 到期后缓存失效~~ → **已补验**，见 §6（TTL 内外两侧都验到）。
 - 前端仍无转写表单入口（`RUN.md` §4 已列为「不能做」），本次仍只有 curl / 任务接口入口。
 - V1 素材是 B 站长课程，**未覆盖非 B 站直链的长音频**（直链路径只在 180s m4a 上隐式走过）。
