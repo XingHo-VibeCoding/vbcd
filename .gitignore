@@ -46,3 +46,5 @@ desktop.ini
 npm-debug.log*
 logs/
 .tmp-*
+asr/probe-result-*.json
+asr/data/
