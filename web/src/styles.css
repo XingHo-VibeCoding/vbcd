@@ -1496,7 +1496,8 @@ body {
   grid-auto-flow: column;
   grid-auto-columns: 10px;
   gap: var(--sp-1);
-  margin-left: 32px;
+  /* 几何推导值，不是间距阶梯：= .contrib-weekdays span 的 width(24px) + .contrib-body 的 gap(--sp-2) */
+  margin-left: calc(24px + var(--sp-2));
   font-size: var(--fs-1);
   color: var(--muted);
 }
