@@ -325,6 +325,8 @@ ls data/work/                                                # 主页「归档�
 | `docker compose build asr` 拉不到 `python:3.11-slim` | Docker Hub 直连不通 | 用上面的镜像站前缀拉取再 `docker tag` |
 | `curl localhost:8000/healthz` 连接被拒但容器是 Up | asr **刻意不发布端口**（防 API Key 通道裸奔） | 从 server 容器里访问：`docker compose exec server node -e "fetch('http://asr:8000/healthz').then(r=>r.json()).then(console.log)"` |
 | `docker` 报 `permission denied` | 当前用户不在 `docker` 组 | `sudo usermod -aG docker $USER` 后重新登录；临时：`sudo setfacl -m u:$USER:rw /var/run/docker.sock`（docker 重启后失效） |
+| `docker run --env-file server/.env` 启动的服务问 KB 报 `LLM_FAILED：Cannot convert argument to a ByteString because the character at index N has a value of X which is greater than 255` | **`docker run` 不剥行内注释**，而 `docker compose` 的 `env_file` 会（未加引号的值剥掉 ` #…` 并剥外层引号）。于是密钥尾部吃进中文注释 → `Authorization: Bearer …# 可换…` 里出现 >255 的字符，Node 的 `fetch` 直接抛 ByteString 错（2026-09-29 实测：`OPENAI_API_KEY` 长度 117 → 165） | **别用 `docker run --env-file` 直接跑这个服务**；要另起一份用 `docker compose run`（同一套解析），或先把 `.env` 的注释与引号剥干净再造临时文件。核对办法：比 `LLM_MODEL` 长度（应为 19）且 `/\u4e00-\u9fa5/` 不命中 |
+| 线上 `:80` 页面少了刚提交的文案（如「发散 / 收敛」搜不到），接口却是新的 | `web` 镜像是**多阶段构建**：静态产物在 `docker build` 时就固化进镜像，改完 `web/src` 不重建就永远是旧的（2026-09-29 实测：镜像 09-28 18:44 构建，而前端提交在 09-29 06:54 之后） | `docker compose up -d --build web`（会连带重启依赖服务，`asr`/`server` 会重启）。核对：`docker exec vbcd-web-1 ls -l /usr/share/nginx/html/assets/*.js` 的文件名与字节数应与 `web/dist/assets/` **完全一致** |
 
 上线到服务器还差三步：① 阿里云安全组放行 443；② 域名 A 记录指向服务器 IP；③ 加 certbot 证书段。
 
