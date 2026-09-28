@@ -105,7 +105,7 @@ vbcd/
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `id` | string | 主键 |
-| `type` | enum | `note`（记资料）/ `organize`（整理链接）/ `remind`（提醒）/ `delete_note`（删除资料，高风险：只生成待确认记录，须经 F6 确认才真删，见 3.3）/ `transcribe_url`（转写归档，F13：异步执行，见 3.4） |
+| `type` | enum | `note`（记资料）/ `organize`（收敛链接）/ `remind`（提醒）/ `delete_note`（删除资料，高风险：只生成待确认记录，须经 F6 确认才真删，见 3.3）/ `transcribe_url`（转写归档，F13：异步执行，见 3.4） |
 | `payload` | object | 任务参数（如 `{title, content}`；transcribe_url 为 `{url, category?, tags?, language?, part?}`） |
 | `asr` | object | 可选；仅 `transcribe_url` 存在：`{job_id, stage, done, total, percent, submitted_at, last_error}`（不写转写正文，避免运行时文件膨胀） |
 | `status` | enum | `todo` / `doing` / `done` / `failed` / `attention`（见 5.4） |

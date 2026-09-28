@@ -9,7 +9,7 @@
 | 动作 | 现有实现 | 页面入口 |
 |---|---|---|
 | 归档一条资料 | `POST /api/notes` | 主页「归档」卡 |
-| 发起任务（记资料/提醒/整理链接/删除资料/视频转写） | `POST /api/tasks`（`transcribe_url` 走 asr 微服务异步执行） | 「日志」页 · 任务页签、资料详情页「删除这条资料」；转写暂只有 curl 入口 |
+| 发起任务（记资料/提醒/收敛/删除资料/视频转写） | `POST /api/tasks`（`transcribe_url` 走 asr 微服务异步执行） | 归档页·收敛、日志页·任务页签、资料详情页「删除这条资料」；转写暂只有 curl 入口 |
 | 推进任务状态 | `PATCH /api/tasks/:id` | 「日志」页 · 任务页签 |
 | 高风险动作确认 | `PATCH /api/tasks/:id`（`decision`） | `/tasks/:id/confirm` 确认页 |
 | 回看确认留痕 | `GET /api/confirmations` | 「日志」页 · 确认留痕页签 |
@@ -25,7 +25,7 @@
 | `archive_note` | `services/notes.js` | "把这段整理成资料归档" → 定标题/分类/标签后落盘 |
 | `create_task` | `services/tasks.js` | "提醒我周五交报告" → 建 remind 任务 |
 | `transcribe_media` | `services/transcribe.js` + `asr/` 微服务 | "把这个视频转成笔记" → 建 `transcribe_url` 任务，异步转写后归档 |
-| `advance_task` | `routes/tasks.js` 的迁移校验 | "把那条整理链接标完成" |
+| `advance_task` | `routes/tasks.js` 的迁移校验 | "把那条收敛链接标完成" |
 | `request_confirmation` | `storage/confirmations.js` | 高风险动作先登记待确认——**闸门留在后端，agent 不能绕过** |
 | `search_notes` | `services/notes.js` 索引 | 检索自家资料库 |
 | `ask_kb` | `routes/kb.js` | 基于向量索引的问答（现为「agent」页的实现） |

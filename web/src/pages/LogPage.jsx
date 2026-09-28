@@ -2,6 +2,7 @@
 // 页签写进地址栏 ?tab=tasks|confirm（默认 tasks）——与 ?cal / ?view / ?tab=activity 同一套做法：
 // 刷新、前进后退、把链接发到手机都能停在同一个页签。
 // · 提交任务后写入 data/.runtime/tasks.json；type=note 由后端同步归档成资料
+// · 「整理链接」（收敛）已收编到归档页（/archive?mode=converge），本页只提交「提醒 / 记一条资料」
 // · 状态推进走 PATCH /api/tasks/:id；高风险任务（attention）在确认前推不动，后端会回 428
 // · 确认留痕只读：记录由 PATCH /api/tasks/:id 带 decision 时写入，这里不产生任何数据
 import { useEffect, useState } from 'react'
@@ -17,12 +18,12 @@ const CATEGORIES = [
 const TASK_KINDS = [
   { value: 'remind', label: '提醒事项' },
   { value: 'note', label: '记一条资料' },
-  { value: 'organize', label: '整理链接' },
+  // 「整理链接」已收编到归档页的「收敛」（/archive?mode=converge），本页不再设提交入口
 ]
 
 const TYPE_LABELS = {
   note: '资料',
-  organize: '整理链接',
+  organize: '收敛',
   remind: '提醒',
   delete_note: '删除资料',
   transcribe_url: '视频转写',
@@ -101,7 +102,6 @@ function TasksTab() {
   const [category, setCategory] = useState('learning')
   const [content, setContent] = useState('')
   const [text, setText] = useState('')
-  const [url, setUrl] = useState('')
 
   const [status, setStatus] = useState('')
   const [tick, setTick] = useState(0) // 提交/推进后 +1，触发重新拉取
@@ -138,17 +138,11 @@ function TasksTab() {
     setNotice('')
     setSubmitting(true)
     try {
-      const payload =
-        type === 'note'
-          ? { title, content, category }
-          : type === 'remind'
-            ? { text }
-            : { url }
+      const payload = type === 'note' ? { title, content, category } : { text }
       const task = await createTask({ type, payload, origin: isPhone() ? 'phone' : 'desktop' })
       setTitle('')
       setContent('')
       setText('')
-      setUrl('')
       setNotice(
         `已提交：「${summaryOf(task)}」→ ${STATUS_LABELS[task.status] ?? task.status}` +
           (task.result ? `｜${task.result}` : ''),
@@ -241,18 +235,6 @@ function TasksTab() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="如：周五前交实验报告"
-            />
-          </label>
-        ) : null}
-
-        {type === 'organize' ? (
-          <label>
-            链接 *
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://…"
             />
           </label>
         ) : null}
