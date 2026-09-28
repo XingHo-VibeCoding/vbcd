@@ -50,6 +50,9 @@ vbcd/
 │   ├── PROBE.md         # 上游返回结构与上限的实测结论（改上游前先读）
 │   ├── tests/           # pytest 单测 + respx mock 集成（不烧 Key）
 │   └── Dockerfile       # python:3.11-slim + ffmpeg，非 root
+├── skills/              # 可复用 AI Skill（Day 12 起）：一个 Skill 一个目录，内含 SKILL.md；
+│                        #   现有 frontend-rules（前端样式规则与改动前后检查清单）
+├── .pi/                 # pi 项目级设置：settings.json 注册 ../skills 为 Skill 发现路径
 └── .env.example         # 环境变量样例（不含真实值，可入库）
 ```
 
