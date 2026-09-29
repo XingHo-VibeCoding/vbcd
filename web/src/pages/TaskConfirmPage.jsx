@@ -3,6 +3,8 @@
 // 决定一旦提交即写入 Confirmation 留痕（时间 + 内容 + 决定），本页也会转成回看视图。
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import Breadcrumb from '../components/Breadcrumb.jsx'
+import BackLink from '../components/BackLink.jsx'
 import { decideTask, listConfirmations, listTasks } from '../api/tasks'
 
 const ACTION_LABELS = { delete_note: '删除资料' }
@@ -97,6 +99,7 @@ export default function TaskConfirmPage() {
 
   return (
     <section className="card">
+      <Breadcrumb items={[{ label: '日志', to: '/log' }, { label: '确认操作' }]} />
       <h2>确认操作</h2>
       <p className="hint">
         这一步会改动你的数据。看清楚再决定 —— 没点「确认执行」之前，什么都不会发生。
@@ -149,6 +152,11 @@ export default function TaskConfirmPage() {
           </div>
         </>
       )}
+
+      {/* 位置与资料详情页一致：都放在卡片底部；底部两个按钮不改（它们是「去哪」的目的地，不是「回去」） */}
+      <p className="detail-back">
+        <BackLink fallback="/log" fallbackLabel="返回日志" />
+      </p>
     </section>
   )
 }

@@ -1686,3 +1686,69 @@ body {
     min-height: 44px; /* 触控目标 */
   }
 }
+
+/* ===== Day 13：面包屑 + 「返回上一页」 =====
+   两者分工不同：面包屑 = 这条页面在一级导航里的位置（静态、可预期）；
+   「返回上一页」= 我刚才从哪儿来（可能是 /about 时间线或 /ask 来源，写死父级会带错路）。
+   颜色全部复用既有 token（--accent / --muted），未新增也未改任何色值
+   → 深浅两套主题的对比度维持既有实测结果（浅色 accent 6.52:1、muted 7.37:1）。 */
+.breadcrumb {
+  margin-bottom: var(--sp-3);
+}
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-1); /* 元信息档 */
+}
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  text-decoration: none;
+}
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+.breadcrumb .sep {
+  color: var(--muted); /* 装饰性分隔符，aria-hidden 掉 */
+}
+/* 当前页是纯文字；长标题单行截断（title 属性里留全称），避免把面包屑撑成两行。
+   max-width 用 ch 而不是 px：这是「按字符数给宽度」的排版计算值，不是间距阶梯语义 */
+.breadcrumb [aria-current='page'] {
+  max-width: 24ch;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 「返回上一页」：有来路时是动作（原生 button），无来路时是目的地（Link）—— 两态视觉一致 */
+.detail-back button.back-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: var(--fs-2);
+  cursor: pointer;
+}
+.detail-back button.back-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 720px) {
+  /* 触控目标：面包屑链接与返回链接都是可点元素，与全站 44px 口径一致 */
+  .breadcrumb a,
+  .detail-back a,
+  .detail-back button.back-link {
+    min-height: 44px;
+  }
+}

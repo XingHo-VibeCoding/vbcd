@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import HomePage from './pages/HomePage.jsx'
 import NoteListPage from './pages/NoteListPage.jsx'
 import LogPage from './pages/LogPage.jsx'
@@ -44,12 +44,17 @@ export default function App() {
       <header className="app-header">
         <h1>buddy</h1>
         <p className="subtitle">会成长的个人助手 · 第一版骨架</p>
+        {/* Day 13：链接换成 NavLink —— 当前项自动获得 aria-current="page"（无障碍导航标签）。
+            「主页」要加 end，否则 /notes、/about 等所有路径都会把它也算成当前项。
+            视觉上不加当前项标记（使用者未要求，不擅自加）。 */}
         <nav className="nav">
-          <Link to="/">主页</Link>
-          <Link to="/notes">档案</Link>
-          <Link to="/log">日志</Link>
-          <Link to="/ask">agent</Link>
-          <Link to="/about">关于</Link>
+          <NavLink to="/" end>
+            主页
+          </NavLink>
+          <NavLink to="/notes">档案</NavLink>
+          <NavLink to="/log">日志</NavLink>
+          <NavLink to="/ask">agent</NavLink>
+          <NavLink to="/about">关于</NavLink>
           {authEnabled ? <LogoutButton /> : null}
         </nav>
       </header>

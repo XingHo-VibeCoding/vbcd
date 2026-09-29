@@ -4,6 +4,8 @@ import { getNote } from '../api/notes'
 import { createTask } from '../api/tasks'
 import MarkdownContent from '../components/MarkdownContent.jsx'
 import Toast from '../components/Toast.jsx'
+import Breadcrumb from '../components/Breadcrumb.jsx'
+import BackLink from '../components/BackLink.jsx'
 
 const CATEGORY_LABELS = { learning: '学习', life: '生活', work: '事务' }
 
@@ -150,6 +152,8 @@ export default function NoteDetailPage() {
   const meta = note.meta
   return (
     <article className="card">
+      {/* 层级只有「档案」这一层，但末项写标题而不是「详情」——反正都要占一行，写标题更有用 */}
+      <Breadcrumb items={[{ label: '档案', to: '/notes' }, { label: meta.title }]} />
       <h2 className="detail-title">{meta.title}</h2>
 
       <div className="note-item-meta">
@@ -199,7 +203,7 @@ export default function NoteDetailPage() {
       </div>
 
       <p className="detail-back">
-        <Link to="/notes">← 返回列表</Link>
+        <BackLink fallback="/notes" fallbackLabel="返回档案列表" />
       </p>
 
       <Toast text={toast?.text} tone={toast?.tone} />
