@@ -242,7 +242,7 @@
 > 起因：使用者 2026-09-28 问「本项目有多 agent 协作规则吗」——当时答案是没有（`AGENT.md` 讲的是**产品**的 agent 化，不是多个 AI 协作者）。
 > 本节即为此补齐，采纳使用者裁定的四个选项：**1A 分级授权 / 2A 单写者 / 3A 复用现有留证格式 / 4A 写入 `AGENTS.md` §10**。
 > 本节只回答「子 agent 怎么用」，**不放松任何既有铁律**。
-> 适用范围：pi 的 pi-subagents 扩展（已在 `~/.pi/agent/settings.json` 启用）；项目内暂无自己的 agent 定义。
+> 适用范围：pi 的 pi-subagents 扩展（已在 `~/.pi/agent/settings.json` 启用）；项目内已有 3 个项目级 agent 定义（`.pi/agents/`：`buddy-rules-auditor` / `buddy-doc-sync` / `buddy-verifier`，2026-09-29 在 `015a951` 入库）。
 
 1. **授权：只读自动、写入须批**
    - **只读类**（`scout` 侦察、`reviewer` 复核、`oracle` 决策校验、`researcher` / `evidence-auditor`、`codex-exec` / `claude-code` 只读档）可在**使用者已确认的板块内**直接派出，不必再单独申请。

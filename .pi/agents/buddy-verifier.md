@@ -29,9 +29,9 @@ cd server && node scripts/smoke.mjs
 cd server && ASR_SERVICE_URL=http://127.0.0.1:8099 ASR_SERVICE_TOKEN=fake-token ASR_POLL_INTERVAL_MS=1000 SMOKE_FAKE_ASR_PORT=8099 node scripts/smoke.mjs
 ```
 
-ASR 单测（48 例）：
+ASR 单测（48 例）：必须在**仓库根**跑（`asr/` 包要求仓库根在 `sys.path`；在 `asr/` 目录内跑会 `ModuleNotFoundError: No module named 'asr'`，实测踩过）：
 ```bash
-cd asr && .venv/bin/python -m pytest -q
+cd /home/bird/work/vbcd && asr/.venv/bin/python -m pytest asr -q
 ```
 
 部署链路健康检查（compose 跑着时）：

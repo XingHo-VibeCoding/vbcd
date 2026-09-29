@@ -376,7 +376,7 @@ vbcd/
 | `ORGANIZE_MAX_ATTEMPTS` | `3` | 僵死重试上限，超过判 failed | ⬜ |
 | `ORGANIZE_ALLOW_LOOPBACK` | `0` | =1 时**只放行回环地址**（127.0.0.1/localhost/::1），仅供本地假服务器自测；内网与云元数据地址恒拦 | 🟡 |
 
-`asr/` 服务侧变量见 `asr/.env.example`（`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / `ASR_CHUNK_SECONDS` / **`ASR_MAX_AUDIO_SECONDS=300`（上游单请求时长硬上限，启动时把 `ASR_CHUNK_SECONDS` 夹紧到 ≤ 本值）** / `ASR_HOST` `ASR_PORT` / `DOWNLOAD_TIMEOUT` `MAX_DOWNLOAD_MB` / `JOBS_DIR` / `YTDLP_*` / `CACHE_TTL_SECONDS`）。
+`asr/` 服务侧变量见 `asr/.env.example`（完整清单以样例文件为准；高频项：`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / `MAAS_BASE_URL` / `ASR_MODEL` / `ASR_CHUNK_SECONDS` / **`ASR_MAX_AUDIO_SECONDS=300`（上游单请求时长硬上限，启动时把 `ASR_CHUNK_SECONDS` 夹紧到 ≤ 本值）** / `ASR_MAX_B64_BYTES` / `ASR_REQUEST_TIMEOUT` / `ASR_CHUNK_CONCURRENCY` / `ASR_GLOBAL_CONCURRENCY` / `ASR_HOST` `ASR_PORT` / `DOWNLOAD_TIMEOUT` `MAX_DOWNLOAD_MB` / `JOBS_DIR` `JOB_TTL_SECONDS` `JOB_TIMEOUT_SECONDS` / `YTDLP_*` / `CACHE_TTL_SECONDS`）。
 
 > ⚠️ **本表里有几个键目前代码不读**（属部署期预留，尚未启用）：`PUBLIC_ORIGIN` / `DATA_REPO_URL` / `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` / `TZ` / `LOG_DIR` / `TRUST_PROXY`。2026-09-29 由 `buddy-doc-sync` 核对发现（代码 0 处读取，`.env.example` 里也没有）——填入无害但也无效，启用对应功能时需同时补实现与文档。
 
