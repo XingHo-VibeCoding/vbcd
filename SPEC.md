@@ -70,6 +70,55 @@ vbcd/
 - **无动画**：不引入 `transition` / `animation` / `@keyframes`；深色下原生控件由 `color-scheme` 跟随。
 - **关于页热力图色（F11）**：两套主题各 3 个 `--contrib-*`（0 档复用 `--surface-hover`）。
 
+## 1.2 前端视图结构与页面切换（Day 13）
+
+**今日要掌握的答案：页面之间靠「地址栏」切换**，库用 **`react-router-dom` v7**（Day 7 随 Vite 脚手架引入，未做版本升级，只用最基础的 `Routes` / `Route` / `Link` / `useNavigate` / `useParams` / `useSearchParams`）。全站只有两种切换写法：
+
+| 换什么 | 用什么 | 例子 | 为什么这样选 |
+|---|---|---|---|
+| 换**实体**（去另一个页面） | 路径 + `<Link>` / `useNavigate` | `/notes` → `/notes/:id` | 地址可分享、可收藏，刷新后还在同一条资料 |
+| 换**视图**（同一页面的另一种看法） | 查询参数 + `useSearchParams` | `/notes?view=dir`、`/log?tab=confirm` | 数据不动、只换渲染方式，同一份接口结果两种画法 |
+
+**为什么不把「当前在哪个视图」放进组件 state 或全局状态管理**：state 刷新即丢、前进后退按钮不生效、链接发到手机对方只能看到默认视图。地址栏是唯一一个「刷新、前进后退、跨设备分享」三件事天然同时成立的地方——这也是本项目从 Day 10 起 `?view` / `?tab` / `?mode` / `?cal` 一路沿用同一套做法的原因。
+
+**代价（已知并接受）**：单页应用需要服务端把未知路径回落 `index.html`，否则 `/ask`、`/notes/xxx` 直接刷新会 404 —— 由 `web/nginx.conf` 的 `try_files $uri $uri/ /index.html` 兜住（Day 8 已落）。
+
+### 视图树
+
+```
+一级 · 顶部导航常驻 5 项（同级切换，<Link>；当前项 Day 13 起带 aria-current="page"）
+├── /        主页      └ ?cal=week（默认） | month
+├── /notes   档案      └ ?view=card（默认） | dir
+├── /log     日志      └ ?tab=tasks（默认） | confirm（确认留痕）
+├── /ask     agent 问答   （无参数：提问内容是临时输入，不入地址栏）
+└── /about   关于      └ ?tab=intro（默认） | activity
+
+二级 · 路径参数下钻（从一级任一入口进入）
+├── /notes/:id               入口 5 个：/notes 卡片、/notes?view=dir 目录行、
+│                            /about?tab=activity 时间线、/ask 问答来源、/archive 归档成功后提示
+└── /tasks/:id/confirm       入口 4 个：/log 任务行、/log?tab=confirm 留痕行、
+                             / 主页任务行、/notes/:id「删除这条资料」发起后
+
+独立入口（不在顶部导航里）
+└── /archive  归档     └ ?mode=converge（默认） | diverge；入口 2 个：/ 主页方格、/notes「+ 归档」；
+                         提交成功后跳 /notes/:id
+
+兼容重定向（replace，旧地址不留历史记录）
+/new → /archive ｜ /tasks → /log ｜ /confirmations → /log?tab=confirm
+
+隐私模块开启时（AUTH_ENABLED=1）
+/login?from=<原路径>   ← 任意接口回 401 时由页面跳过去，登录成功回 from
+```
+
+### 约定
+
+1. **默认视图不写参数**：点「卡片」等于清空参数，`?view=card` 不会出现在地址栏 —— 默认值只有一处定义，地址栏保持干净。
+2. **查询参数只承载「视图选择」，不承载数据**：数据永远现取接口（F3「打开即刷新」），刷新一次就是一次新请求。
+3. **不写进地址栏的**：搜索词 `q`、分类筛选、agent 提问内容 —— 它们是临时输入，每敲一个字都进历史会污染前进后退。
+4. **二级页不假设自己从哪儿来**：`/notes/:id` 有 5 个入口，写死「返回列表」会带错路（Day 13 板块② 补面包屑 + 返回上一页）。
+5. **已知边界**：`/notes` 的视图按钮用 `setSearchParams({})` 清空全部参数；该页目前只有 `view` 一个参数，暂无副作用，将来加参数时须改为只删 `view`。
+6. **不做**：路由库进阶用法（loader、嵌套路由、懒加载分包）、路由级鉴权守卫（改为接口回 401 → 页面跳 `/login`）、全局状态管理。
+
 ## 2. 数据对象及字段
 
 **通用约定**：
