@@ -140,6 +140,13 @@
   - **尺寸**：成功 3 秒 / 失败 5 秒、按钮 3 秒；位置按使用者 09-27 实测意见**从底部居中改为右上角**（`top/right: var(--sp-4)`，窄屏贴边 + 宽度按视口算，`pointer-events: none` 不吃点击）；
   - **验证**：`npm run build` 通过；`grep transition|animation` 为空；Docker 线上 80 端口的资源指纹与本地构建一致，且在线上 JS 里能检出 4 条新文案（`复制路径` / `已复制 ✓` / `路径已复制` / `复制失败，请长按选中路径手动复制`）；使用者按 9 条清单实跑（含连点 5 次、提示条未消失时重点、`Tab`+`Enter`/`Space`、离开页面无残留与无控制台警告、局域网 IP 走失败降级、深色与 375px），报「测试完成」且未提出异常；
   - ⚠️ **未做**：任何动画（使用者明确不要）；提示条尚未复用到其他页面；依赖后端的交互（当日清单明令不做）。
+- **Day 12（2026-09-28）**：✅ 产出并**真实调用**了第一个自制 Skill —— `skills/frontend-rules/SKILL.md`（117 行：六类检查清单 P1–P5、修改前 7 问、修改后 6 条验证命令、留证格式、「不做什么」），在 `.pi/settings.json` 注册为项目 Skill；打卡提交 `d959e68`（另含 `SPEC.md` 与 skill 口径 3 行）；✅ 调用留证 `skills/frontend-rules/runs/2026-09-28-day12.md`（153 行）：逐条核验档案列表页筛选交互 32 个勾选点，记下 **1 处违规**（`.contrib-months` 裸值 `32px`）与 **1 处文案缺口**（筛选无结果缺显式出口）；✅ 两处发现均已闭环：`21b6460` 区分「被筛掉了」与「资料库本来为空」（+ 留证 33 行）、`f1f1e5c` 热力图月份行左缩进改为几何推导写法。⚠️ 本文件 §4 当时漏记 Day 12，于 Day 13 收尾时补记（本条）。
+- **Day 13（第 2 周 · 多级页面与四种状态，2026-09-29）**：✅ 范围核对后裁定**不新建页面**（仓库已有 12 条路由定义，与清单预设的「实现 3 个页面」重叠）→ 做三板块补齐，4 个提交：
+  - **板块① 视图结构**（`92187ce`）：`SPEC.md` 新增 §1.2（49 行）——选型答案（`react-router-dom` v7 + **地址栏即状态**）、「换实体用路径 / 换视图用查询参数」的分工与理由、单页应用的代价（nginx `try_files` 兜底）、**完整视图树**（一级 5 项含 `?cal`/`?view`/`?tab`/`?mode` 默认值；二级 `/notes/:id` **5 个入口**、`/tasks/:id/confirm` **4 个入口**；`/archive` 2 个入口；3 条兼容重定向；`AUTH_ENABLED=1` 时的 `/login?from=`）、6 条约定（含 `/notes` 视图按钮 `setSearchParams({})` 清参的已知边界）；
+  - **板块② 多级切换**（`5f6250f`）：新增 `components/Breadcrumb.jsx`（`nav[aria-label]` + `ol/li`，末项 `aria-current="page"`，分隔符 `aria-hidden`）与 `components/BackLink.jsx`（有来路走 `navigate(-1)`；无来路落 `fallback` **并改文案**，判据是 react-router v7 的 `history.state.idx`——**读过 `node_modules` 源码确认**该字段存在与语义）；接入 `/notes/:id`、`/tasks/:id/confirm`；顶部导航 `Link`→`NavLink`（`/` 加 `end`）获得 `aria-current`，**视觉零变化**（`.active` 规则只作用于 `button`）；`styles.css` 末尾追加 67 行（**零新 token、零硬编码色值**，720px 触控 44px），留证 `runs/2026-09-29-day13.md`；
+  - **板块③ 四种状态**（`a982ae8`）：新增 `components/StateBlock.jsx`（四态**互斥**、播报容器**常驻 DOM**、正常态内容放在容器**外**、错误态用 `role="alert"` + assertive）；`/notes` 接入并新增「错误 → **重试**」与「空（被筛掉）→ **清空筛选条件**」（后者正是 Day 12 留证记的建议项）；行为变更 3 处并已如实汇报（错误态不再与空态并存、错误时隐藏「共 N 条」、失败时不再保留旧列表）；**本板块零 CSS 改动**；
+  - **验证与留证**：`npm run build` 通过（模块 292 → **295**）；`grep transition\|animation` 无输出；`#` 色值仍只在两个 token 块内；**空态用真实接口验过**（`?q=zzzz` → `total:0`）、正常态 `total:6`；`server/scripts/smoke.mjs` 公开模式 **20/20、0 失败**（临时数据目录，跑完停服并清理，未碰真实资料与 docker 栈）；
+  - ⚠️ **未做/待拍板**：`?state=` 预览开关（使用者明确不要）、四态只覆盖 `/notes`、顶部导航「当前项」视觉标记、`.detail-back` 两处重复字号声明未合并；**线上 `:80` 仍是镜像里的旧产物**，验收需 `docker compose up -d --build web`（未执行）。
 
 ## 5. buddy 项目规则（产品行为的铁律）
 
