@@ -332,7 +332,7 @@ ls data/work/                                                # 主页「归档�
 
 ### 8.8 视频转写（F13）
 
-`asr/` 是独立的 fun-asr 转写微服务（FastAPI 单进程，4 个端点）；buddy 侧不新增接口，走 `type=transcribe_url` 任务。
+`asr/` 是独立的 fun-asr 转写微服务（FastAPI 单进程，5 个端点）；buddy 侧不新增接口，走 `type=transcribe_url` 任务（支持「先抓字幕 → 抓不到回落转写」+ srt 输出）。
 
 ```bash
 # ① 本机跑：装依赖（Python 3.11+）+ 起服务
@@ -347,11 +347,11 @@ curl http://127.0.0.1:8000/healthz
 #   ASR_SERVICE_URL=http://127.0.0.1:8000   （compose 内则是 http://asr:8000）
 #   ASR_SERVICE_TOKEN=<与 asr/.env 相同>
 
-# ③ 提交转写任务（暂无前端表单，用 curl）
+# ③ 提交转写任务（前端：归档页「收敛」→「视频链接」；也可 curl）
 curl -X POST http://localhost:3100/api/tasks -H 'Content-Type: application/json' \
-  -d '{"type":"transcribe_url","payload":{"url":"https://www.bilibili.com/video/BVxxxx","category":"learning","tags":["视频转写"]},"origin":"desktop"}'
-# → 201 status=doing；GET /api/tasks 看「转写中：正在转写（n/m，x%）」；
-#   完成后 status=done、result=「已归档到 learning/….md」；B 站分 P 传 "part": 2
+  -d '{"type":"transcribe_url","payload":{"url":"https://www.bilibili.com/video/BVxxxx","category":"learning","tags":["视频转写"],"prefer_subtitles":true,"formats":["text","segments","srt"]},"origin":"desktop"}'
+# → prefer_subtitles=true 先抓平台字幕：命中则同步归档（status=done、result 含「字幕」、正文带 srt 代码块）；
+#   抓不到则回落转写（status=doing），完成后 status=done、result=「已归档到 learning/….md」；B 站分 P 传 "part": 2
 
 # 归档后若要进知识库问答，需手工触发一次增量索引：
 curl -X POST http://localhost:3100/api/kb/index
@@ -362,7 +362,7 @@ asr/.venv/bin/python -m pytest asr
 # ⑤ 探针（改上游参数前先跑）：asr/scripts/probe_funasr.py，结论写在 asr/PROBE.md
 ```
 
-ASR 服务的 4 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返回 job）、`GET|DELETE /v1/jobs/{id}`、`GET /healthz`；`/v1/*` 需 `Authorization: Bearer $SERVICE_TOKEN`。临时媒体终态即删，job JSON TTL 30 分钟后 GC。
+ASR 服务的 5 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返回 job，`formats:["srt"]` 时 result 带 `srt`）、`GET|DELETE /v1/jobs/{id}`、`POST /v1/subtitles`（平台字幕抓取，同步返回 `{found:true,…}` 或 `{found:false}`）、`GET /healthz`；`/v1/*` 需 `Authorization: Bearer $SERVICE_TOKEN`。临时媒体终态即删，job JSON TTL 30 分钟后 GC。
 
 **时长硬上限（最常踩）**：上游单请求**音频硬上限 300 秒**（305s 起 400 + 空句子，与体积无关）→ `ASR_CHUNK_SECONDS` 默认 180，且启动时自动夹紧到 ≤ `ASR_MAX_AUDIO_SECONDS`（提交 999 会打印警告并生效为 300，2026-09-29 实测）。长媒体靠静音对齐切片 + 片偏移合并完成，不需要你手动切。
 
