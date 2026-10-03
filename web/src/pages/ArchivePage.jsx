@@ -18,6 +18,12 @@ const CATEGORIES = [
   { value: 'work', label: '事务' },
 ]
 
+// 收敛支持两类链接：网页走 organize（抓正文），视频走 transcribe_url（先字幕→转写，输出 srt）
+const LINK_KINDS = [
+  { value: 'web', label: '网页链接' },
+  { value: 'video', label: '视频链接' },
+]
+
 function isPhone() {
   return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
 }
@@ -28,11 +34,13 @@ function isPhone() {
  */
 function ConvergeForm() {
   const navigate = useNavigate()
+  const [kind, setKind] = useState('web')
   const [url, setUrl] = useState('')
   const [category, setCategory] = useState('learning')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const isVideo = kind === 'video'
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -42,12 +50,14 @@ function ConvergeForm() {
     try {
       const submittedUrl = url          // 清表单前先存下来，供提示条引用
       const task = await createTask({
-        type: 'organize',
-        payload: { url, category },
+        type: isVideo ? 'transcribe_url' : 'organize',
+        payload: isVideo
+          ? { url, category, prefer_subtitles: true, formats: ['text', 'segments', 'srt'] }
+          : { url, category },
         origin: isPhone() ? 'phone' : 'desktop',
       })
       setUrl('')
-      // 提示透出后端 result（「已提交，正在抓取链接」），进度去日志页看
+      // 提示透出后端 result（视频命中字幕会显示「已归档到 …（字幕）」，否则「已提交，正在抓取链接」）
       setNotice(`已登记：${submittedUrl}｜${task.result || '已提交'}`)
     } catch (err) {
       if (err.code === 'AUTH_REQUIRED') {
@@ -62,8 +72,23 @@ function ConvergeForm() {
 
   return (
     <form onSubmit={handleSubmit} className="form">
+      <div className="view-switch" role="group" aria-label="链接类型">
+        {LINK_KINDS.map((k) => (
+          <button
+            key={k.value}
+            type="button"
+            className={kind === k.value ? 'tab active' : 'tab'}
+            aria-pressed={kind === k.value}
+            onClick={() => setKind(k.value)}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
       <p className="hint">
-        贴一个链接，buddy 抓取正文并用模型整理成资料（失败会告诉你原因）；
+        {isVideo
+          ? '贴一个视频链接，buddy 先抓平台字幕、抓不到就转写音频，产出带时间戳全文与 srt；'
+          : '贴一个链接，buddy 抓取正文并用模型整理成资料（失败会告诉你原因）；'}
         任务进度去<Link to="/log">日志</Link>看。
       </p>
       <label>
@@ -72,7 +97,7 @@ function ConvergeForm() {
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://…"
+          placeholder={isVideo ? 'https://…（视频链接）' : 'https://…'}
           required
         />
       </label>
@@ -94,7 +119,7 @@ function ConvergeForm() {
       ) : null}
       <div className="form-actions">
         <button type="submit" className="btn-primary" disabled={submitting}>
-          {submitting ? '登记中…' : '收敛这条链接'}
+          {submitting ? '登记中…' : isVideo ? '转写这个视频' : '收敛这条链接'}
         </button>
       </div>
     </form>
