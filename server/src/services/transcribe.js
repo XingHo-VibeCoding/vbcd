@@ -1,7 +1,7 @@
 // transcribe_url 任务类型：payload 校验 + 提交 ASR + 把转写包组装成 Markdown 资料。
 // 归档走与 F1 相同的 createNote()（同级写操作，故不设确认闸门——高风险外部动作规则不变）。
 import * as storage from '../storage/files.js'
-import { asrConfigured, submitTranscribe } from './asr.js'
+import { asrConfigured, fetchSubtitles, submitTranscribe } from './asr.js'
 import { fail } from './errors.js'
 import { getChatModel } from './llm.js'
 import { CATEGORIES, createNote, nowShanghai } from './notes.js'
@@ -40,7 +40,11 @@ export function validatePayload(payload) {
     throw fail('VALIDATION_FAILED', 'part 必须是 ≥1 的整数（B 站分 P 序号）')
   }
   const language = String(payload?.language ?? '').trim() || null
-  return { url, category, tags, language, part }
+  const preferSubtitles = payload?.prefer_subtitles === true   // 显式开启才「先字幕后转写」；默认纯转写（向后兼容）
+  const formats = Array.isArray(payload?.formats)
+    ? payload.formats.filter((f) => ['text', 'segments', 'srt'].includes(f))
+    : []
+  return { url, category, tags, language, part, preferSubtitles, formats }
 }
 
 /**
@@ -56,6 +60,26 @@ export async function submitTranscribeTask(task) {
     throw err
   }
   task.payload = { ...task.payload, ...parsed }
+
+  // 先字幕策略：抓平台字幕，命中直接归档 done；抓不到/服务出错回落转写（不判死）
+  if (parsed.preferSubtitles && !task.asr?.subtitles_tried) {
+    task.asr = { ...(task.asr || {}), subtitles_tried: true }
+    try {
+      const sub = await fetchSubtitles({ url: parsed.url, part: parsed.part })
+      if (sub?.found) {
+        const archived = await archiveTranscript(task, sub, { subtitle: true })
+        task.status = 'done'
+        task.result = archived.reused
+          ? `已归档过 ${archived.path}（字幕）`
+          : `已归档到 ${archived.path}（字幕）`
+        task.asr = { ...(task.asr || {}), last_error: '' }
+        return taskStore.put(task)
+      }
+    } catch (err) {
+      // 字幕抓取失败：回落转写，记 last_error 不判死
+      task.asr = { ...(task.asr || {}), last_error: err?.message || '字幕抓取失败' }
+    }
+  }
 
   const { iso } = nowShanghai()
   if (!asrConfigured()) {
@@ -191,16 +215,18 @@ export async function summarize(transcriptText, title) {
  * 把 ASR 转写包（含可选 partial 标记）组装成 createNote 的入参。
  * partial=true 时正文顶部加告警块；llmResult 为 null 时走「原文模板」回退。
  */
-export function buildNote(task, result, { partial = false, llmResult = null, llmError = '' } = {}) {
+export function buildNote(task, result, { partial = false, llmResult = null, llmError = '', subtitle = false } = {}) {
   const src = result?.source ?? {}
   const payload = task.payload ?? {}
   const title = String(src.title || `${src.platform || 'video'}-${src.id || 'unknown'}`).slice(0, 80)
   const { date } = nowShanghai()
+  const kind = subtitle ? '字幕' : '转写'
+  const engine = subtitle ? '平台字幕' : 'fun-asr'
 
   const head = [
     `# ${title}`,
     '',
-    `> 来源：${payload.url}｜平台：${src.platform || '未知'}｜时长：${fmtDuration(src.duration_sec)}｜转写：${date}`,
+    `> 来源：${payload.url}｜平台：${src.platform || '未知'}｜时长：${fmtDuration(src.duration_sec)}｜${kind}：${date}`,
   ]
   if (partial) {
     head.push('> ⚠️ 部分转写：ASR 报告有片段失败，以下仅含已成功片段的内容。')
@@ -209,7 +235,7 @@ export function buildNote(task, result, { partial = false, llmResult = null, llm
 
   let mid
   if (llmResult) {
-    head.push(`> 本笔记由转写链路自动生成：全文来自 fun-asr，摘要与要点由 ${llmResult.model} 整理。`)
+    head.push(`> 本笔记由${kind}链路自动生成：全文来自 ${engine}，摘要与要点由 ${llmResult.model} 整理。`)
     const summaryBlock = ['## 摘要', '', llmResult.summary || '（空）', '', '## 要点', '']
     if (llmResult.points?.length) {
       summaryBlock.push(...llmResult.points.map((p) => `- ${p}`))
@@ -218,14 +244,18 @@ export function buildNote(task, result, { partial = false, llmResult = null, llm
     }
     mid = summaryBlock
     if (llmResult.truncated) {
-      mid.push('', `> ⚠️ 转写过长，模型只读了首尾 ${LLM_TRANSCRIPT_MAX_CHARS} 字，摘要可能遗漏中间内容。`)
+      mid.push('', `> ⚠️ ${kind}过长，模型只读了首尾 ${LLM_TRANSCRIPT_MAX_CHARS} 字，摘要可能遗漏中间内容。`)
     }
   } else {
-    head.push(`> 本笔记由转写链路自动生成：全文来自 fun-asr。`)
-    mid = [`> ⚠️ 本次未做模型整理（原因：${llmError || '模型未配置'}），以下为转写原文。`]
+    head.push(`> 本笔记由${kind}链路自动生成：全文来自 ${engine}。`)
+    mid = [`> ⚠️ 本次未做模型整理（原因：${llmError || '模型未配置'}），以下为${kind}原文。`]
   }
 
-  const content = [...head, '', ...mid, '', '## 全文（带时间戳）', '', transcript, ''].join('\n')
+  const parts = [...head, '', ...mid, '', '## 全文（带时间戳）', '', transcript]
+  if (result?.srt) {
+    parts.push('', '## 字幕（srt）', '', '```srt', String(result.srt).trim(), '```')
+  }
+  const content = [...parts, ''].join('\n')
   return {
     title,
     content,
@@ -239,7 +269,7 @@ export function buildNote(task, result, { partial = false, llmResult = null, llm
  * 终态归档入口（轮询器调用）：查重 → LLM 整理（失败回退原文模板）→ createNote。
  * 返回 { path, reused }；reused=true 表示同 URL 已归档过，没有再写文件。
  */
-export async function archiveTranscript(task, result, { partial = false } = {}) {
+export async function archiveTranscript(task, result, { partial = false, subtitle = false } = {}) {
   const url = String(task.payload?.url ?? '')
   const existing = await findNoteBySourceUrl(url)
   if (existing) return { path: existing.path, reused: true }
@@ -253,7 +283,7 @@ export async function archiveTranscript(task, result, { partial = false } = {}) 
     llmError = err?.message || '模型调用失败'
   }
 
-  const note = buildNote(task, result, { partial, llmResult, llmError })
+  const note = buildNote(task, result, { partial, llmResult, llmError, subtitle })
   try {
     const created = await createNote(note)
     return { path: created.path, reused: false }

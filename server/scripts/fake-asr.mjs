@@ -7,6 +7,7 @@
 //   url 含 "stuck"   → job 永远 running（配合 ASR_JOB_MAX_WAIT_MINUTES 测超时判负）
 //   url 含 "retry"   → 该 URL 第一次提交 job 失败，第二次提交成功（测退回重试）
 //   其他             → job 两拍后 succeeded，返回带 segments 的转写包
+//   /v1/subtitles：url 含 "subok" → found:true 带字幕包；其他 → found:false
 import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 
@@ -84,6 +85,29 @@ const server = createServer((req, res) => {
       submitCounts.set(source, (submitCounts.get(source) || 0) + 1)
       jobs.set(id, { source, polls: 0, attempt: submitCounts.get(source) })
       return send(202, envelope(id, 'queued', { progress: { stage: 'download', done: 0, total: 0, percent: 0 } }))
+    })
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/v1/subtitles') {
+    let body = ''
+    req.on('data', (c) => (body += c))
+    req.on('end', () => {
+      const source = String(JSON.parse(body || '{}').source ?? '')
+      if (source.includes('subok')) {
+        return send(200, {
+          found: true,
+          source: { kind: 'subtitles', input: source, platform: 'bilibili', id: 'BV-SUB', title: '字幕视频标题', uploader: 'up主', duration_sec: 60, webpage_url: source, thumbnail: '', part: null },
+          language: 'zh-Hans',
+          text: '字幕第一句。字幕第二句。',
+          segments: [
+            { start: 0.0, end: 2.0, text: '字幕第一句。' },
+            { start: 2.0, end: 4.0, text: '字幕第二句。' },
+          ],
+          srt: '1\n00:00:00,000 --> 00:00:02,000\n字幕第一句。\n\n2\n00:00:02,000 --> 00:00:04,000\n字幕第二句。\n',
+        })
+      }
+      return send(200, { found: false })
     })
     return
   }

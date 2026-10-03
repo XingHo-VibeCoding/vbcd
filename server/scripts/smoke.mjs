@@ -1,6 +1,7 @@
 // 端到端冒烟测试（零依赖，用 Node 18+ 自带 fetch）
 import http from 'node:http'
 import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 // 用法：
 //   1) 先起后端（可用独立数据目录，避免污染真实资料）：
 //        公开模式（默认）：DATA_DIR=/tmp/buddy-smoke-data PORT=3000 npm run dev
@@ -60,7 +61,7 @@ console.log(`冒烟测试 → ${BASE}`)
 let fakeAsr = null
 async function startFakeAsr() {
   if (!FAKE_ASR_PORT) return false
-  fakeAsr = spawn(process.execPath, [new URL('./fake-asr.mjs', import.meta.url).pathname], {
+  fakeAsr = spawn(process.execPath, [fileURLToPath(new URL('./fake-asr.mjs', import.meta.url))], {
     env: { ...process.env, ASR_PORT: FAKE_ASR_PORT, FAKE_TOKEN: 'fake-token' },
     stdio: 'ignore',
   })
@@ -402,6 +403,36 @@ if (FAKE_ASR_PORT) {
       '转⑨ 非 http(s) url → 400 VALIDATION_FAILED',
       bad.status === 400 && bad.json?.error?.code === 'VALIDATION_FAILED',
       bad.json?.error?.message,
+    )
+
+    // 转⑩ 先字幕：prefer_subtitles 命中字幕 → 同步归档（字幕）+ 正文含 srt 代码块
+    const subUrl = `https://example.com/v/${UNIQ}-subok`
+    const t6 = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: subUrl, category: 'learning', prefer_subtitles: true, formats: ['text', 'segments', 'srt'] } },
+      cookie,
+    })
+    const t6done = t6.status === 201 ? await waitTask(t6.json.data.id, cookie) : null
+    const sPath = /已归档到 (\S+\.md)/.exec(t6done?.result ?? '')
+    const sNoteId = sPath ? sPath[1].split('/').pop().replace(/\.md$/, '') : ''
+    const sNote = sNoteId ? await req('GET', `/api/notes/${encodeURIComponent(sNoteId)}`, { cookie }) : null
+    check(
+      '转⑩ prefer_subtitles 命中字幕 → done（字幕）+ 正文含 srt 代码块',
+      t6.status === 201 && t6done?.status === 'done' && /（字幕）/.test(t6done?.result ?? '') &&
+        /## 字幕（srt）/.test(sNote?.json?.data?.content ?? '') && /```srt/.test(sNote?.json?.data?.content ?? ''),
+      t6done?.result,
+    )
+
+    // 转⑪ 先字幕但无字幕 → 回落转写并归档（结果不含「字幕」字样）
+    const subMissUrl = `https://example.com/v/${UNIQ}-nosub`
+    const t7 = await req('POST', '/api/tasks', {
+      body: { type: 'transcribe_url', payload: { url: subMissUrl, category: 'learning', prefer_subtitles: true } },
+      cookie,
+    })
+    const t7done = t7.status === 201 ? await waitTask(t7.json.data.id, cookie) : null
+    check(
+      '转⑪ prefer_subtitles 无字幕 → 回落转写并归档',
+      t7.status === 201 && t7done?.status === 'done' && /已归档到/.test(t7done?.result ?? '') && !/（字幕）/.test(t7done?.result ?? ''),
+      t7done?.result,
     )
   }
 }

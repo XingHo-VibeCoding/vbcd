@@ -61,10 +61,20 @@ async function call(method, path, body) {
 }
 
 /** 提交转写：wait_seconds=0 → 立即 202 返回 job 信封 {job_id, status, ...} */
-export function submitTranscribe({ url, language, part } = {}) {
+export function submitTranscribe({ url, language, part, formats } = {}) {
   return call('POST', '/v1/transcribe', {
     source: url,
     wait_seconds: 0,
+    ...(language ? { language } : {}),
+    ...(part ? { part: Number(part) } : {}),
+    ...(Array.isArray(formats) && formats.length ? { formats } : {}),
+  })
+}
+
+/** 抓平台字幕（同步秒级）：命中返回 {found:true, source, language, text, segments, srt}，无字幕 {found:false} */
+export function fetchSubtitles({ url, language, part } = {}) {
+  return call('POST', '/v1/subtitles', {
+    source: url,
     ...(language ? { language } : {}),
     ...(part ? { part: Number(part) } : {}),
   })
