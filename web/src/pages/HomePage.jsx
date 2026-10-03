@@ -177,9 +177,9 @@ export default function HomePage() {
   const eventDays = new Set(schedule.map((s) => s.date))
   const week = weekDates(today)
 
-  const rangeLabel = isMonthView
-    ? `${today.getFullYear()} 年 ${today.getMonth() + 1} 月`
-    : `${week[0].getMonth() + 1} 月 ${week[0].getDate()} 日 – ${week[6].getMonth() + 1} 月 ${week[6].getDate()} 日`
+  // 标题两种视图统一为「YYYY 年 M 月」（2026-10-03 使用者裁定）：周视图跨月时
+  // 「9 月 28 日 – 10 月 4 日」的双月写法太抢眼，具体日期格子本身已经把范围表达清楚了。
+  const rangeLabel = `${today.getFullYear()} 年 ${today.getMonth() + 1} 月`
 
   const isDark = theme === 'dark'
 
