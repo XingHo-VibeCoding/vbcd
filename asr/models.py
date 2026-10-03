@@ -32,6 +32,12 @@ class TranscribeRequest(BaseModel):
     options: dict[str, Any] = Field(default_factory=dict)
 
 
+class SubtitleRequest(BaseModel):
+    source: str
+    language: Optional[str] = None        # 优先语种；缺省按内置中文优先列表选
+    part: Optional[int] = None            # B 站分 P（1 起）
+
+
 class Progress(BaseModel):
     stage: Optional[Stage] = None
     done: int = 0

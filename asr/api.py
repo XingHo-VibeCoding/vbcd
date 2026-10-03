@@ -9,9 +9,9 @@ import logging
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
-from . import jobs
+from . import jobs, subtitles
 from .config import get_settings
-from .models import ServiceError, TranscribeRequest
+from .models import ServiceError, SubtitleRequest, TranscribeRequest
 
 log = logging.getLogger("asr.api")
 
@@ -92,3 +92,19 @@ async def delete_job(job_id: str, _=Depends(require_token)):
     if not removed:
         return err_response(ServiceError("JOB_NOT_FOUND", f"job {job_id} 不存在或已被清理"), 404)
     return {"deleted": True}
+
+
+@router.post("/v1/subtitles")
+async def get_subtitles(req: SubtitleRequest, _=Depends(require_token)):
+    """抓平台字幕（同步）：命中返回 {found:true, source, language, text, segments, srt}；
+    无字幕/无中文返回 {found:false}（不报错，供调用方回落到转写）。"""
+    source = req.source.strip()
+    if not source:
+        return err_response(ServiceError("INVALID_SOURCE", "source 不能为空"))
+    try:
+        result = await subtitles.fetch_subtitles(source, req.part, get_settings())
+    except ServiceError as err:
+        return err_response(err)
+    if result is None:
+        return {"found": False}
+    return {"found": True, **result}
