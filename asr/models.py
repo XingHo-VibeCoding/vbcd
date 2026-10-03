@@ -28,6 +28,7 @@ class TranscribeRequest(BaseModel):
     language: Optional[str] = None        # 显式指定语种；缺省由首片探测
     part: Optional[int] = None            # B 站分 P（1 起）
     wait_seconds: float = 0.0             # >0 时限内完成则 200 直接返回结果
+    formats: Optional[list[str]] = None   # 可选输出：含 "srt" 时 result 附带 srt 字幕（text/segments 恒有）
     options: dict[str, Any] = Field(default_factory=dict)
 
 

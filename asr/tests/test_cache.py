@@ -14,6 +14,7 @@ def test_key_differs_by_options():
     base = cache_key("https://a.com/v", {})
     assert base != cache_key("https://a.com/v", {"language": "zh"})
     assert base != cache_key("https://a.com/v", {"part": 2})
+    assert base != cache_key("https://a.com/v", {"formats": ["srt"]})
     assert base != cache_key("https://a.com/v2", {})
 
 

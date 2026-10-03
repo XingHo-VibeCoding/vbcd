@@ -16,7 +16,7 @@ def cache_key(source: str, options: dict[str, Any]) -> str:
     src = source.strip()
     affecting = {
         k: options.get(k)
-        for k in ("language", "part")
+        for k in ("language", "part", "formats")
         if options.get(k) is not None
     }
     raw = json.dumps({"source": src, "options": affecting}, sort_keys=True, ensure_ascii=False)

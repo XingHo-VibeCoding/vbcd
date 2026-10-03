@@ -130,6 +130,8 @@ async def _run_pipeline(job: dict, source: str, options: dict, settings: Setting
             "stats": stats,
             "warnings": warnings,
         }
+        if "srt" in (options.get("formats") or []):
+            result["srt"] = audio.to_srt(merged["segments"])
         cache.put(cache.cache_key(source, options), result, settings.cache_ttl_seconds, jobs_dir)
         _set(job, status="succeeded", stage="merge", done=len(chunks),
              total=len(chunks), result=result, settings=settings)

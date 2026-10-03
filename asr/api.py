@@ -54,7 +54,7 @@ async def transcribe(req: TranscribeRequest, _=Depends(require_token)):
         return err_response(ServiceError("INVALID_SOURCE", "source 不能为空"))
 
     wait = max(0.0, min(float(req.wait_seconds or 0), 120.0))
-    options = {"language": req.language, "part": req.part, **(req.options or {})}
+    options = {"language": req.language, "part": req.part, "formats": req.formats, **(req.options or {})}
     options = {k: v for k, v in options.items() if v is not None}
 
     try:

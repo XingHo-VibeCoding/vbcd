@@ -144,6 +144,30 @@ def fmt_timestamp(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
+def _srt_ts(seconds: float) -> str:
+    """SRT 时间戳 HH:MM:SS,mmm（恒带小时与毫秒，逗号分隔，标准 SRT 格式）。"""
+    ms = max(0, int(round(seconds * 1000)))
+    h, rem = divmod(ms, 3600000)
+    m, rem = divmod(rem, 60000)
+    s, ms = divmod(rem, 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+def to_srt(segments: list[dict]) -> str:
+    """segments（{start, end, text}，秒）→ SRT 字幕文本；空段跳过、序号连续。"""
+    out: list[str] = []
+    n = 0
+    for seg in segments or []:
+        text = str((seg or {}).get("text") or "").strip()
+        if not text:
+            continue
+        n += 1
+        start = _srt_ts(float(seg.get("start") or 0))
+        end = _srt_ts(float(seg.get("end") or seg.get("start") or 0))
+        out.append(f"{n}\n{start} --> {end}\n{text}\n")
+    return "\n".join(out)
+
+
 def merge_chunk_results(chunk_results: list[dict]) -> dict:
     """合并逐片转写结果：时间戳平移（offset 已带实际片长）、排序、去空。
     返回 {text, segments, granularity}；granularity 取各片里最低的一档。"""

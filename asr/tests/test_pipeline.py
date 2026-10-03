@@ -177,3 +177,41 @@ async def test_cache_hit_skips_asr(tmp_path, monkeypatch):
     assert job2["status"] == "succeeded"
     assert job2["result"]["stats"]["cache_hit"] is True
     assert route.call_count == 1   # 第二次没打 ASR
+
+
+@respx.mock
+async def test_srt_included_when_requested(tmp_path, monkeypatch):
+    """formats 含 srt → result 带 srt 字段；不含 → 无 srt 键。"""
+    src = tmp_path / "src.wav"
+    make_wav(src, 2.0)
+    monkeypatch.setattr(sources, "fetch_source", fake_fetch(str(src), 2.0))
+    respx.post(URL).mock(return_value=httpx.Response(200, json=asr_body("一句字幕", 0, 1500)))
+
+    settings = make_settings(tmp_path / "jobs")
+    job = {"job_id": "s1", "status": "queued",
+           "progress": {"stage": "download", "done": 0, "total": 0, "percent": 0},
+           "created_at": "x", "updated_at": "x", "result": None, "error": None}
+    await jobs._run_pipeline(job, "https://x.com/v", {"formats": ["srt"]}, settings)
+
+    assert job["status"] == "succeeded"
+    srt = job["result"].get("srt")
+    assert srt and srt.startswith("1\n00:00:00,000 --> ")
+    assert "一句字幕" in srt
+
+
+@respx.mock
+async def test_no_srt_when_not_requested(tmp_path, monkeypatch):
+    """不传 formats → result 不含 srt 键（默认 text+segments）。"""
+    src = tmp_path / "src.wav"
+    make_wav(src, 2.0)
+    monkeypatch.setattr(sources, "fetch_source", fake_fetch(str(src), 2.0))
+    respx.post(URL).mock(return_value=httpx.Response(200, json=asr_body("一句", 0, 1500)))
+
+    settings = make_settings(tmp_path / "jobs")
+    job = {"job_id": "s2", "status": "queued",
+           "progress": {"stage": "download", "done": 0, "total": 0, "percent": 0},
+           "created_at": "x", "updated_at": "x", "result": None, "error": None}
+    await jobs._run_pipeline(job, "https://x.com/v", {}, settings)
+
+    assert job["status"] == "succeeded"
+    assert "srt" not in job["result"]
