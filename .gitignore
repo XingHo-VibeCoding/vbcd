@@ -48,3 +48,5 @@ logs/
 .tmp-*
 asr/probe-result-*.json
 asr/data/
+# 平台 cookies（登录态，含 SESSDATA 等）：永不入库
+asr/.secrets/

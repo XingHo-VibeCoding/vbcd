@@ -33,6 +33,9 @@ services:
     volumes:
       # 命名卷：临时媒体与 job JSON，不向宿主机 data/ 塞临时产物
       - asr-jobs:/app/jobs
+      # 平台 cookies（B 站 / YouTube 登录态）：宿主放 ./asr/.secrets/*.txt，容器内只读。
+      # 文件名即平台名（bilibili.txt / youtube.txt），代码按来源域名自动选用；.gitignore 已排除。
+      - ./asr/.secrets:/app/secrets:ro
     networks: [internal]
     # 刻意不写 ports：只在 compose 内网被 server 调用，不对外发布
 
