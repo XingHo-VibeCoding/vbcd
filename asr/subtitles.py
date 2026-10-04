@@ -12,7 +12,7 @@ import httpx
 from .audio import to_srt
 from .config import Settings
 from .models import ServiceError
-from .sources import check_url_allowed
+from .sources import check_url_allowed, resolve_cookie_file
 
 # 中文优先语种候选（CC 与自动字幕都试，按顺序取第一个命中）
 ZH_LANGS = ("zh-Hans", "zh-CN", "zh", "ai-zh", "zh-Hant", "zh-TW", "zh-HK")
@@ -121,14 +121,23 @@ def _extract_subtitle_info(url: str, part: int | None, settings: Settings) -> di
         opts["playlist_items"] = str(part)
     if "bilibili" in url or "b23.tv" in url:
         opts["http_headers"]["Referer"] = "https://www.bilibili.com/"
-    if settings.ytdlp_cookies_file:
-        opts["cookiefile"] = settings.ytdlp_cookies_file
+    cookie = resolve_cookie_file(settings, url)
+    if cookie:
+        opts["cookiefile"] = cookie
+    if settings.ytdlp_proxy:
+        opts["proxy"] = settings.ytdlp_proxy
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
     except Exception as err:
+        msg = _clip(str(err))
+        if "412" in msg and ("bilibili" in url or "b23.tv" in url):
+            raise ServiceError(
+                "DOWNLOAD_FAILED", f"字幕抓取失败：{msg}",
+                hint="B 站风控拦截（海外/机房 IP 常见）：配 YTDLP_COOKIES_FILE 登录态 cookies，或走国内出口代理",
+            )
         raise ServiceError(
-            "DOWNLOAD_FAILED", f"字幕抓取失败：{_clip(str(err))}",
+            "DOWNLOAD_FAILED", f"字幕抓取失败：{msg}",
             hint="检查链接可访问性；会员内容需配 YTDLP_COOKIES_FILE",
         )
     if part is not None and info.get("entries"):

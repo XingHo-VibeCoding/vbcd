@@ -51,7 +51,8 @@ class Settings:
     jobs_dir: str = str(Path(__file__).resolve().parent / "data" / "jobs")
 
     # 下载
-    ytdlp_cookies_file: str = ""
+    ytdlp_cookies_file: str = ""           # 单文件 cookie（旧配置，仍生效）
+    ytdlp_cookies_dir: str = ""            # 多平台 cookie 目录：按 {platform}.txt 自动选，优先于单文件
     ytdlp_proxy: str = ""
     ytdlp_user_agent: str = ""
     download_timeout: float = 300.0

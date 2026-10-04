@@ -18,7 +18,7 @@ from .models import ServiceError
 # 常见直链媒体扩展名：命中则跳过 yt-dlp，直接下载（更快、更省依赖行为差异）
 MEDIA_EXTENSIONS = {
     ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus",
-    ".mp4", ".mkv", ".mov", ".webm", ".m4v",
+    ".mp4", ".mkv", ".mov", ".webm", ".m4v", ".m4s",
 }
 
 _YT_UA = (
@@ -109,6 +109,17 @@ def _platform_of(url: str) -> str:
     return "other"
 
 
+def resolve_cookie_file(settings: Settings, source: str) -> str:
+    """按来源平台在 cookies 目录里找 {platform}.txt；找不到回落单文件配置。
+    cookies 目录机制（YTDLP_COOKIES_DIR）用于多平台并存（B 站 / YouTube 各一份），
+    比手工合并 Netscape 文件省事，也比单文件配置好扩展。"""
+    if settings.ytdlp_cookies_dir:
+        candidate = Path(settings.ytdlp_cookies_dir) / f"{_platform_of(source)}.txt"
+        if candidate.is_file():
+            return str(candidate)
+    return settings.ytdlp_cookies_file
+
+
 def _ytdlp_opts(settings: Settings, job_dir: Path, source: str, part: int | None) -> dict:
     opts: dict = {
         "format": "bestaudio/best",
@@ -125,8 +136,9 @@ def _ytdlp_opts(settings: Settings, job_dir: Path, source: str, part: int | None
     if "bilibili.com" in source or "b23.tv" in source:
         # B 站校验 Referer（PLAN §4.1）
         opts["http_headers"]["Referer"] = "https://www.bilibili.com/"
-    if settings.ytdlp_cookies_file:
-        opts["cookiefile"] = settings.ytdlp_cookies_file
+    cookie = resolve_cookie_file(settings, source)
+    if cookie:
+        opts["cookiefile"] = cookie
     if settings.ytdlp_proxy:
         opts["proxy"] = settings.ytdlp_proxy
     return opts
@@ -147,9 +159,17 @@ def _download_ytdlp(source: str, part: int | None, job_dir: Path, settings: Sett
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(source, download=True)
     except Exception as err:  # yt_dlp.utils.DownloadError 等
+        msg = _clip(str(err))
+        # B 站 412 = WAF 风控拦 IP（海外/机房出口几乎必中）。此时 cookies/代理是唯一解法，
+        # 同 IP 重试无意义，故保持 retryable=False。
+        if "412" in msg and _platform_of(source) == "bilibili":
+            raise ServiceError(
+                "DOWNLOAD_FAILED", f"下载失败：{msg}",
+                hint="B 站风控拦截（海外/机房 IP 常见）：配 YTDLP_COOKIES_FILE 登录态 cookies，或走国内出口代理",
+            )
         raise ServiceError(
             "DOWNLOAD_FAILED",
-            f"下载失败：{_clip(str(err))}",
+            f"下载失败：{msg}",
             hint="检查链接是否可公开访问；会员/番剧内容需配 YTDLP_COOKIES_FILE",
         )
 
@@ -195,16 +215,26 @@ def _download_ytdlp(source: str, part: int | None, job_dir: Path, settings: Sett
     )
 
 
+def _direct_headers(source: str, settings: Settings) -> dict:
+    """直链下载请求头。B 站 CDN（bilivideo.com）无 Referer 一律 412，必须带上。"""
+    headers = {"User-Agent": settings.ytdlp_user_agent or _YT_UA}
+    host = (urlparse(source).hostname or "").lower()
+    if "bilivideo" in host or "bilibili" in host or "b23" in host:
+        headers["Referer"] = "https://www.bilibili.com/"
+    return headers
+
+
 async def _download_direct(source: str, job_dir: Path, settings: Settings) -> SourceInfo:
     """直链媒体：httpx 流式下载。重定向目标每次都要重新过 SSRF 校验。"""
     name = Path(urlparse(source).path).name or "media"
     dest = job_dir / f"src-{name}"
 
     timeout = httpx.Timeout(settings.download_timeout)
+    headers = _direct_headers(source, settings)
     try:
         async with httpx.AsyncClient(
             timeout=timeout, follow_redirects=False, max_redirects=5,
-            headers={"User-Agent": settings.ytdlp_user_agent or _YT_UA},
+            headers=headers,
         ) as client:
             url = source
             for _ in range(5):
