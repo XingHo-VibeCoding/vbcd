@@ -54,7 +54,9 @@ class TestYtdlpOpts:
         (secrets / "bilibili.txt").write_text("c")
         s = Settings(ytdlp_cookies_dir=str(secrets))
         opts = _ytdlp_opts(s, tmp_path, "https://www.bilibili.com/video/BV1", None)
-        assert opts["cookiefile"] == str(secrets / "bilibili.txt")
+        # cookiefile 是 job 目录里的可写副本（yt-dlp 会回写），不是原只读路径
+        assert opts["cookiefile"] == str(tmp_path / "cookies.txt")
+        assert Path(opts["cookiefile"]).read_text() == "c"
 
     def test_proxy_passthrough(self, tmp_path):
         s = Settings(ytdlp_proxy="socks5://127.0.0.1:1080")

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import shutil
 import socket
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -138,7 +139,11 @@ def _ytdlp_opts(settings: Settings, job_dir: Path, source: str, part: int | None
         opts["http_headers"]["Referer"] = "https://www.bilibili.com/"
     cookie = resolve_cookie_file(settings, source)
     if cookie:
-        opts["cookiefile"] = cookie
+        # yt-dlp 会以读写方式打开 cookiefile（下载后回写更新的登录态）。
+        # /app/secrets 是只读挂载 → 复制一份到 job 临时目录（可写，用完即删）。
+        writable = job_dir / "cookies.txt"
+        shutil.copyfile(cookie, writable)
+        opts["cookiefile"] = str(writable)
     if settings.ytdlp_proxy:
         opts["proxy"] = settings.ytdlp_proxy
     return opts

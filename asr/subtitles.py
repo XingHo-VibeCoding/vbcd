@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import re
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -121,9 +124,16 @@ def _extract_subtitle_info(url: str, part: int | None, settings: Settings) -> di
         opts["playlist_items"] = str(part)
     if "bilibili" in url or "b23.tv" in url:
         opts["http_headers"]["Referer"] = "https://www.bilibili.com/"
+    cookie_tmp_path = None
     cookie = resolve_cookie_file(settings, url)
     if cookie:
-        opts["cookiefile"] = cookie
+        # 与 sources._ytdlp_opts 同理：cookiefile 必须可写（yt-dlp 会回写登录态）。
+        # 字幕链路没有 job 目录，用临时文件，finally 里保证删掉。
+        tmp = tempfile.NamedTemporaryFile(prefix="asr-cookies-", suffix=".txt", delete=False)
+        tmp.close()
+        shutil.copyfile(cookie, tmp.name)
+        opts["cookiefile"] = tmp.name
+        cookie_tmp_path = tmp.name
     if settings.ytdlp_proxy:
         opts["proxy"] = settings.ytdlp_proxy
     try:
@@ -140,6 +150,9 @@ def _extract_subtitle_info(url: str, part: int | None, settings: Settings) -> di
             "DOWNLOAD_FAILED", f"字幕抓取失败：{msg}",
             hint="检查链接可访问性；会员内容需配 YTDLP_COOKIES_FILE",
         )
+    finally:
+        if cookie_tmp_path:
+            Path(cookie_tmp_path).unlink(missing_ok=True)
     if part is not None and info.get("entries"):
         info = info["entries"][0]
     return info
