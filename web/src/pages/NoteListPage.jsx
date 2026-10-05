@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { listNotes } from '../api/notes'
 import NoteFileList from '../components/NoteFileList.jsx'
 import StateBlock from '../components/StateBlock.jsx'
+import ImaPanel from '../components/ImaPanel.jsx'
 
 const CATEGORIES = [
   { value: '', label: '全部' },
@@ -30,12 +31,15 @@ export default function NoteListPage() {
   // 写进地址栏而不是 state/localStorage——刷新、前进后退、把链接发给手机都能保持视图。
   const [searchParams, setSearchParams] = useSearchParams()
   const isDirView = searchParams.get('view') === 'dir'
+  // F15 · 来源切换：?src=ima 为云端（ima 知识库只读视图），缺省/其他值一律本地。
+  const src = searchParams.get('src') === 'ima' ? 'ima' : 'local'
   // Day 12：无结果时要区分「被筛掉了」和「本来就没资料」——前者该引导清空筛选，
   // 后者才该引导去归档；两者共用一句「+ 归档」会把人带偏。
   const hasFilter = q.trim() !== '' || category !== ''
 
   // 搜索 250ms 防抖；分类变化立即重新请求（F3：打开/输入即刷新）
   useEffect(() => {
+    if (src === 'ima') return // 云端形态的数据由 ImaPanel 自取，本地接口不白打一发
     setLoading(true)
     setError('')
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -49,7 +53,7 @@ export default function NoteListPage() {
         .finally(() => setLoading(false))
     }, 250)
     return () => clearTimeout(debounceRef.current)
-  }, [q, category, retryTick, navigate])
+  }, [q, category, retryTick, navigate, src])
 
   const { total, items, rebuilt, rebuiltAt, rebuiltInMs } = result
   const indexNote = rebuiltAt
@@ -71,49 +75,76 @@ export default function NoteListPage() {
   return (
     <section>
       <div className="toolbar">
-        <input
-          className="search-input"
-          type="search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="搜索标题、内容或标签…"
-        />
-        <select value={category} onChange={(e) => setCategory(e.target.value)}>
-          {CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        <div className="view-switch" role="group" aria-label="列表视图">
+        {/* F15 · 来源切换放工具栏最前：本地视图除了多出这一组按钮，其余控件照旧 */}
+        <div className="view-switch" role="group" aria-label="资料来源">
           <button
             type="button"
-            aria-pressed={!isDirView}
-            className={isDirView ? '' : 'active'}
+            aria-pressed={src === 'local'}
+            className={src === 'local' ? 'active' : ''}
             onClick={() => setSearchParams({})}
           >
-            卡片
+            本地
           </button>
           <button
             type="button"
-            aria-pressed={isDirView}
-            className={isDirView ? 'active' : ''}
-            onClick={() => setSearchParams({ view: 'dir' })}
+            aria-pressed={src === 'ima'}
+            className={src === 'ima' ? 'active' : ''}
+            onClick={() => setSearchParams({ src: 'ima' })}
           >
-            目录
+            云端
           </button>
         </div>
+        {src === 'local' && (
+          <>
+            <input
+              className="search-input"
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="搜索标题、内容或标签…"
+            />
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              {CATEGORIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <div className="view-switch" role="group" aria-label="列表视图">
+              <button
+                type="button"
+                aria-pressed={!isDirView}
+                className={isDirView ? '' : 'active'}
+                onClick={() => setSearchParams({})}
+              >
+                卡片
+              </button>
+              <button
+                type="button"
+                aria-pressed={isDirView}
+                className={isDirView ? 'active' : ''}
+                onClick={() => setSearchParams({ view: 'dir' })}
+              >
+                目录
+              </button>
+            </div>
+          </>
+        )}
         <Link className="btn-primary" to="/archive">
           + 归档
         </Link>
       </div>
 
-      {/* 错误时不说「共 N 条」：这个数字此时不可信 */}
-      {state === 'error' ? null : (
-        <p className="meta">
-          共 {total} 条 · {indexNote}
-        </p>
-      )}
+      {src === 'ima' ? (
+        <ImaPanel />
+      ) : (
+        <>
+          {/* 错误时不说「共 N 条」：这个数字此时不可信 */}
+          {state === 'error' ? null : (
+            <p className="meta">
+              共 {total} 条 · {indexNote}
+            </p>
+          )}
 
       <StateBlock
         state={state}
@@ -158,6 +189,8 @@ export default function NoteListPage() {
           </ul>
         )}
       </StateBlock>
+        </>
+      )}
     </section>
   )
 }

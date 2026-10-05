@@ -236,7 +236,10 @@ body {
   gap: var(--sp-3);
 }
 
-.note-item a {
+/* F15：云端只读视图里的「不可点行」（搜索结果/条目）与可点的 a 共用同一卡片盒子；
+   全走既有 token，不新增色值与间距裸值。文件夹行仍是 Link（a），保留 hover。*/
+.note-item a,
+.note-item > div {
   display: block;
   background: var(--surface);
   border: 1px solid var(--border);
