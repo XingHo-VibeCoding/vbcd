@@ -23,6 +23,8 @@ vbcd/
 ├── SPEC.md              # 本文件
 ├── README.md / RUN.md   # 项目说明 / 运行说明
 ├── docker-compose.yml   # 部署（Nginx + server + Chroma + asr）
+├── db/                  # 数据库（Day 16 起）：schema.sql 建表 + seed.sql 幂等种子；
+│                        #   目标库 PostgreSQL，迁移路线见 §7.3（尚未写进 docker-compose.yml）
 ├── web/                 # 前端 React + Vite
 │   ├── nginx.conf       # 生产：SPA 回退 + SSE 关缓冲
 │   └── src/
