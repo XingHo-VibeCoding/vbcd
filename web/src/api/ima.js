@@ -11,12 +11,13 @@ function qs(obj) {
 }
 
 /** 列知识库：返回 { items:[{id,name,cover_url,description,recommended_questions,member_count,content_count,...}], next_cursor, has_more } */
-export function listImaKbs({ q = '', cursor = '', limit = 50 } = {}) {
+// ima 上游 limit 实测上限 20（文档写 50 不实，服务端也会夹紧）；写大毫无意义
+export function listImaKbs({ q = '', cursor = '', limit = 20 } = {}) {
   return request(`/api/ima/kbs${qs({ q, cursor, limit })}`)
 }
 
 /** 浏览条目：文件与文件夹混排（kind 区分），返回 { items, current_path, next_cursor, has_more } */
-export function listImaItems({ kb_id, folder_id = '', cursor = '', limit = 50 } = {}) {
+export function listImaItems({ kb_id, folder_id = '', cursor = '', limit = 20 } = {}) {
   return request(`/api/ima/items${qs({ kb_id, folder_id, cursor, limit })}`)
 }
 

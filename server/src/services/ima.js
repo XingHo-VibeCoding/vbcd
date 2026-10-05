@@ -15,7 +15,10 @@ import { fail } from './errors.js'
 const CACHE_MAX = 200 // 缓存条数上限（FIFO 驱逐）
 const DEFAULT_TIMEOUT_MS = 15000
 const DEFAULT_TTL_MS = 60_000
-const LIMIT_MAX = 50 // ima limit 参数上限（上游文档：1-50）
+const LIMIT_MAX = 50 // ima limit 参数上限（上游文档：1-50；探针实测 search_knowledge_base 实际接受上限是 20）
+// 上游部分端点（实测 search_knowledge_base；get_knowledge_list 文档写 50 但未验证）真实上限是 20。
+// 我方的对外口径不变（1-50），内部在发出上游请求时夹紧到上游真上限，分页交给 next_cursor。
+const LIMIT_UPSTREAM_CAP = 20
 const Q_MAX = 200 // buddy 侧对搜索词的本地限制
 const KB_ID_MAX = 128
 const TRUNCATED_AT = 100 // 单库搜索返回条数达到此值视为可能被截断
@@ -120,13 +123,14 @@ async function callCached(path, body) {
 
 // ---------- 参数校验 ----------
 
-function limitParam(raw, fallback = 20) {
-  if (raw === undefined || raw === '') return fallback
+function limitParam(raw, fallback = 20, cap = LIMIT_MAX) {
+  if (raw === undefined || raw === '') return Math.min(fallback, cap)
   const n = Number(raw)
   if (!Number.isInteger(n) || n < 1 || n > LIMIT_MAX) {
     throw fail('VALIDATION_FAILED', `limit 需为 1–${LIMIT_MAX} 的整数`, 400)
   }
-  return n
+  // 超上游上限就夹紧（文档写 1-50 不实，但上游接口对部分端点拒收 >20）
+  return Math.min(n, cap)
 }
 
 function required(value, label, max = Q_MAX) {
@@ -198,7 +202,7 @@ export async function listKbs({ q = '', cursor = '', limit } = {}) {
   const data = await callCached('openapi/wiki/v1/search_knowledge_base', {
     query: String(q ?? '').trim().slice(0, Q_MAX),
     cursor: String(cursor ?? ''),
-    limit: limitParam(limit),
+    limit: limitParam(limit, 20, LIMIT_UPSTREAM_CAP),
   })
   const items = (data.info_list ?? []).map((raw) => ({
     id: String(raw?.kb_id ?? raw?.id ?? ''),
@@ -221,7 +225,7 @@ export async function listItems({ kb_id, folder_id = '', cursor = '', limit } = 
   const data = await callCached('openapi/wiki/v1/get_knowledge_list', {
     knowledge_base_id: kbId,
     cursor: String(cursor ?? ''),
-    limit: limitParam(limit),
+    limit: limitParam(limit, 20, LIMIT_UPSTREAM_CAP),
     ...(folder_id ? { folder_id: String(folder_id) } : {}),
   })
   return {
