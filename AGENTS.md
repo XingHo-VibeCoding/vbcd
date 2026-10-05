@@ -147,6 +147,14 @@
   - **板块③ 四种状态**（`a982ae8`）：新增 `components/StateBlock.jsx`（四态**互斥**、播报容器**常驻 DOM**、正常态内容放在容器**外**、错误态用 `role="alert"` + assertive）；`/notes` 接入并新增「错误 → **重试**」与「空（被筛掉）→ **清空筛选条件**」（后者正是 Day 12 留证记的建议项）；行为变更 3 处并已如实汇报（错误态不再与空态并存、错误时隐藏「共 N 条」、失败时不再保留旧列表）；**本板块零 CSS 改动**；
   - **验证与留证**：`npm run build` 通过（模块 292 → **295**）；`grep transition\|animation` 无输出；`#` 色值仍只在两个 token 块内；**空态用真实接口验过**（`?q=zzzz` → `total:0`）、正常态 `total:6`；`server/scripts/smoke.mjs` 公开模式 **20/20、0 失败**（临时数据目录，跑完停服并清理，未碰真实资料与 docker 栈）；
   - ⚠️ **未做/待拍板**：`?state=` 预览开关（使用者明确不要）、四态只覆盖 `/notes`、顶部导航「当前项」视觉标记、`.detail-back` 两处重复字号声明未合并；**线上 `:80` 仍是镜像里的旧产物**，验收需 `docker compose up -d --build web`（未执行）。
+- **Day 16（2026-10-05）**：✅ 第 3 周「云端链路」开场：数据模型设计 → 建表 → 种子脚本 → select 验证，**全部落在现有项目结构内**（不走 CloudBase，截图口径见下）。
+  - **选型**：使用者裁定「把 Day 16 转移到当前项目结构下」→ 采用 **PostgreSQL**（本地已有 `postgres:18-alpine` 镜像，Docker Hub 不可达也能离线跑）；与 `SPEC.md` §7.3「文件存储 → 数据库」迁移路径一致。**依旧不走 CloudBase**（延续 2026-09-25 决定），因此**截图口径改为「本机数据库输出」**，与清单原文「CloudBase 控制台数据库的表数据页」有偏差 —— 这一处待使用者按 `PRD.md` 第 8 章风险 1 与队长确认。
+  - **两张核心表**：`notes`（资料，11 字段）+ `tasks`（任务，12 字段）；**关联字段 `tasks.note_id → notes.id`，删除行为 `ON DELETE SET NULL`**（用 `RESTRICT` 会被 `delete_note` 任务自锁，已在事务内实测验证并 `ROLLBACK`）；`notes.tags` 用 `text[]` + GIN 索引，故**不需要第三张标签表**；`type` / `status` / `origin` 用 `CHECK`（代码里的封闭集合），`category` 用 `text`（用户侧开放集合）；主键用**业务 id**（text）而非自增代理键，迁移期无需新旧 id 映射、API 契约不变。
+  - **新增文件（仅 2 个，均属 Day 16）**：`db/schema.sql`（建表 + 索引 + 约束 + **逐字段 COMMENT**；幂等，重复执行退出码 0）、`db/seed.sql`（**虚构样例**数据 6 + 6 行，`ON CONFLICT (id) DO NOTHING` 保证重复执行打印 `INSERT 0 0` 不报错；`hash` 用 PG 内置 `sha256()` 按 body 现算）。
+  - **验证（原始输出已留存于会话）**：`\dt` 列出两张表；`\d+` 显示外键、3 条 CHECK 与全部字段注释；`notes=6 / tasks=6`，`tasks` 覆盖全部 5 种类型；关联查询 3 行对上资料标题、3 行 `note_id` 为空；事务内删除资料证明 `note_id` 自动置空。
+  - **并行避让（§10.3 单写者）**：作业当时本机有**第二个 pi 会话**在改 `server/`（`routes/ima.js`、`services/ima.js`、`app.js`、`.env.example` 均未提交且仍在写）→ 本次**只新增 `db/` 两个文件**，未改 `server/`、`web/`、`docker-compose.yml`；数据库起独立容器 `day16-pg`（只绑 `127.0.0.1:55432`、独立卷 `day16-pg-data`、不加入 compose，口令只存在于会话不入文件）；提交只 `git add` 明确路径、**不用 `-A`**。
+  - 🔎 **规则缺口（本轮发现）**：`AGENTS.md` §10 只覆盖「一个主会话 + N 个子 agent」的形状；**两个独立 pi 主会话共用同一工作目录**这种情形**没有任何落地机制**（实测：无 git hook、无 CI、无第二 worktree、无锁）。本轮以「路径不相交 + 提交串行」兜底。是否要把「并行主会话」补进 §10，**待使用者拍板**，本轮未动规则文件。
+  - **未做（属后续）**：任何接口（Day 17 才开始）、前端改动、把库写进 `docker-compose.yml`、`server/src/storage/` 的数据访问层；⚠️ 待办：`db/` 目前没有「一键起库」入口，`RUN.md` 也未记 Day 16 的起库步骤（均留待 Day 17 接 compose 时补）；`SPEC.md` §7.3 的三步迁移只完成了第 1 步里的「建表」。
 
 ## 5. buddy 项目规则（产品行为的铁律）
 
