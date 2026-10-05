@@ -222,7 +222,7 @@ curl -i -X POST http://localhost:3000/api/login \
 | `/api/confirmations`：确认留痕 | 会话持久化：存内存，重启服务需重新登录 |
 | `/api/me`：个人主页数据 | 直接删除资料的接口（只能经 F6 确认流触发） |
 | `/api/kb/*`：问答三接口（需配 env，见 8.6） | 公网 HTTPS 部署（见 8.7） |
-| 转写：`type=transcribe_url` 任务（需配 env，见 8.8） | 独立的转写对外接口（复用任务链路，共 13 个接口） |
+| 转写：`type=transcribe_url` 任务（需配 env，见 8.8） | 独立的转写对外接口（复用任务链路，共 16 个接口） |
 
 ### 8.5 目录速查（后端）
 
@@ -415,6 +415,28 @@ node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 
 
 测试专用开关：`ORGANIZE_ALLOW_LOOPBACK=1` 时**只放行回环地址**（127.0.0.1 / localhost / ::1，仅供 `link-selftest.mjs` 与本地冒烟打假服务器）；
 内网网段（10./172.16-31./192.168.）与云元数据地址（169.254.169.254）**无论如何都拦**。上线与日常开发一律不要开。
+
+### 8.10 ima 云端知识库只读视图（F15）
+
+在 `/notes` 页「云端」标签看你 ima（ima.qq.com）里的知识库。**只读**：不写 `data/`、不进向量库、不落缓存文件；Key 只在 `server/.env`。
+
+```bash
+# ① 启用：server/.env 加两行（ima 开放平台自建，https://ima.qq.com/agent-interface）
+#   IMA_OPENAPI_CLIENTID=<你的 ClientID>
+#   IMA_OPENAPI_APIKEY=<你的 ApiKey>   # 泄露 = 知识库内容泄露，勿入库勿截图
+# ② 重启后端后在 /notes 页点「云端」即可；不配 Key 也能跑，云端页显示说明性空态
+```
+
+接口（只读，3 个）：`GET /api/ima/kbs`（库列表）、`GET /api/ima/items?kb_id=…[&folder_id=…]`（浏览，文件夹可下钻）、`GET /api/ima/search?kb_id=…&q=…`（库内搜索）。前端跨库搜索是扇出并发（上限 4），不是后端聚合。
+
+踩坑：
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| `IMA_UPSTREAM_FAILED: invalid SearchKnowledgeBaseReq.Limit` | 上游文档写 limit 上限 50，**实测 `search_knowledge_base` 只收 ≤20**；前端曾默认传 50 | 已修：对外收 1–50，发上游时夹紧到 20；分页走 `next_cursor` |
+| 云端页一直转圈 | `IMA_*` 没配 → 接口 503 | 配 Key 重启；不想配可忽略（功能默认关闭） |
+
+测试（不烧真 Key）：`SMOKE_FAKE_IMA_PORT=8097` + 后端 `IMA_BASE_URL=http://127.0.0.1:8097 IMA_OPENAPI_CLIENTID=fake-cid IMA_OPENAPI_APIKEY=fake-key` → `smoke.mjs` 会自动拉起 `scripts/fake-ima.mjs` 桩并跑 im①–im⑦（字段映射/混排/校验/上游错误透传/高亮剥标签+截断/缓存命中/隐私未登录 401）。
 
 ## 9. 用 Obsidian 查看资料（F1）
 

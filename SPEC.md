@@ -68,7 +68,7 @@ vbcd/
 - **颜色只有一处定义**：`web/src/styles.css` 的 `:root`（浅色）与 `:root[data-theme='dark']`（深色覆盖），两套同名 token；组件规则里不出现硬编码色值。
 - **真值**：`<html data-theme="light|dark">`；首屏由 `web/index.html` 的内联脚本在渲染前写好（避免浅色闪一下），运行期读写归 `web/src/theme.js`。
 - **默认与持久化**：无 `localStorage['buddy-theme']` 时跟随系统 `prefers-color-scheme`；用户点过之后固定，写入该键（仅 `light`/`dark`，写失败静默不报错）。
-- **服务端不参与**：不写 `data/profile.md`，不新增接口（接口仍 13 个），不跨设备同步。
+- **服务端不参与**：不写 `data/profile.md`，不新增接口，不跨设备同步。
 - **无动画**：不引入 `transition` / `animation` / `@keyframes`；深色下原生控件由 `color-scheme` 跟随。
 - **关于页热力图色（F11）**：两套主题各 3 个 `--contrib-*`（0 档复用 `--surface-hover`）。
 
@@ -91,6 +91,7 @@ vbcd/
 一级 · 顶部导航常驻 5 项（同级切换，<Link>；当前项 Day 13 起带 aria-current="page"）
 ├── /        主页      └ ?cal=week（默认） | month
 ├── /notes   档案      └ ?view=card（默认） | dir
+│                       └ ?src=local（默认） | ima（F15 云端只读视图，见 3.6）
 ├── /log     日志      └ ?tab=tasks（默认） | confirm（确认留痕）
 ├── /ask     agent 问答   （无参数：提问内容是临时输入，不入地址栏）
 └── /about   关于      └ ?tab=intro（默认） | activity
@@ -195,7 +196,7 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（13 个）
+## 3. API 列表（16 个）
 
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录。
 > 删除资料不单独开接口，复用任务链路（`POST /api/tasks` + `type=delete_note`）并强制走 3.3 确认流。
@@ -215,6 +216,9 @@ vbcd/
 | 11 | `POST /api/kb/index` | 触发增量索引（F9） | 无 | `200 {added, updated, removed, unchanged, chunks}` | `KB_NOT_CONFIGURED`、`CHROMA_UNAVAILABLE`、`LLM_FAILED` |
 | 12 | `GET /api/me` | 个人主页（头像 / 昵称 / 简介 / 日程） | — | `200 {profile:{nickname,avatar,bio}, schedule:[{date,time,title}]}` | `INTERNAL` |
 | 13 | `GET /api/confirmations` | 确认留痕回看（F6） | `task_id?` | `200 {total, items[]}` | `INTERNAL` |
+| 14 | `GET /api/ima/kbs` | ima 知识库列表（F15，只读） | `q?`、`cursor?`、`limit?`（1–50，上游夹紧至 20） | `200 {items[], next_cursor, has_more}` | `IMA_NOT_CONFIGURED`、`IMA_UPSTREAM_FAILED`、`VALIDATION_FAILED` |
+| 15 | `GET /api/ima/items` | ima 库内条目/文件夹浏览（F15，只读） | `kb_id`（必填）、`folder_id?`、`cursor?`、`limit?`（同上） | `200 {items[], current_path[], next_cursor, has_more}` | 同上 |
+| 16 | `GET /api/ima/search` | ima 库内内容搜索（F15，只读） | `kb_id`（必填）、`q`（必填）、`cursor?` | `200 {items[], truncated, next_cursor, has_more}` | 同上 |
 
 ### 3.1 知识库问答（F9）
 
@@ -258,7 +262,7 @@ vbcd/
 
 ### 3.4 视频/音频转写链路（F13）
 
-**入口**：`POST /api/tasks` 带 `type=transcribe_url` + `payload={url, category?, tags?, language?, part?, prefer_subtitles?, formats?}`——**不新增对外接口**（仍 13 个）。归档是 F1 同级写操作，不设确认闸门；高风险外部动作规则不变。
+**入口**：`POST /api/tasks` 带 `type=transcribe_url` + `payload={url, category?, tags?, language?, part?, prefer_subtitles?, formats?}`——**不新增对外接口**（F15 之前为 13 个）。归档是 F1 同级写操作，不设确认闸门；高风险外部动作规则不变。
 
 **payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work`；`part` 为 B 站分 P 序号（≥1 整数）；`tags` ≤10 个；`prefer_subtitles` 为布尔（显式 `true` 才启用「先字幕」，默认 `false` 纯转写）；`formats` 为 `text|segments|srt` 子集（含 `srt` 时资料正文附带 srt 代码块）。
 
@@ -280,7 +284,7 @@ vbcd/
 
 ### 3.5 链接收敛链路（F14 / `organize`）
 
-**入口**：归档页「收敛」或 `POST /api/tasks` 带 `type=organize` + `payload={url, category?, tags?}`——**不新增对外接口**（仍 13 个）。归档是 F1 同级写操作，不设确认闸门（读取外部网页不算对外动作）。
+**入口**：归档页「收敛」或 `POST /api/tasks` 带 `type=organize` + `payload={url, category?, tags?}`——**不新增对外接口**（F15 之前为 13 个）。归档是 F1 同级写操作，不设确认闸门（读取外部网页不算对外动作）。
 
 **payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work`；`tags` ≤10 个。
 
@@ -299,6 +303,38 @@ vbcd/
 **失败落点**（均写进 `task.result` 中文文案，不是 HTTP 错误码）：非 http(s) 提交时 400；内网/云元数据 → `failed`「出于安全已阻止」；下载失败/超时/非 HTML/正文不足 → `failed` 带原因与出路；LLM 失败 → 仍归档；`createNote` 失败 → `failed` 可退回重试。
 
 **与 F13 的边界**：视频站链接（bilibili/youtube 等）仍走本文通用抓取（拿到标题+简介），但会在正文里提示「要逐句时间戳请改用视频转写」；不做自动改走转写。
+
+### 3.6 ima 云端知识库只读视图（F15）
+
+**定位**：把腾讯 ima（`ima.qq.com`）的云端知识库以「只读」方式接进 `/notes` 页「云端」标签。**内容零落盘**——不写 `data/`、不进向量库、不落缓存文件；只在进程内存里按「方法+参数」做 TTL 缓存（默认 60s，重启即失）。
+
+**凭证**：`IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY`（`server/.env`，ima 开放平台自建，权限等同知识库内容本身）。**未配置时**：三个端点全部返回 `503 IMA_NOT_CONFIGURED`，前端显示说明性空态（指引去 `server/.env` 配置），不是错误页。
+
+**三个接口（只读 GET，`services/ima.js` + `routes/ima.js`）**：
+
+| 端点 | 上游（ima openapi） | 返回字段 |
+|---|---|---|
+| `GET /api/ima/kbs` | `POST openapi/wiki/v1/search_knowledge_base` | `{items:[{id,name,cover_url,description,recommended_questions[],member_count,content_count,role_type,base_type}], next_cursor, has_more}` |
+| `GET /api/ima/items` | `POST openapi/wiki/v1/get_knowledge_list` | `{items:[{kind:entry|folder,id,name,parent_folder_id,media_type,file_number,folder_number}], current_path[], next_cursor, has_more}` |
+| `GET /api/ima/search` | `POST openapi/wiki/v1/search_knowledge` | `{items:[{kind,id,name,parent_folder_id,highlight}], truncated, next_cursor, has_more}` |
+
+**字段映射**：上游字段名与文档不完全一致（2026-10-05 实测）——知识库是 `kb_id`/`kb_name`（不是 `id`/`name`）；信封是 `{code, msg, data}`（不是 `retcode`/`errmsg`）。代码同时兼容两套字段名。
+
+**上游 `limit` 上限与文档不符**：文档写 1–50，实测 `search_knowledge_base` 上限是 **20**（`invalid SearchKnowledgeBaseReq.Limit`）。对外口径仍收 1–50，发出上游请求时夹紧到 `LIMIT_UPSTREAM_CAP=20`，分页交给 `next_cursor`。
+
+**`kind` 判定**：`folder_id` 存在且 `media_id` 缺失 → `folder`；否则 → `entry`。文件夹可下钻（重调 `items` 传 `folder_id`）；条目不可点击（ima 无单条正文 API）。
+
+**`truncated`**：`items.length >= 100` 时置 `true`（上游 `search_knowledge` 一次最多返回 100 条，是软截断的标志而非错误）。
+
+**`highlight`**：上游返回的 `highlight_content` 含 `<em>` 等 HTML；后端默认剥标签（`highlight_mode=raw` 保留原样）。
+
+**缓存**：`IMA_CACHE_TTL_MS`（默认 60000）内的相同请求不再打上游；只对成功结果缓存（错误每次重查）；键含方法+全量参数。
+
+**认证**：与全站同口径——`AUTH_ENABLED=1` 时走 `requireAuth`（无 Cookie 401）；公开模式下开放。
+
+**前端**：`web/src/api/ima.js` 三封装 + `web/src/components/ImaPanel.jsx` 三形态（库卡片 / 浏览+面包屑 / 搜索），`/notes` 工具栏加「本地 / 云端」切换，地址栏承载 `?src=ima&kb=&folder=&q=`。
+
+**冒烟**：`server/scripts/fake-ima.mjs`（桩）+ `SMOKE_FAKE_IMA_PORT` 环境变量，断言 7 条（im①–im⑦）：字段映射、混排+面包屑、参数校验、上游错误透传、高亮剥标签+截断、缓存命中、隐私模式未登录 401。
 
 ## 4. 数据流
 
@@ -333,6 +369,8 @@ vbcd/
 | `CHROMA_UNAVAILABLE` | 503 | 向量库连不上或异常 |
 | `ASR_NOT_CONFIGURED` | 503 | 转写服务未配置（缺 `ASR_SERVICE_URL`），仅出现在任务 result，不作响应码 |
 | `ASR_UNAVAILABLE` | 503 | 转写服务不可达 / 超时（同上：落任务 result，接口仍返回 201） |
+| `IMA_NOT_CONFIGURED` | 503 | ima 未配置（缺 `IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY`） |
+| `IMA_UPSTREAM_FAILED` | 503 | ima 上游不可达 / 超时 / `code≠0`（errmsg 透传进 `error.message`） |
 | `INTERNAL` | 500 | 其他未预期错误 |
 
 ### 5.3 用户可见文案
@@ -427,6 +465,11 @@ vbcd/
 | `ORGANIZE_STALE_MS` | `240000` | `doing` 超过此时长未动算僵死（须 > fetch+LLM 最坏耗时） | ⬜ |
 | `ORGANIZE_MAX_ATTEMPTS` | `3` | 僵死重试上限，超过判 failed | ⬜ |
 | `ORGANIZE_ALLOW_LOOPBACK` | `0` | =1 时**只放行回环地址**（127.0.0.1/localhost/::1），仅供本地假服务器自测；内网与云元数据地址恒拦 | 🟡 |
+| `IMA_OPENAPI_CLIENTID` | （必填启用时） | F15：ima 开放平台 ClientID（自建） | 🔴 |
+| `IMA_OPENAPI_APIKEY` | （必填启用时） | F15：ima 开放平台 ApiKey（泄露等同知识库内容泄露） | 🔴 |
+| `IMA_BASE_URL` | `https://ima.qq.com` | ima 域名；仅供冒烟桩覆盖（`SMOKE_FAKE_IMA_PORT`） | ⬜ |
+| `IMA_HTTP_TIMEOUT_MS` | `15000` | 单次 ima 调用超时 | ⬜ |
+| `IMA_CACHE_TTL_MS` | `60000` | 上游成功响应的进程内缓存时长；`0`=关闭（不落盘） | ⬜ |
 
 `asr/` 服务侧变量见 `asr/.env.example`（完整清单以样例文件为准；高频项：`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / `MAAS_BASE_URL` / `ASR_MODEL` / `ASR_CHUNK_SECONDS` / **`ASR_MAX_AUDIO_SECONDS=300`（上游单请求时长硬上限，启动时把 `ASR_CHUNK_SECONDS` 夹紧到 ≤ 本值）** / `ASR_MAX_B64_BYTES` / `ASR_REQUEST_TIMEOUT` / `ASR_CHUNK_CONCURRENCY` / `ASR_GLOBAL_CONCURRENCY` / `ASR_HOST` `ASR_PORT` / `DOWNLOAD_TIMEOUT` `MAX_DOWNLOAD_MB` / `JOBS_DIR` `JOB_TTL_SECONDS` `JOB_TIMEOUT_SECONDS` / `YTDLP_*` / `CACHE_TTL_SECONDS`）。
 
@@ -481,4 +524,4 @@ vbcd/
 | A5 | 开通 443 + certbot 证书自动化 | ⬜ 待做 |
 | A6 | 服务器安全组与 SSH 加固（改端口 / 限来源） | ⬜ 待做 |
 | A7 | F13 转写链路的三项验证（>20 分钟多片 `chunks ≥ 5`、TTL 内 `cache_hit=true`、逐句 `[mm:ss]` 归档复跑） | ✅ **已完成**（2026-09-29）：`chunks=14` / `cache_hit=true`（0.127s）/ 归档 68 段带时间戳；留证见 `runs/2026-09-29-f13-live-verify.md`（含「asr 镜像必须先重建」的前置条件），探针结论见 `asr/PROBE.md` §A4 |
-| A8 | `GET /api/health` 是否计入「N 个接口」 | ⬜ **待使用者拍板**（2026-09-29 由 `buddy-doc-sync` 子 agent 独立核对时发现）：代码实际注册 **14** 个 `router.*`（含 health），文档统一口径是**不含 health** 的「13 个」——但本文件 §3 的表与正文从未收录 health，而 `RUN.md` §8.4 把「健康检查」写进「已有」，两份口径不齐。选项：① **维持 13**（推荐，改动最小）→ 在本文件 §3 表下加一行脚注「另有 `GET /api/health`（健康检查，无鉴权，不计入上表）」；② 改为计入 → 本文件 §3 标题 + `RUN.md` + `AGENT.md` + `TECH_DESIGN.md` + `PRD.md` **五处 13→14** 同步 |
+| A8 | `GET /api/health` 是否计入「N 个接口」 | ⬜ **待使用者拍板**（2026-09-29 由 `buddy-doc-sync` 子 agent 独立核对时发现；2026-10-05 F15 后更新数字）：代码实际注册 **17** 个 `router.*`（含 health），文档统一口径是**不含 health** 的「16 个」——但本文件 §3 的表与正文从未收录 health，而 `RUN.md` §8.4 把「健康检查」写进「已有」，两份口径不齐。选项：① **维持 16**（推荐，改动最小）→ 在本文件 §3 表下加一行脚注「另有 `GET /api/health`（健康检查，无鉴权，不计入上表）」；② 改为计入 → 本文件 §3 标题 + `RUN.md` + `AGENT.md` + `TECH_DESIGN.md` + `PRD.md` **五处 16→17** 同步 |
