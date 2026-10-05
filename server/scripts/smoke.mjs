@@ -16,6 +16,10 @@ const UNIQ = `${Date.now()}` // 每次运行用唯一内容，避免与历史数
 // 转写链路冒烟：设 SMOKE_FAKE_ASR_PORT（如 8099）时，自动拉起 scripts/fake-asr.mjs 桩并跑转写断言；
 // 需后端以 ASR_SERVICE_URL=http://127.0.0.1:<同一端口> ASR_SERVICE_TOKEN=fake-token ASR_POLL_INTERVAL_MS=1000 启动。
 const FAKE_ASR_PORT = process.env.SMOKE_FAKE_ASR_PORT || ''
+// ima 只读链路冒烟：设 SMOKE_FAKE_IMA_PORT（如 8097）时，自动拉起 scripts/fake-ima.mjs 桩并跑断言；
+// 需后端以 IMA_BASE_URL=http://127.0.0.1:<同一端口> IMA_OPENAPI_CLIENTID=fake-cid IMA_OPENAPI_APIKEY=fake-key 启动。
+// 不设 SMOKE_FAKE_IMA_PORT 时只做「未配置态」断言；后端配了真实凭据时会跳过一次真实只读调用。
+const FAKE_IMA_PORT = process.env.SMOKE_FAKE_IMA_PORT || ''
 
 let passed = 0
 let failed = 0
@@ -75,7 +79,25 @@ async function startFakeAsr() {
   console.error('fake-asr 未能启动')
   process.exit(2)
 }
-process.on('exit', () => { if (fakeAsr) fakeAsr.kill() })
+// ===== 按需拉起假 ima 服务（只读断言用）=====
+let fakeIma = null
+async function startFakeIma() {
+  if (!FAKE_IMA_PORT) return false
+  fakeIma = spawn(process.execPath, [fileURLToPath(new URL('./fake-ima.mjs', import.meta.url))], {
+    env: { ...process.env, IMA_PORT: FAKE_IMA_PORT },
+    stdio: 'ignore',
+  })
+  for (let i = 0; i < 30; i += 1) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${FAKE_IMA_PORT}/counts`)
+      if (r.ok) return true
+    } catch { /* 还没起来 */ }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  console.error('fake-ima 未能启动')
+  process.exit(2)
+}
+process.on('exit', () => { if (fakeAsr) fakeAsr.kill(); if (fakeIma) fakeIma.kill() })
 
 /** 轮询任务直到终态（done/failed/attention）或超时；返回最后一次看到的任务对象。
  *  默认 60s：归档类任务可能含一次真实 LLM 整理（fallback 或慢端点都要打满等待预算）。 */
@@ -499,6 +521,79 @@ if (FAKE_ASR_PORT) {
   orgServer.close()
 }
 
+
+// ===== ima 云端知识库只读代理（F15，可选）=====
+// 分支逻辑：后端未配凭据 → 只验 503 IMA_NOT_CONFIGURED；设了 SMOKE_FAKE_IMA_PORT → 起桩跑全套；
+// 后端配了真实凭据但没设桩端口 → 发一发 /kbs 看 200 就跳（不拿真实服务当断言对象）。
+{
+  const probe = await req('GET', '/api/ima/kbs', { cookie })
+  if (probe.status === 503 && probe.json?.error?.code === 'IMA_NOT_CONFIGURED') {
+    check('im⓪ 未配 Key → 503 IMA_NOT_CONFIGURED', true)
+  } else if (!FAKE_IMA_PORT) {
+    console.log(`  ⏭️  后端已配 ima（probe=${probe.status}）但未设 SMOKE_FAKE_IMA_PORT，跳过桩断言`)
+  } else if (await startFakeIma()) {
+    // 桩已起；用带 query 的 /kbs 验证真字段映射（kb_id/kb_name → id/name）
+    const kbs = await req('GET', '/api/ima/kbs', { cookie })
+    check(
+      'im① GET /api/ima/kbs → 200 且字段映射正确',
+      kbs.status === 200 && kbs.json?.data?.items?.some((i) => i.id === 'kb-a' && i.name === '课程笔记'),
+      `items=${kbs.json?.data?.items?.length}`,
+    )
+
+    // 浏览：文件与文件夹混排，文件夹带 kind=folder
+    const items = await req('GET', '/api/ima/items?kb_id=kb-a', { cookie })
+    check(
+      'im② GET /api/ima/items → 混排且 kind 正确',
+      items.status === 200 &&
+        items.json?.data?.items?.[0]?.kind === 'folder' &&
+        items.json?.data?.items?.[1]?.kind === 'entry' &&
+        Array.isArray(items.json?.data?.current_path),
+      `items=${items.json?.data?.items?.length}`,
+    )
+
+    // 校验：缺 kb_id / 缺 q → 400
+    const noKb = await req('GET', '/api/ima/items', { cookie })
+    const noQ = await req('GET', '/api/ima/search?kb_id=kb-a', { cookie })
+    check(
+      'im③ 缺参数 → 400 VALIDATION_FAILED',
+      noKb.status === 400 && noKb.json?.error?.code === 'VALIDATION_FAILED' &&
+        noQ.status === 400 && noQ.json?.error?.code === 'VALIDATION_FAILED',
+      '',
+    )
+
+    // 上游非 0 code → 503 IMA_UPSTREAM_FAILED（桩 kb-err 分支）
+    const upstreamErr = await req('GET', '/api/ima/items?kb_id=kb-err', { cookie })
+    check(
+      'im④ 上游业务错误 → 503 IMA_UPSTREAM_FAILED 且透传 errmsg',
+      upstreamErr.status === 503 && upstreamErr.json?.error?.code === 'IMA_UPSTREAM_FAILED' && /接口无效/.test(upstreamErr.json?.error?.message ?? ''),
+      upstreamErr.json?.error?.message,
+    )
+
+    // 搜索：高亮剥标签；q=截断 桩返 100 条 → truncated=true
+    const hit = await req('GET', `/api/ima/search?kb_id=kb-a&q=${encodeURIComponent('微积分')}`, { cookie })
+    const trunc = await req('GET', `/api/ima/search?kb_id=kb-a&q=${encodeURIComponent('截断')}`, { cookie })
+    check(
+      'im⑤ 搜索命中 → highlight 剥标签；100 条 → truncated',
+      hit.status === 200 && hit.json?.data?.items?.every((i) => !/</.test(i.highlight ?? '')) &&
+        trunc.status === 200 && trunc.json?.data?.truncated === true && trunc.json?.data?.items?.length === 100,
+      `hit=${hit.json?.data?.items?.length} trunc=${trunc.json?.data?.items?.length}`,
+    )
+
+    // 缓存：同参第二次调用，桩侧计数不增加（TTL 60s 内）
+    const uniq = `cache-${UNIQ}`
+    const c1 = await fetch(`http://127.0.0.1:${FAKE_IMA_PORT}/counts`).then((r) => r.json()).then((d) => d.counts?.['/openapi/wiki/v1/search_knowledge_base'] ?? 0)
+    await req('GET', `/api/ima/kbs?q=${encodeURIComponent(uniq)}`, { cookie })
+    await req('GET', `/api/ima/kbs?q=${encodeURIComponent(uniq)}`, { cookie })
+    const c2 = await fetch(`http://127.0.0.1:${FAKE_IMA_PORT}/counts`).then((r) => r.json()).then((d) => d.counts?.['/openapi/wiki/v1/search_knowledge_base'] ?? 0)
+    check('im⑥ 同参 60s 内第二次 → 命中缓存不再打上游', c2 - c1 === 1, `上游计数 ${c1}→${c2}`)
+
+    // 隐私模式下未带 cookie 应 401（公开模式下这发是 200，不做断言）
+    if (authEnabled) {
+      const noAuth = await req('GET', '/api/ima/kbs')
+      check('im⑦ 未登录访问 → 401 AUTH_REQUIRED', noAuth.status === 401 && noAuth.json?.error?.code === 'AUTH_REQUIRED', '')
+    }
+  }
+}
 
 if (authEnabled) {
   // ㉒ 登出 → 204

@@ -13,6 +13,7 @@ router.get('/health', (req, res) => {
       auth_enabled: process.env.AUTH_ENABLED === '1',
       // 只报告是否配置，不做实时探测（健康检查要快且稳）
       asr_configured: Boolean(process.env.ASR_SERVICE_URL),
+      ima_configured: Boolean(process.env.IMA_OPENAPI_CLIENTID && process.env.IMA_OPENAPI_APIKEY),
     },
   })
 })
