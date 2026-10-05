@@ -159,8 +159,10 @@ export async function assertPublicUrl(url, { allowLoopback = ALLOW_LOOPBACK } = 
     throw fail('DOWNLOAD_FAILED', `域名解析失败：${p.host}（检查链接或网络）`)
   }
   if (!addrs.length) throw fail('DOWNLOAD_FAILED', `域名解析无结果：${p.host}`)
-  const offender = addrs.find((a) => isPrivateIp(a.address) && !(allowLoopback && isLoopback(a.address)))
-  if (offender) {
+  // 判定放宽：任一私网就拒会把「正常域名混进伪 AAAA（如 2001::1 隧道残留）」全误杀。
+  // 改为「全部私网才拒」——SSRF 的 DNS 重绑定攻击通常所有记录都指向内网，不会公私混。
+  const hasPublic = addrs.some((a) => !isPrivateIp(a.address))
+  if (!hasPublic) {
     throw fail('SSRF_BLOCKED', privateHint(p.host))
   }
   return p

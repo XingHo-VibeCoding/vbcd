@@ -86,13 +86,14 @@ async def check_url_allowed(url: str) -> str:
             f"域名 {parsed.hostname} 解析失败",
             hint="检查地址拼写或本机 DNS",
         )
-    for info in infos:
-        ip = info[4][0]
-        if _is_forbidden_ip(ip):
-            raise ServiceError(
-                "SSRF_BLOCKED",
-                f"{parsed.hostname} 解析到内网/保留地址 {ip}，已拒绝",
-            )
+    # 判定放宽：任一私网就拒会把「正常域名混进伪 AAAA（如 2001::1 隧道残留）」全误杀。
+    # 改为「全部私网才拒」——SSRF 的 DNS 重绑定攻击通常所有记录都指向内网，不会公私混。
+    has_public = any(not _is_forbidden_ip(info[4][0]) for info in infos)
+    if not has_public:
+        raise ServiceError(
+            "SSRF_BLOCKED",
+            f"{parsed.hostname} 解析到的地址全部是内网/保留地址，已拒绝",
+        )
     return url.strip()
 
 
