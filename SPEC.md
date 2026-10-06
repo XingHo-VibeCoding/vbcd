@@ -199,7 +199,7 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（18 个）
+## 3. API 列表（20 个）
 
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录。
 > 删除资料不单独开接口，复用任务链路（`POST /api/tasks` + `type=delete_note`）并强制走 3.3 确认流。
@@ -224,6 +224,8 @@ vbcd/
 | 16 | `GET /api/ima/search` | ima 库内内容搜索（F15，只读） | `kb_id`（必填）、`q`（必填）、`cursor?` | `200 {items[], truncated, next_cursor, has_more}` | 同上 |
 | 17 | `GET /api/ima/notes` | ima 笔记列表（F15b，只读） | `cursor?`、`limit?`（1–50，上游夹紧至 20） | `200 {items[], next_cursor, has_more}` | `IMA_NOT_CONFIGURED`、`IMA_UPSTREAM_FAILED`、`VALIDATION_FAILED` |
 | 18 | `GET /api/ima/notes/:id` | ima 笔记详情：meta + Markdown 正文（F15b，只读） | — | `200 {meta, content}` | `IMA_NOT_CONFIGURED`、`IMA_UPSTREAM_FAILED`、`IMA_NOTE_NOT_FOUND`（404） |
+| 19 | `GET /api/db/notes` | 资料列表（Day 17：Postgres 只读迁移口） | `q?`、`category?`、`limit?`（1–500，默认 500）、`offset?` | `200 {total, items[]}` | `VALIDATION_FAILED`、`DB_NOT_CONFIGURED`、`DB_UNAVAILABLE` |
+| 20 | `GET /api/db/notes/:id` | 资料详情（同文件版 `{meta, content}` 结构） | — | `200 {meta, content}` | `NOT_FOUND`、`DB_NOT_CONFIGURED`、`DB_UNAVAILABLE` |
 
 ### 3.1 知识库问答（F9）
 
@@ -343,6 +345,8 @@ vbcd/
 
 ### 3.7 ima 笔记只读视图（F15b）
 
+> 3.8 见文末（新增小节追加在既有 3.x 之后，避免大面积编号移动）。
+
 **定位**：`/notes` 云端首页的「知识库卡片」之后再加一张「**笔记**」卡片，点进看你 ima 里自己写的笔记。与知识库（`openapi/wiki/v1`）不同模块（`openapi/note/v1`），同样**只读、零落盘**。
 
 **两个接口（同 `services/ima.js` / `routes/ima.js`）**：
@@ -361,6 +365,20 @@ vbcd/
 **隐私口径**：与知识库同口径（`AUTH_ENABLED=1` 才受登录保护，默认免登录）——2026-10-05 使用者拍板不加独立门禁（Q9）。
 
 **错误码**：`IMA_NOTE_NOT_FOUND`（404，笔记列表里扫不到该 id）。
+
+### 3.8 Postgres 只读接口（Day 17 · /api/db/*）
+
+§7.3「文件 → 数据库」迁移的第 2 步：新增的 `/api/db/notes*` 读 notes 表，与文件版 `/api/notes*` **并存**（不是替换）。
+
+**字段契约对齐文件版**：列表项含 `id/title/category/date/tags/excerpt/path/hash`（`excerpt` 由 SQL 从 `body` 截 120 字、`path` 由 `category + '/' + id + '.md'` 派生）；详情返回 `{meta:{…}, content}` 两层结构——前端 `web/src/api/notes.js` 把 `listNotes`/`getNote` 的 fetch 从 `/api/notes` 换成 `/api/db/notes` 即完成切换，页面一行不用改。
+
+**查询参数**：`q`（标题+正文+标签 `ILIKE` 模糊）、`category`（精确）、`limit`（默认 500，与文件版「不限量」等价；1–500，超范围 400）、`offset`。
+
+**连接池**：`pg.Pool`（懒加载、max 4、空闲 10s 释放、连接超时 5s）；进程收 `SIGTERM/SIGINT` 时 `pool.end()`。
+
+**错误口径**：未配 `DATABASE_URL` → `503 DB_NOT_CONFIGURED`；库连不上 / SQL/认证错误 → `503 DB_UNAVAILABLE`（不向前端透裸 SQLSTATE，细节只进服务端日志）。
+
+**幂等同步**：`server/scripts/sync-to-db.mjs`（`DATABASE_URL=… node scripts/sync-to-db.mjs [--dry-run]`）扫 `data/` 子目录 → `INSERT … ON CONFLICT (id) DO UPDATE WHERE hash 变了`；跑完对账「库里有而文件没有」的行，只报告不自动删。
 
 ## 4. 数据流
 
@@ -398,6 +416,8 @@ vbcd/
 | `IMA_NOT_CONFIGURED` | 503 | ima 未配置（缺 `IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY`） |
 | `IMA_UPSTREAM_FAILED` | 503 | ima 上游不可达 / 超时 / `code≠0`（errmsg 透传进 `error.message`） |
 | `IMA_NOTE_NOT_FOUND` | 404 | ima 笔记不存在（列表里扫不到该 docid，可能已删除） |
+| `DB_NOT_CONFIGURED` | 503 | Postgres 读接口未配置（缺 `DATABASE_URL` / `PG_PASSWORD`） |
+| `DB_UNAVAILABLE` | 503 | 库连不上 / SQL / 认证错误（不透裸 SQLSTATE，细节进服务端日志） |
 | `INTERNAL` | 500 | 其他未预期错误 |
 
 ### 5.3 用户可见文案
@@ -497,6 +517,8 @@ vbcd/
 | `IMA_BASE_URL` | `https://ima.qq.com` | ima 域名；仅供冒烟桩覆盖（`SMOKE_FAKE_IMA_PORT`） | ⬜ |
 | `IMA_HTTP_TIMEOUT_MS` | `15000` | 单次 ima 调用超时 | ⬜ |
 | `IMA_CACHE_TTL_MS` | `60000` | 上游成功响应的进程内缓存时长；`0`=关闭（不落盘） | ⬜ |
+| `DATABASE_URL` | `postgres://buddy:<口令>@pg:5432/buddy` | Day 17：`/api/db/*` 读库地址；compose 内由 `docker-compose.yml` 从 `PG_PASSWORD` 拼接 | 🟡 |
+| `PG_PASSWORD` | 随机 48 位 | compose 变量：同时作为 `POSTGRES_PASSWORD` 与 `DATABASE_URL` 的口令段（项目根 `.env`，不入库） | 🔴 |
 
 `asr/` 服务侧变量见 `asr/.env.example`（完整清单以样例文件为准；高频项：`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / `MAAS_BASE_URL` / `ASR_MODEL` / `ASR_CHUNK_SECONDS` / **`ASR_MAX_AUDIO_SECONDS=300`（上游单请求时长硬上限，启动时把 `ASR_CHUNK_SECONDS` 夹紧到 ≤ 本值）** / `ASR_MAX_B64_BYTES` / `ASR_REQUEST_TIMEOUT` / `ASR_CHUNK_CONCURRENCY` / `ASR_GLOBAL_CONCURRENCY` / `ASR_HOST` `ASR_PORT` / `DOWNLOAD_TIMEOUT` `MAX_DOWNLOAD_MB` / `JOBS_DIR` `JOB_TTL_SECONDS` `JOB_TIMEOUT_SECONDS` / `YTDLP_*` / `CACHE_TTL_SECONDS`）。
 

@@ -274,14 +274,14 @@ curl -N "http://localhost:3000/api/kb/stream?q=WSL"     # 流式
 | 换 Embedding 模型后检索全乱 | 向量维度变了 | 删 Chroma collection `buddy-notes` 与 `data/.kb-manifest.json`，重跑 `/api/kb/index` |
 | Chroma 裸奔公网 | 没配认证 | 设 `CHROMA_SERVER_AUTHN_CREDENTIALS` + `CHROMA_AUTH_TOKEN`，或安全组只放后端 IP |
 
-### 8.7 Docker 部署（Nginx + 后端 + Chroma + ASR）
+### 8.7 Docker 部署（Nginx + 后端 + Chroma + ASR + Postgres）
 
 彩排与上线同一份 `docker-compose.yml`。
 
 ```bash
 cd /home/bird/work/vbcd
 docker compose up -d --build
-docker compose ps            # web(80) / server(仅内网 3000) / chroma(仅内网 8000) / asr(仅内网 8000)
+docker compose ps            # web(80) / server(仅内网 3000) / chroma(仅内网 8000) / asr(仅内网 8000) / pg(仅内网 5432)
 ```
 
 访问 http://localhost/ （前端静态站 + `/api` 反代，同源，Cookie 零配置）。后端 3000 与 Chroma 8000 都不发布到宿主机，Chroma 不会裸奔公网。
@@ -296,6 +296,22 @@ docker pull docker.m.daocloud.io/library/python:3.11-slim && docker tag docker.m
 ```
 
 镜像站：`docker.m.daocloud.io`（示例）、`docker.1ms.run`、`hub.rat.dev`；`registry.cn-hangzhou.aliyuncs.com` 需带命名空间。
+
+**Postgres（Day 17）**：`pg` 服务用 `postgres:18-alpine`（本地已有镜像），数据进命名卷 `vbcd_pg-data`、不发布端口、只在 compose 内网被 `server` 访问。首次起库自动跑 `db/schema.sql` 建表（不跑 `db/seed.sql` —— 种子只给 Day 16 的临时库用）。口令走项目根 `.env` 的 `PG_PASSWORD`（compose 的 `${VAR}` 插值只认根 `.env`，不认 `server/.env`；见踩坑表最后一行）。
+
+起库与同步（数据进 compose 内网的 pg）：
+
+```bash
+docker compose up -d --build pg server web   # pg 先 healthy 再拉起 server
+# 同步 data/ 真实资料（临时容器走 compose 内网，不占宿主机端口）
+docker run --rm --network vbcd_internal \
+  -e DATA_DIR=/app/data \
+  -e DATABASE_URL="postgres://buddy:$(grep '^PG_PASSWORD=' .env | cut -d= -f2)@pg:5432/buddy" \
+  -v $(pwd)/data:/app/data -v $(pwd)/server:/srv -w /srv \
+  node:22-alpine node scripts/sync-to-db.mjs
+# 验证
+curl -s 'http://192.168.130.14/api/db/notes?limit=3'          # 内网机子的实际 IP；localhost 也行
+```
 
 验证：
 
@@ -327,6 +343,8 @@ ls data/work/                                                # 主页「归档�
 | `docker` 报 `permission denied` | 当前用户不在 `docker` 组 | `sudo usermod -aG docker $USER` 后重新登录；临时：`sudo setfacl -m u:$USER:rw /var/run/docker.sock`（docker 重启后失效） |
 | `docker run --env-file server/.env` 启动的服务问 KB 报 `LLM_FAILED：Cannot convert argument to a ByteString because the character at index N has a value of X which is greater than 255` | **`docker run` 不剥行内注释**，而 `docker compose` 的 `env_file` 会（未加引号的值剥掉 ` #…` 并剥外层引号）。于是密钥尾部吃进中文注释 → `Authorization: Bearer …# 可换…` 里出现 >255 的字符，Node 的 `fetch` 直接抛 ByteString 错（2026-09-29 实测：`OPENAI_API_KEY` 长度 117 → 165） | **别用 `docker run --env-file` 直接跑这个服务**；要另起一份用 `docker compose run`（同一套解析），或先把 `.env` 的注释与引号剥干净再造临时文件。核对办法：比 `LLM_MODEL` 长度（应为 19）且 `/\u4e00-\u9fa5/` 不命中 |
 | 线上 `:80` 页面少了刚提交的文案（如「发散 / 收敛」搜不到），接口却是新的 | `web` 镜像是**多阶段构建**：静态产物在 `docker build` 时就固化进镜像，改完 `web/src` 不重建就永远是旧的（2026-09-29 实测：镜像 09-28 18:44 构建，而前端提交在 09-29 06:54 之后） | `docker compose up -d --build web`（会连带重启依赖服务，`asr`/`server` 会重启）。核对：`docker exec vbcd-web-1 ls -l /usr/share/nginx/html/assets/*.js` 的文件名与字节数应与 `web/dist/assets/` **完全一致** |
+| `docker compose up` 报 `required variable PG_PASSWORD is missing`，但 `server/.env` 里明明写了 | **`docker compose` 的 `${VAR}` 插值只认项目根 `.env`**，`env_file` 是容器运行时的变量、不参与编排插值 | `PG_PASSWORD` 放项目根 `.env`（gitignore 已覆盖）；`server/.env` 里不必重复写 |
+| web 容器还在但接口 502，`docker compose logs server` 显示 `health -> 200` | nginx 在 `server` 容器重建前启动，把 `server` 主机名解析成了旧 IP | `docker compose restart web`（重启重新解析）即可；根治法是给 nginx.conf 加 `resolver 127.0.0.11 valid=5s` + 变量代理，本期未改 |
 
 上线到服务器还差三步：① 阿里云安全组放行 443；② 域名 A 记录指向服务器 IP；③ 加 certbot 证书段。
 
