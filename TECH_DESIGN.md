@@ -1,6 +1,6 @@
 # TECH_DESIGN.md — buddy 技术设计（MVP · 第 1 期）
 
-> 上游依据：`PRD.md` v1.9（F1–F15 与验收标准）。本文只写「为什么这么选」，具体怎么做见 `SPEC.md`。
+> 上游依据：`PRD.md` v1.10（F1–F15 与验收标准）。本文只写「为什么这么选」，具体怎么做见 `SPEC.md`。
 > 原则：能跑通 > 花哨；数据自有 > 平台便利；每层可替换 > 一次到位。
 
 ## 1. 设计目标与约束
@@ -66,7 +66,7 @@
 | 18 | 前端路由与视图状态 | `react-router-dom` v7 + **「地址栏即状态」**（换实体用路径，换视图用查询参数：`?cal=` `?view=` `?tab=` `?mode=`） | 刷新、前进后退、把链接发到手机都保持同一视图；前端不需要额外状态库，也没有「状态与地址不一致」的坑 | 组件内 `useState`：一刷新就回默认视图，分享出去的链接失效 |
 | 19 | 主题（F10） | CSS 变量两套 token（`:root` 浅色 + `:root[data-theme='dark']` 深色覆盖）+ `index.html` 首屏内联脚本先定主题 | 零动画、渲染前就定好主题所以不闪浅色；25 个 token 全覆盖后组件里不写死色值，加主题不用动组件 | 多套样式表 / CSS-in-JS：切换要重算样式，硬编码色值容易漏改（本次就回收了 5 处组件里的 9 行写死色值） |
 | 20 | 交互反馈（Day 11） | 单例 Toast（`role="status"` 容器**常驻 DOM**）+ 三档反馈口径（即时态 / 短暂提示 / 结果留痕） | 容器常驻读屏才会播报新内容；失败降级不依赖 HTTPS（`navigator.clipboard` 不可用时用 Selection API 自动选中供手动复制） | 各页各写 inline 提示：重复实现、状态容易残留；引 UI 库：为一条提示条引整套组件不划算 |
-| 21 | ima 云端接入（F15） | 同源 BFF 代理（`/api/ima/*` → `ima.qq.com`）+ 进程内 TTL 缓存；前端只打自家接口 | 浏览器直连 ima 会被 CORS 拒（上游不允许 `ima-openapi-*` 自定义头跨源），必须经后端；BFF 顺便藏住 ApiKey、可做缓存与超时收口；**零落盘**靠「只进内存缓存、不写文件」这条硬规矩 | ima 官方 skill（`@tencent-adm/ima-skills`）：面向 CLI agent 场景，buddy 是 Web 应用用不上；前端直连：CORS 被拒 + Key 会进浏览器 |
+| 21 | ima 云端接入（F15/F15b） | 同源 BFF 代理（`/api/ima/*` → `ima.qq.com`）+ 进程内 TTL 缓存；前端只打自家接口 | 浏览器直连 ima 会被 CORS 拒（上游不允许 `ima-openapi-*` 自定义头跨源），必须经后端；BFF 顺便藏住 ApiKey、可做缓存与超时收口；**零落盘**靠「只进内存缓存、不写文件」这条硬规矩 | ima 官方 skill（`@tencent-adm/ima-skills`）：面向 CLI agent 场景，buddy 是 Web 应用用不上；前端直连：CORS 被拒 + Key 会进浏览器 |
 
 **一句话技术路线**：
 > 前端 React（Vite 构建）→ 后端 Node.js + Express（REST/JSON）→ 存储为 Git 仓库里的 Markdown 文件与 JSON 索引 → 部署在阿里云 ECS（Docker + Nginx + HTTPS）。
@@ -288,3 +288,4 @@ flowchart TB
 | 2026-09-28 | v1.4 | 追加 F14 链接收敛：选型 +1（node-html-parser + 自写提取）、数据流图 4.6（原备份链路顺延为 4.7）、技术债 +2（启发式提取 / 不做 robots）；上游依据升至 PRD v1.8 |
 | 2026-10-03 | v1.5 | 补齐第 2 周（Day 8–13）设计落点：功能清单更新为 F1–F14（并注明 F8/F12 不在本期）、第 2 章补「实际进程」表、选型 +4（17 compose 编排 / 18 地址栏即状态 / 19 主题双 token / 20 反馈三档）、新增 4.8 部署与运行时拓扑、5.1 架构全景补 ⑤ 微服务与外部依赖（契约 C）、4.5 补 **asr 契约现状（6 个端点已实现 4 个）**、技术债 +5、已知弱点补线上未收尾 |
 | 2026-10-05 | v1.6 | 追加 F15 ima 云端知识库只读视图：3 个新接口（14–16，只读 GET），接口契约升至 16 个；选型 +1（同源 BFF 代理 + 进程内 TTL 缓存，内容零落盘）；上游依据升至 PRD v1.9；踩坑记：ima `limit` 文档写 50、实测上限 20 |
+| 2026-10-05 | v1.7 | 追加 F15b ima 笔记只读视图：2 个新接口（17–18：`GET /api/ima/notes` 列表、`GET /api/ima/notes/:id` 详情），接口契约升至 18 个；`openapi/note/v1` 与知识库 `wiki/v1` 是两个模块，复用同一套 BFF 代理与 TTL 缓存；笔记正文为 Markdown（`target_content_format:1` 实测可用，官方文档写「不支持」不实），`<mark>` 服务端剥掉、失效图片前端 `onError` 占位；上游依据升至 PRD v1.10 |

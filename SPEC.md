@@ -92,6 +92,7 @@ vbcd/
 ├── /        主页      └ ?cal=week（默认） | month
 ├── /notes   档案      └ ?view=card（默认） | dir
 │                       └ ?src=local（默认） | ima（F15 云端只读视图，见 3.6）
+│                          └ ima 下 `panel=notes` → 笔记列表（F15b，见 3.7）
 ├── /log     日志      └ ?tab=tasks（默认） | confirm（确认留痕）
 ├── /ask     agent 问答   （无参数：提问内容是临时输入，不入地址栏）
 └── /about   关于      └ ?tab=intro（默认） | activity
@@ -99,6 +100,8 @@ vbcd/
 二级 · 路径参数下钻（从一级任一入口进入）
 ├── /notes/:id               入口 5 个：/notes 卡片、/notes?view=dir 目录行、
 │                            /about?tab=activity 时间线、/ask 问答来源、/archive 归档成功后提示
+├── /notes/ima/:docid        ima 笔记详情（F15b）：入口 1 个（/notes?src=ima&panel=notes 列表行）；
+│                            /notes/ima 裸路径重定向回笔记列表
 └── /tasks/:id/confirm       入口 4 个：/log 任务行、/log?tab=confirm 留痕行、
                              / 主页任务行、/notes/:id「删除这条资料」发起后
 
@@ -196,7 +199,7 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（16 个）
+## 3. API 列表（18 个）
 
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录。
 > 删除资料不单独开接口，复用任务链路（`POST /api/tasks` + `type=delete_note`）并强制走 3.3 确认流。
@@ -219,6 +222,8 @@ vbcd/
 | 14 | `GET /api/ima/kbs` | ima 知识库列表（F15，只读） | `q?`、`cursor?`、`limit?`（1–50，上游夹紧至 20） | `200 {items[], next_cursor, has_more}` | `IMA_NOT_CONFIGURED`、`IMA_UPSTREAM_FAILED`、`VALIDATION_FAILED` |
 | 15 | `GET /api/ima/items` | ima 库内条目/文件夹浏览（F15，只读） | `kb_id`（必填）、`folder_id?`、`cursor?`、`limit?`（同上） | `200 {items[], current_path[], next_cursor, has_more}` | 同上 |
 | 16 | `GET /api/ima/search` | ima 库内内容搜索（F15，只读） | `kb_id`（必填）、`q`（必填）、`cursor?` | `200 {items[], truncated, next_cursor, has_more}` | 同上 |
+| 17 | `GET /api/ima/notes` | ima 笔记列表（F15b，只读） | `cursor?`、`limit?`（1–50，上游夹紧至 20） | `200 {items[], next_cursor, has_more}` | `IMA_NOT_CONFIGURED`、`IMA_UPSTREAM_FAILED`、`VALIDATION_FAILED` |
+| 18 | `GET /api/ima/notes/:id` | ima 笔记详情：meta + Markdown 正文（F15b，只读） | — | `200 {meta, content}` | `IMA_NOT_CONFIGURED`、`IMA_UPSTREAM_FAILED`、`IMA_NOTE_NOT_FOUND`（404） |
 
 ### 3.1 知识库问答（F9）
 
@@ -334,7 +339,28 @@ vbcd/
 
 **前端**：`web/src/api/ima.js` 三封装 + `web/src/components/ImaPanel.jsx` 三形态（库卡片 / 浏览+面包屑 / 搜索），`/notes` 工具栏加「本地 / 云端」切换，地址栏承载 `?src=ima&kb=&folder=&q=`。
 
-**冒烟**：`server/scripts/fake-ima.mjs`（桩）+ `SMOKE_FAKE_IMA_PORT` 环境变量，断言 7 条（im①–im⑦）：字段映射、混排+面包屑、参数校验、上游错误透传、高亮剥标签+截断、缓存命中、隐私模式未登录 401。
+**冒烟**：`server/scripts/fake-ima.mjs`（桩）+ `SMOKE_FAKE_IMA_PORT` 环境变量，断言 11 条（im①–im⑪）：知识库 7 条（字段映射、混排+面包屑、参数校验、上游错误透传、高亮剥标签+截断、缓存命中、隐私模式未登录 401）+ 笔记 4 条（列表字段映射、详情 meta+Markdown 且 `<mark>` 已剥、404、隐私模式未登录 401）。
+
+### 3.7 ima 笔记只读视图（F15b）
+
+**定位**：`/notes` 云端首页的「知识库卡片」之后再加一张「**笔记**」卡片，点进看你 ima 里自己写的笔记。与知识库（`openapi/wiki/v1`）不同模块（`openapi/note/v1`），同样**只读、零落盘**。
+
+**两个接口（同 `services/ima.js` / `routes/ima.js`）**：
+
+| 端点 | 上游（ima openapi） | 返回字段 |
+|---|---|---|
+| `GET /api/ima/notes` | `POST openapi/note/v1/list_note`（`folder_id:""` = 全部，`sort_type:0` 修改时间倒序） | `{items:[{id,title,summary,created_at,updated_at,folder_id,folder_name}], next_cursor, has_more}` |
+| `GET /api/ima/notes/:id` | ① `list_note` 逐页扫 meta（没有单条详情接口；上限 10 页）→ ② `get_doc_content`（`target_content_format:1` 取 Markdown） | `{meta:{…}, content}`（Markdown 字符串；`<mark>` 已由服务端剥掉） |
+
+**上游实测差异（2026-10-05）**：① 文档写 `target_content_format:1`「不支持」，**实测返回合法 Markdown**；② `list_note` 返回**平铺**字段（`note_id`/`title`/…），与旧版 `list_note_by_folder_id` 的双层 `basic_info` 结构不同；③ `sort_type` 实测无效（各取值顺序一致，按修改时间倒序直接用默认值）；④ `search_note` 分页是 `{start,end}` 区间而非 cursor，**前端未接**（F15b 不设搜索）。
+
+**正文处理**：`<mark>`/`</mark>` 是 ima 笔记的内联高亮，服务端剥成纯文本（`MarkdownContent` 不执行 HTML 的安全默认不变）；图片是 ima CDN 直链，**带 `t`/`sign` 签名的部分会过期**（403 `t info expired`，过期后不可救）——由前端 `img onError` 就地换纯文字占位「图片已失效（ima 签名过期）」，不保留可点死链（`web/src/pages/ImaNoteDetailPage.jsx`）。
+
+**前端**：云端首页末尾加「笔记」卡片（副标「ima 私有笔记 · N 篇」，首屏 `is_end` 精确否则「N+」）→ `/notes?src=ima&panel=notes` 列表（行结构照抄档案列表：标题 / 120 字压缩摘要 / 徽标+修改日期，复用 `StateBlock` 四态与「未配 Key」说明态）→ `/notes/ima/:docid` 详情（照抄档案详情版式，只显示 ima 有的字段：「云端笔记」徽标、所属笔记本、创建/更新、来源一行；不显示分类/标签/文件路径/删除）。`/notes/ima` 裸路径重定向回列表。
+
+**隐私口径**：与知识库同口径（`AUTH_ENABLED=1` 才受登录保护，默认免登录）——2026-10-05 使用者拍板不加独立门禁（Q9）。
+
+**错误码**：`IMA_NOTE_NOT_FOUND`（404，笔记列表里扫不到该 id）。
 
 ## 4. 数据流
 
@@ -371,6 +397,7 @@ vbcd/
 | `ASR_UNAVAILABLE` | 503 | 转写服务不可达 / 超时（同上：落任务 result，接口仍返回 201） |
 | `IMA_NOT_CONFIGURED` | 503 | ima 未配置（缺 `IMA_OPENAPI_CLIENTID` / `IMA_OPENAPI_APIKEY`） |
 | `IMA_UPSTREAM_FAILED` | 503 | ima 上游不可达 / 超时 / `code≠0`（errmsg 透传进 `error.message`） |
+| `IMA_NOTE_NOT_FOUND` | 404 | ima 笔记不存在（列表里扫不到该 docid，可能已删除） |
 | `INTERNAL` | 500 | 其他未预期错误 |
 
 ### 5.3 用户可见文案
@@ -524,4 +551,4 @@ vbcd/
 | A5 | 开通 443 + certbot 证书自动化 | ⬜ 待做 |
 | A6 | 服务器安全组与 SSH 加固（改端口 / 限来源） | ⬜ 待做 |
 | A7 | F13 转写链路的三项验证（>20 分钟多片 `chunks ≥ 5`、TTL 内 `cache_hit=true`、逐句 `[mm:ss]` 归档复跑） | ✅ **已完成**（2026-09-29）：`chunks=14` / `cache_hit=true`（0.127s）/ 归档 68 段带时间戳；留证见 `runs/2026-09-29-f13-live-verify.md`（含「asr 镜像必须先重建」的前置条件），探针结论见 `asr/PROBE.md` §A4 |
-| A8 | `GET /api/health` 是否计入「N 个接口」 | ⬜ **待使用者拍板**（2026-09-29 由 `buddy-doc-sync` 子 agent 独立核对时发现；2026-10-05 F15 后更新数字）：代码实际注册 **17** 个 `router.*`（含 health），文档统一口径是**不含 health** 的「16 个」——但本文件 §3 的表与正文从未收录 health，而 `RUN.md` §8.4 把「健康检查」写进「已有」，两份口径不齐。选项：① **维持 16**（推荐，改动最小）→ 在本文件 §3 表下加一行脚注「另有 `GET /api/health`（健康检查，无鉴权，不计入上表）」；② 改为计入 → 本文件 §3 标题 + `RUN.md` + `AGENT.md` + `TECH_DESIGN.md` + `PRD.md` **五处 16→17** 同步 |
+| A8 | `GET /api/health` 是否计入「N 个接口」 | ⬜ **待使用者拍板**（2026-09-29 由 `buddy-doc-sync` 子 agent 独立核对时发现；2026-10-05 F15 后更新数字）：代码实际注册 **19** 个 `router.*`（含 health），文档统一口径是**不含 health** 的「18 个」（2026-10-05 F15b 笔记 +2 后由 16 升至 18）——但本文件 §3 的表与正文从未收录 health，而 `RUN.md` §8.4 把「健康检查」写进「已有」，两份口径不齐。选项：① **维持 18**（推荐，改动最小）→ 在本文件 §3 表下加一行脚注「另有 `GET /api/health`（健康检查，无鉴权，不计入上表）」；② 改为计入 → 本文件 §3 标题 + `RUN.md` + `AGENT.md` + `TECH_DESIGN.md` + `PRD.md` **五处 18→19** 同步 |

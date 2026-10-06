@@ -416,9 +416,9 @@ node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 
 测试专用开关：`ORGANIZE_ALLOW_LOOPBACK=1` 时**只放行回环地址**（127.0.0.1 / localhost / ::1，仅供 `link-selftest.mjs` 与本地冒烟打假服务器）；
 内网网段（10./172.16-31./192.168.）与云元数据地址（169.254.169.254）**无论如何都拦**。上线与日常开发一律不要开。
 
-### 8.10 ima 云端知识库只读视图（F15）
+### 8.10 ima 云端知识库 + 笔记只读视图（F15 / F15b）
 
-在 `/notes` 页「云端」标签看你 ima（ima.qq.com）里的知识库。**只读**：不写 `data/`、不进向量库、不落缓存文件；Key 只在 `server/.env`。
+在 `/notes` 页「云端」标签看你 ima（ima.qq.com）里的**知识库**和**笔记**：知识库卡片后面还有一张「笔记」卡片，点进列表，再点进详情（`/notes/ima/:docid`，跟档案详情页同款版式）。**只读**：不写 `data/`、不进向量库、不落缓存文件；Key 只在 `server/.env`。
 
 ```bash
 # ① 启用：server/.env 加两行（ima 开放平台自建，https://ima.qq.com/agent-interface）
@@ -427,7 +427,7 @@ node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 
 # ② 重启后端后在 /notes 页点「云端」即可；不配 Key 也能跑，云端页显示说明性空态
 ```
 
-接口（只读，3 个）：`GET /api/ima/kbs`（库列表）、`GET /api/ima/items?kb_id=…[&folder_id=…]`（浏览，文件夹可下钻）、`GET /api/ima/search?kb_id=…&q=…`（库内搜索）。前端跨库搜索是扇出并发（上限 4），不是后端聚合。
+接口（只读，5 个）：`GET /api/ima/kbs`（库列表）、`GET /api/ima/items?kb_id=…[&folder_id=…]`（浏览，文件夹可下钻）、`GET /api/ima/search?kb_id=…&q=…`（库内搜索）、`GET /api/ima/notes`（笔记列表）、`GET /api/ima/notes/:id`（笔记 meta + Markdown 正文，`<mark>` 已剥）。前端跨库搜索是扇出并发（上限 4），不是后端聚合；笔记不做搜索。
 
 踩坑：
 
@@ -435,8 +435,10 @@ node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 
 |---|---|---|
 | `IMA_UPSTREAM_FAILED: invalid SearchKnowledgeBaseReq.Limit` | 上游文档写 limit 上限 50，**实测 `search_knowledge_base` 只收 ≤20**；前端曾默认传 50 | 已修：对外收 1–50，发上游时夹紧到 20；分页走 `next_cursor` |
 | 云端页一直转圈 | `IMA_*` 没配 → 接口 503 | 配 Key 重启；不想配可忽略（功能默认关闭） |
+| 笔记详情里图片显示「图片已失效（ima 签名过期）」 | ima 内嵌图带 `t`/`sign` 签名，**上游已过期（403 `t info expired`），救不回来** | 属预期；能正常显示的图不受影响 |
+| 知识库里的文件夹行点不动 | 上游把文件夹表示成 `media_type:99` + `media_id:"folder_…"`（与我们参照的旧版文档 `folder_id`/`name` 形状不同），判据过时 | 已知缺陷，未修（2026-10-05 实探测得） |
 
-测试（不烧真 Key）：`SMOKE_FAKE_IMA_PORT=8097` + 后端 `IMA_BASE_URL=http://127.0.0.1:8097 IMA_OPENAPI_CLIENTID=fake-cid IMA_OPENAPI_APIKEY=fake-key` → `smoke.mjs` 会自动拉起 `scripts/fake-ima.mjs` 桩并跑 im①–im⑦（字段映射/混排/校验/上游错误透传/高亮剥标签+截断/缓存命中/隐私未登录 401）。
+测试（不烧真 Key）：`SMOKE_FAKE_IMA_PORT=8097` + 后端 `IMA_BASE_URL=http://127.0.0.1:8097 IMA_OPENAPI_CLIENTID=fake-cid IMA_OPENAPI_APIKEY=fake-key` → `smoke.mjs` 会自动拉起 `scripts/fake-ima.mjs` 桩并跑 im①–im⑪（知识库 7 条：字段映射/混排/校验/上游错误透传/高亮剥标签+截断/缓存命中/隐私未登录 401；笔记 4 条：列表字段映射/详情 meta+Markdown 且 `<mark>` 已剥/404/隐私未登录 401）。
 
 ## 9. 用 Obsidian 查看资料（F1）
 
