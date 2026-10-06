@@ -1755,3 +1755,15 @@ body {
     min-height: 44px;
   }
 }
+
+/* F15b · ima 笔记正文里签名已过期的图片：img onError 后整图替换为这块纯文字占位。
+   样式走现有 token：虚线边框表明「缺失但保留位置」，muted 文字表明「不是正文内容」。 */
+.md-img-missing {
+  display: block;
+  margin: var(--sp-3) 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: var(--fs-1);
+}

@@ -5,6 +5,7 @@ import NoteListPage from './pages/NoteListPage.jsx'
 import LogPage from './pages/LogPage.jsx'
 import TaskConfirmPage from './pages/TaskConfirmPage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
+import ImaNoteDetailPage from './pages/ImaNoteDetailPage.jsx'
 import ArchivePage from './pages/ArchivePage.jsx'
 import KbAskPage from './pages/KbAskPage.jsx'
 import AboutPage from './pages/AboutPage.jsx'
@@ -66,6 +67,9 @@ export default function App() {
           <Route path="/log" element={<LogPage />} />
           <Route path="/tasks/:id/confirm" element={<TaskConfirmPage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
+          {/* F15b · ima 笔记详情（只读）：静态段 ima 优先于动态段 :id（/notes/ima 落到重定向而非 id="ima" 的资料查询） */}
+          <Route path="/notes/ima" element={<Navigate to="/notes?src=ima&panel=notes" replace />} />
+          <Route path="/notes/ima/:docid" element={<ImaNoteDetailPage />} />
           <Route path="/archive" element={<ArchivePage />} />
           {/* 旧入口重定向：新建资料 → 归档页；任务 / 确认记录 → 日志页 */}
           <Route path="/new" element={<Navigate to="/archive" replace />} />

@@ -1,14 +1,15 @@
-// 云端知识库只读视图（F15 / SPEC 3.6）：档案页 /notes?src=ima 的内容区。
-// 地址栏即状态：?src=ima&kb=<id>&folder=<id>&q=<词> —— 刷新 / 分享 / 前进后退都能还原。
-// 三种形态：
-//   ① 未选库未搜词      → 列知识库卡片（名称 / 描述 / 条目数）
+// 云端知识库只读视图（F15 / SPEC 3.6）+ ima 笔记只读列表（F15b / SPEC 3.7）：档案页 /notes?src=ima 的内容区。
+// 地址栏即状态：?src=ima&kb=<id>&folder=<id>&q=<词>&panel=notes —— 刷新 / 分享 / 前进后退都能还原。
+// 四种形态：
+//   ① 未选库未搜词      → 列知识库卡片（名称 / 描述 / 条目数）+ 末尾一张「笔记」入口卡片
 //   ② 选库未搜词        → 浏览条目：文件与文件夹混排，文件夹可下钻，「加载更多」续页
 //   ③ 搜词              → 库内搜索；未选库时对全部库并发扇出（上限 4），按库分组、标 truncated
-// 只读：ima 没有正文接口，条目只显示标题与命中片段，不跳详情（已定的「纯清单不跳转」）。
+//   ④ panel=notes       → ima 笔记列表（只读；详情走 /notes/ima/:docid 独立路由）
+// 只读：知识库条目没有正文接口，只显示标题与命中片段，不跳详情；笔记有正文（另一个模块），在详情页渲染。
 // 未配 Key（503 IMA_NOT_CONFIGURED）不算错误态：显示说明文字引导去 server/.env 配凭据。
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { listImaKbs, listImaItems, searchImaKb } from '../api/ima.js'
+import { listImaKbs, listImaItems, searchImaKb, listImaNotes } from '../api/ima.js'
 import StateBlock from './StateBlock.jsx'
 
 const FANOUT_CONCURRENCY = 4 // 跨库扇出并发上限
@@ -19,12 +20,28 @@ function cleanParams(obj) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== ''))
 }
 
+// 档案列表同款摘要：压掉所有空白、120 字截断加「…」（与后端 storage/files.js 的 excerptOf 同口径）
+function excerptOf(text, len = 120) {
+  const flat = String(text || '').replace(/\s+/g, ' ').trim()
+  return flat.length > len ? `${flat.slice(0, len)}…` : flat
+}
+
+// 毫秒时间戳 → YYYY-MM-DD（本地时区），观感对齐档案列表行的日期
+function fmtDate(ms) {
+  const d = new Date(Number(ms))
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 export default function ImaPanel() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const kbId = searchParams.get('kb') || ''
   const folderId = searchParams.get('folder') || ''
   const q = (searchParams.get('q') || '').trim()
+  // F15b：panel=notes 时整页换成笔记列表（与知识库三种形态并列，互斥）
+  const panel = searchParams.get('panel') === 'notes' ? 'notes' : ''
 
   const [qDraft, setQDraft] = useState(q)
   const debounceRef = useRef(null)
@@ -38,6 +55,12 @@ export default function ImaPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [retryTick, setRetryTick] = useState(0)
+
+  // F15b · ima 笔记：进入云端就拉一次（首页卡片的「N 篇」也靠它），续页信息独立存
+  const [notes, setNotes] = useState(null) // null=还没拉到
+  const [notesError, setNotesError] = useState('')
+  const [notesLoading, setNotesLoading] = useState(false)
+  const [notesNext, setNotesNext] = useState({ cursor: '', hasMore: false })
 
   const loginRedirect = () =>
     navigate(`/login?from=${encodeURIComponent('/notes?src=ima')}`, { replace: true })
@@ -59,6 +82,49 @@ export default function ImaPanel() {
   useEffect(() => {
     setQDraft(q)
   }, [q])
+
+  // F15b · 笔记列表：与库列表并行拉；失败不连累知识库视图（卡片只失去篇数）
+  useEffect(() => {
+    if (!configured) return
+    let cancelled = false
+    setNotesLoading(true)
+    setNotesError('')
+    listImaNotes()
+      .then((d) => {
+        if (cancelled) return
+        setNotes(d.items)
+        setNotesNext({ cursor: d.next_cursor, hasMore: d.has_more })
+      })
+      .catch((err) => {
+        if (cancelled) return
+        if (err.code === 'AUTH_REQUIRED') return loginRedirect()
+        if (err.code === 'IMA_NOT_CONFIGURED') return setConfigured(false)
+        setNotesError(err.message || '加载失败')
+        setNotes([])
+      })
+      .finally(() => {
+        if (!cancelled) setNotesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configured, retryTick, navigate])
+
+  /** 笔记「加载更多」：ima 单页最多 20 条，超了才用得着 */
+  async function loadMoreNotes() {
+    if (!notesNext.hasMore || notesLoading) return
+    setNotesLoading(true)
+    try {
+      const d = await listImaNotes({ cursor: notesNext.cursor })
+      setNotes((prev) => [...(prev ?? []), ...d.items])
+      setNotesNext({ cursor: d.next_cursor, hasMore: d.has_more })
+    } catch (e) {
+      setNotesError(e.message || '加载失败')
+    } finally {
+      setNotesLoading(false)
+    }
+  }
 
   // 主数据流：参数（kb/folder/q）变化就重取；搜索用扇出，浏览用单库
   useEffect(() => {
@@ -154,6 +220,49 @@ export default function ImaPanel() {
       <div className="empty">
         ima 未配置：请在 <code>server/.env</code> 填 <code>IMA_OPENAPI_CLIENTID</code> 与{' '}
         <code>IMA_OPENAPI_APIKEY</code>（到 ima.qq.com/agent-interface 自建），重启后端后回来。
+      </div>
+    )
+  }
+
+  // ---------- 形态④：ima 笔记列表（?src=ima&panel=notes） ----------
+  // 与知识库形态互斥；列表行照抄档案列表（标题 → 摘要 → 徽标+日期），详情走独立路由。
+  if (panel === 'notes') {
+    const nstate = notesError ? 'error' : notes === null ? 'loading' : notes.length === 0 ? 'empty' : 'ok'
+    return (
+      <div>
+        <nav className="meta" aria-label="云端视图位置">
+          <button type="button" className="btn-ghost" onClick={() => setSearchParams({ src: 'ima' })}>
+            ← 云端
+          </button>
+          <span> / 笔记</span>
+        </nav>
+        <StateBlock
+          state={nstate}
+          errorText={notesError || '加载失败'}
+          onRetry={() => setRetryTick((t) => t + 1)}
+          emptyText="你的 ima 笔记里还没有内容"
+        >
+          <ul className="note-list">
+            {(notes ?? []).map((n) => (
+              <li key={n.id} className="note-item">
+                <Link to={`/notes/ima/${encodeURIComponent(n.id)}`}>
+                  <div className="note-item-title">{n.title}</div>
+                  {n.summary ? <div className="note-item-excerpt">{excerptOf(n.summary)}</div> : null}
+                  <div className="note-item-meta">
+                    <span className="badge">笔记</span>
+                    {n.updated_at ? <span>{fmtDate(n.updated_at)}</span> : null}
+                    {n.folder_name ? <span>{n.folder_name}</span> : null}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {notesNext.hasMore ? (
+            <button type="button" className="btn-ghost" disabled={notesLoading} onClick={loadMoreNotes}>
+              {notesLoading ? '加载中…' : '加载更多'}
+            </button>
+          ) : null}
+        </StateBlock>
       </div>
     )
   }
@@ -259,7 +368,7 @@ export default function ImaPanel() {
         }
       >
         {inHome ? (
-          // 形态①：知识库卡片，点进即浏览
+          // 形态①：知识库卡片 + 末尾「笔记」入口卡片（F15b），点进即浏览
           <ul className="note-list">
             {(kbs ?? []).map((k) => (
               <li key={k.id} className="note-item">
@@ -274,6 +383,23 @@ export default function ImaPanel() {
                 </Link>
               </li>
             ))}
+            {/* 笔记入口：篇数以已拉到的为准（hasMore 说明没拉完 → 「N+」）；拉失败也不挡知识库卡片 */}
+            <li className="note-item">
+              <Link to="/notes?src=ima&panel=notes">
+                <div className="note-item-title">笔记</div>
+                <div className="note-item-excerpt">你自己在 ima 里写的东西，只读</div>
+                <div className="note-item-meta">
+                  <span className="badge">私有</span>
+                  <span>
+                    {notes === null
+                      ? '载入中…'
+                      : notesError
+                        ? '列表暂不可用'
+                        : `${notes.length}${notesNext.hasMore ? '+' : ''} 篇`}
+                  </span>
+                </div>
+              </Link>
+            </li>
           </ul>
         ) : (
           // 形态②③：按库分组的条目列表
