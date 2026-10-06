@@ -20,6 +20,28 @@ services:
     networks: [internal]
     # 刻意不写 ports：不给公网留入口
 
+  pg:
+    # PostgreSQL（Day 16 建表、Day 17 接入）：notes/tasks 两张核心表
+    # 设计要点同 chroma —— 不发布端口，只在 compose 内网被 server 访问
+    image: postgres:18-alpine   # 本机已有此镜像；Docker Hub 不通时无需拉取
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: buddy
+      POSTGRES_USER: buddy
+      # 口令从 server/.env 的 PG_PASSWORD 读（不入库、不截图）；不设置则启动失败，刻意不兜底
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?请在 server/.env 里设置 PG_PASSWORD}
+    volumes:
+      - pg-data:/var/lib/postgresql
+      # 首次起库（数据卷为空）时自动执行：建表幂等，重复启动不会再跑
+      # 注意：不挂 db/seed.sql —— 种子只给 Day 16 的临时库用，正式库只跑真实数据
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U buddy -d buddy"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   asr:
     # fun-asr 转写微服务（F13）：视频/音频 URL → 结构化转写包，供 server 任务链路调用
     build:
@@ -53,13 +75,21 @@ services:
       CHROMA_URL: http://chroma:8000
       # 转写服务走内网服务名；token 从 server/.env 的 ASR_SERVICE_TOKEN 读
       ASR_SERVICE_URL: http://asr:8000
+      # Postgres 走内网服务名 pg；口令同样从 server/.env 的 PG_PASSWORD 展开（compose 会插值 env_file）
+      DATABASE_URL: postgres://buddy:${PG_PASSWORD:?请在 server/.env 里设置 PG_PASSWORD}@pg:5432/buddy
     volumes:
       # 资料目录绑定挂载：宿主机上也能直接备份/Obsidian 打开
       - ./data:/app/data
     networks: [internal]
+    # depends_on 全用长语法：pg 要等 healthy 才起 server（避免 server 先启动导致首批请求全 503）；
+    # chroma / asr 保持 started 即可，它们慢一点只影响对应接口、不影响进程起来
     depends_on:
-      - chroma
-      - asr
+      chroma:
+        condition: service_started
+      asr:
+        condition: service_started
+      pg:
+        condition: service_healthy
 
   web:
     build: ./web
@@ -85,3 +115,4 @@ networks:
 volumes:
   chroma-data:
   asr-jobs:
+  pg-data:
