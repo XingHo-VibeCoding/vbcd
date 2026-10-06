@@ -1,5 +1,5 @@
-// ima 云端知识库只读代理（F15 / SPEC 3.6）
-// 只读调用腾讯 ima OpenAPI：列知识库 / 浏览条目 / 库内搜索；不做任何写入类接口。
+// ima 云端知识库只读代理（F15 / SPEC 3.6）+ ima 笔记只读（F15b / SPEC 3.7）
+// 只读调用腾讯 ima OpenAPI：列知识库 / 浏览条目 / 库内搜索 / 列笔记 / 读笔记正文；不做任何写入类接口。
 // 内容零落盘：不写 data/、不进向量库；仅允许进程内 TTL 缓存（IMA_CACHE_TTL_MS，默认 60s，0=关闭）。
 // 凭据：IMA_OPENAPI_CLIENTID / IMA_OPENAPI_APIKEY（server/.env，不入库）。
 // 上游契约（官方 skill 文档 + 2026-10-05 真实链路实调）：
@@ -259,4 +259,79 @@ export async function searchItems({ kb_id, q, cursor = '' } = {}) {
     next_cursor: String(data.next_cursor ?? ''),
     has_more: data.is_end === false,
   }
+}
+
+// ---------- ima 笔记模块（openapi/note/v1）----------
+// 与知识库（openapi/wiki/v1）是两个模块、两套端点。2026-10-05 实测的差异：
+//   - 文档写 get_doc_content 的 target_content_format=1(MARKDOWN)「不支持」，实测返回合法 Markdown
+//     （图片为 ima CDN 直链，部分含 t/sign 签名会过期 —— 过期与否由前端 img onError 判定，后端不猜）；
+//   - 文档写 limit ≤20（与 wiki 多数端点一致）；cursor 空串起翻，is_end=true 到头；
+//   - 没有单条详情接口：标题/时间等 meta 只能在 list_note 返回里逐页扫出来；
+//   - search_note 的分页是 {start, end}（区间 ≤20），不是 cursor —— 前端暂不搜索，未接。
+const NOTE_MAX_PAGES = 10 // meta 逐页扫描的兜底上限（limit 20 → 至多扫 200 篇）
+
+// ima 笔记正文里的内联高亮只有 <mark> 一种（实测见官方《ima笔记使用指南》）。
+// 前端 MarkdownContent 故意不执行 HTML，裸标签会露出来，故在服务端只剥这一对标签。
+function stripMark(text) {
+  return String(text).replace(/<\/?mark[^>]*>/gi, '')
+}
+
+// list_note 返回平铺结构（note_id/title/summary/create_time/modify_time/cover_image/note_ext_info）。
+// summary 理论上是纯文本，但逐字透传前仍剥一遍标签防上游塞 HTML（列表行按纯文本渲染）。
+function normalizeNote(raw) {
+  return {
+    id: String(raw?.note_id ?? ''),
+    title: String(raw?.title ?? ''),
+    summary: stripTags(raw?.summary ?? ''),
+    created_at: Number(raw?.create_time ?? 0) || null, // 上游是毫秒时间戳（字符串），透传成数字
+    updated_at: Number(raw?.modify_time ?? 0) || null,
+    folder_id: String(raw?.note_ext_info?.folder_id ?? ''),
+    folder_name: String(raw?.note_ext_info?.folder_name ?? ''),
+  }
+}
+
+/** 笔记列表：folder_id 传空 = 全部笔记（根目录），修改时间倒序（sort_type=0 是上游默认）。 */
+export async function listNotes({ cursor = '', limit } = {}) {
+  ensureConfigured()
+  const data = await callCached('openapi/note/v1/list_note', {
+    folder_id: '',
+    sort_type: 0,
+    cursor: String(cursor ?? ''),
+    limit: limitParam(limit, 20, 20), // 笔记模块上游写死 ≤20
+  })
+  return {
+    items: (data.note_book_list ?? []).map(normalizeNote),
+    next_cursor: String(data.next_cursor ?? ''),
+    has_more: data.is_end === false,
+  }
+}
+
+/** 笔记详情 = meta + Markdown 正文；meta 没有独立接口，只能逐页扫 list_note 定位。
+ *  列表走 callCached 有 60s TTL，短时间内重复进详情不会重复打上游。 */
+export async function getNote({ id } = {}) {
+  ensureConfigured()
+  const noteId = required(id, 'id', KB_ID_MAX)
+  let meta = null
+  let cursor = ''
+  for (let page = 0; page < NOTE_MAX_PAGES && !meta; page += 1) {
+    // 不走 listNotes()：要避免对外 limit 校验把内部扫描页宽限制住
+    const data = await callCached('openapi/note/v1/list_note', {
+      folder_id: '',
+      sort_type: 0,
+      cursor,
+      limit: 20,
+    })
+    const hit = (data.note_book_list ?? []).find((n) => String(n?.note_id ?? '') === noteId)
+    if (hit) meta = normalizeNote(hit)
+    cursor = String(data.next_cursor ?? '')
+    if (data.is_end === true) break
+  }
+  if (!meta) {
+    throw fail('IMA_NOTE_NOT_FOUND', 'ima 里没有找到这篇笔记（可能已删除）', 404)
+  }
+  const doc = await callCached('openapi/note/v1/get_doc_content', {
+    note_id: noteId,
+    target_content_format: 1, // Markdown；文档写「不支持」是错的，实测可用（2026-10-05）
+  })
+  return { meta, content: stripMark(String(doc?.content ?? '')) }
 }

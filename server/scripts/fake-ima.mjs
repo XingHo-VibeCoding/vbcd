@@ -6,6 +6,8 @@
 //   search_knowledge_base  → 返回 3 个固定库（kb-a / kb-b / kb-c）；带 query 则按名称过滤
 //   get_knowledge_list     → kb-err 返回 code=110012（模拟上游业务错误）；其余返回 1 文件夹 + 1 文件
 //   search_knowledge       → query="截断" 时返回 100 条（触发 truncated）；其余返回 2 条带 <em> 高亮
+//   list_note              → 返回 2 篇固定笔记（平铺字段；note-1 的 summary 含 <mark>）
+//   get_doc_content        → 返回 Markdown（含 <mark> 与一张图片）；未知 note_id 返回 210006
 //   GET /counts            → 返回各上游路径被调用的次数（验证 IMA_CACHE_TTL_MS 缓存）
 //   其他路径               → { code: 110012, msg: '接口无效' }
 import { createServer } from 'node:http'
@@ -18,6 +20,22 @@ const KBS = [
   { kb_id: 'kb-b', kb_name: '技术收藏', cover_url: '', description: '', recommended_questions: [], member_count: '1', content_count: '9', role_type: '创建者', base_type: '个人知识库' },
   { kb_id: 'kb-c', kb_name: '生活百科', cover_url: '', description: '', recommended_questions: [], member_count: '2', content_count: '0', role_type: '成员', base_type: '共享知识库' },
 ]
+
+const NOTES = [
+  { note_id: 'note-1', title: '测试笔记', summary: '这是一个<mark>测试</mark>文档', create_time: '1791201478100', modify_time: '1791201489831', cover_image: '', note_ext_info: { folder_id: '', folder_name: '' } },
+  { note_id: 'note-2', title: '指南', summary: 'ima 笔记可以帮助你随时随地记录想法', create_time: '1791077219711', modify_time: '1791203945641', cover_image: '', note_ext_info: { folder_id: 'f-x', folder_name: '工作' } },
+]
+
+const NOTE_MD = [
+  '# 测试笔记',
+  '',
+  '这是一个<mark>测试</mark>文档。',
+  '',
+  '![示意图](https://fake.example/x.png?t=expired&sign=dead)',
+  '',
+  '第二段。',
+  '',
+].join('\n')
 
 const srv = createServer(async (req, res) => {
   let body = ''
@@ -88,6 +106,19 @@ const srv = createServer(async (req, res) => {
         next_cursor: '',
       },
     })
+  }
+
+  if (req.url === '/openapi/note/v1/list_note') {
+    const { cursor = '', limit = 20 } = json
+    return send({ code: 0, msg: 'success', data: { note_book_list: NOTES.slice(0, limit), is_end: true, next_cursor: '' } })
+  }
+
+  if (req.url === '/openapi/note/v1/get_doc_content') {
+    const { note_id } = json
+    if (!NOTES.some((n) => n.note_id === note_id)) {
+      return send({ code: 210006, msg: 'NOTE_IS_DELETE', data: {} })
+    }
+    return send({ code: 0, msg: 'success', data: { content: NOTE_MD } })
   }
 
   return send({ code: 110012, msg: '接口无效', data: {} })

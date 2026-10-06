@@ -19,6 +19,7 @@ const FAKE_ASR_PORT = process.env.SMOKE_FAKE_ASR_PORT || ''
 // ima 只读链路冒烟：设 SMOKE_FAKE_IMA_PORT（如 8097）时，自动拉起 scripts/fake-ima.mjs 桩并跑断言；
 // 需后端以 IMA_BASE_URL=http://127.0.0.1:<同一端口> IMA_OPENAPI_CLIENTID=fake-cid IMA_OPENAPI_APIKEY=fake-key 启动。
 // 不设 SMOKE_FAKE_IMA_PORT 时只做「未配置态」断言；后端配了真实凭据时会跳过一次真实只读调用。
+// 笔记断言（im⑧–im⑪）覆盖：列表字段映射 / 详情 meta+Markdown 且 <mark> 已剥 / 404 / 隐私模式 401。
 const FAKE_IMA_PORT = process.env.SMOKE_FAKE_IMA_PORT || ''
 
 let passed = 0
@@ -591,6 +592,43 @@ if (FAKE_ASR_PORT) {
     if (authEnabled) {
       const noAuth = await req('GET', '/api/ima/kbs')
       check('im⑦ 未登录访问 → 401 AUTH_REQUIRED', noAuth.status === 401 && noAuth.json?.error?.code === 'AUTH_REQUIRED', '')
+    }
+
+    // ===== ima 笔记只读（F15b）=====
+    // 列表：平铺字段映射（note_id → id）
+    const notes = await req('GET', '/api/ima/notes', { cookie })
+    check(
+      'im⑧ GET /api/ima/notes → 200 且字段映射正确',
+      notes.status === 200 &&
+        notes.json?.data?.items?.some((i) => i.id === 'note-1' && i.title === '测试笔记' && !/</.test(i.summary ?? '')),
+      `items=${notes.json?.data?.items?.length}`,
+    )
+
+    // 详情：meta + Markdown 正文，正文里的 <mark> 由服务端剥掉
+    const note = await req('GET', '/api/ima/notes/note-1', { cookie })
+    check(
+      'im⑨ GET /api/ima/notes/:id → meta + Markdown 且 <mark> 已剥',
+      note.status === 200 &&
+        note.json?.data?.meta?.id === 'note-1' &&
+        note.json?.data?.meta?.title === '测试笔记' &&
+        String(note.json?.data?.content ?? '').startsWith('# 测试笔记') &&
+        !/<mark/.test(note.json?.data?.content ?? '') &&
+        /这是一个测试文档/.test(note.json?.data?.content ?? ''),
+      `content=${String(note.json?.data?.content ?? '').length} 字节`,
+    )
+
+    // 不存在的笔记 → 404 IMA_NOTE_NOT_FOUND（meta 在列表里扫不到）
+    const missing = await req('GET', '/api/ima/notes/note-missing', { cookie })
+    check(
+      'im⑩ 不存在的笔记 → 404 IMA_NOTE_NOT_FOUND',
+      missing.status === 404 && missing.json?.error?.code === 'IMA_NOTE_NOT_FOUND',
+      missing.json?.error?.message,
+    )
+
+    // 隐私模式未带 cookie → 401
+    if (authEnabled) {
+      const noAuthNotes = await req('GET', '/api/ima/notes')
+      check('im⑪ 未登录访问笔记 → 401 AUTH_REQUIRED', noAuthNotes.status === 401 && noAuthNotes.json?.error?.code === 'AUTH_REQUIRED', '')
     }
   }
 }
