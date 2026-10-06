@@ -4,6 +4,7 @@ import { createApp } from './app.js'
 import { DATA_DIR, ensureReady } from './storage/files.js'
 import { startTranscribeRunner } from './services/transcribe-runner.js'
 import { startOrganizeRunner } from './services/organize-runner.js'
+import { closePool } from './db/pool.js'
 
 const PORT = Number(process.env.PORT || 3000)
 
@@ -15,6 +16,13 @@ const app = createApp()
 
 startTranscribeRunner()
 startOrganizeRunner()
+
+// 容器停止 / Ctrl-C 时关闭连接池，pg 那边不用等连接超时
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    closePool().finally(() => process.exit(0))
+  })
+}
 
 app.listen(PORT, () => {
   console.log(

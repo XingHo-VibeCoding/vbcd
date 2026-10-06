@@ -11,6 +11,7 @@ import confirmationsRouter from './routes/confirmations.js'
 import kbRouter from './routes/kb.js'
 import meRouter from './routes/me.js'
 import imaRouter from './routes/ima.js'
+import dbRouter from './routes/db.js'
 
 export function createApp() {
   const app = express()
@@ -33,6 +34,7 @@ export function createApp() {
   app.use('/api/kb', requireAuth, kbRouter)
   app.use('/api/me', requireAuth, meRouter)
   app.use('/api/ima', requireAuth, imaRouter)
+  app.use('/api/db', requireAuth, dbRouter)
 
   // 兜底：找不到的路由返回统一的 404
   app.use(notFound)
