@@ -79,14 +79,16 @@
 
 ### 4.1 写入链路（F1 / F3）
 
+> Day 18 起 `createNote()` 按 `DATABASE_URL` 自适应：配了就走 notes 表（不落文件、不更新 `.index.json`、不走 git commit——下图中 G/H/I 只在文件路径生效）。SPEC §3.8 写侧小节是这份分叉的契约描述。
+
 ```mermaid
 flowchart TD
     A["手机 / 电脑浏览器<br/>React 前端录入页"] -->|"1  HTTPS 请求：新建资料（JSON）"| B["Nginx<br/>HTTPS 证书 · 静态资源"]
     B -->|"2  转发 /api 请求"| C["Node.js + Express 后端"]
     C -->|"3  鉴权 + 内容校验"| D{"通过？"}
     D -->|"否"| E["返回错误提示<br/>（不写任何文件）"]
-    D -->|"是"| F["写入资料目录<br/>data/分类/日期-标题.md"]
-    F --> G["重建 / 更新索引<br/>data/.index.json"]
+    D -->|"是"| F["按 DATABASE_URL 自适应落点<br/>配了 → INSERT 进 notes 表<br/>没配 → data/分类/日期-标题.md"]
+    F --> G["重建 / 更新索引<br/>data/.index.json（仅文件路径）"]
     G --> H["git commit + push"]
     H --> I["自建 Gitea 私有仓库<br/>数据的权威副本"]
     I -->|"4  返回成功（JSON）"| A

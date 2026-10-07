@@ -366,9 +366,13 @@ vbcd/
 
 **错误码**：`IMA_NOTE_NOT_FOUND`（404，笔记列表里扫不到该 id）。
 
-### 3.8 Postgres 只读接口（Day 17 · /api/db/*）
+### 3.8 Postgres 迁移接口（Day 17 读 / Day 18 写 · /api/db/* 与 /api/notes）
 
-§7.3「文件 → 数据库」迁移的第 2 步：新增的 `/api/db/notes*` 读 notes 表，与文件版 `/api/notes*` **并存**（不是替换）。
+§7.3「文件 → 数据库」迁移的第 2 步（Day 17）：新增的 `/api/db/notes*` 读 notes 表，与文件版 `/api/notes*` **并存**（不是替换）。
+
+**写侧（Day 18）**：`POST /api/notes`（第 3 号接口）的落点改为按 `DATABASE_URL` 自适应——`services/notes.js` 的 `createNote()` 配了 `DATABASE_URL` 就**只写 `notes` 表**，没配照旧落 `data/` 文件（本地裸跑 / smoke 行为不变）。因此走 `createNote` 的所有链路（表单录入、F13 转写、F14 收敛、`type=note` 任务）在部署环境全部自动入库。契约不变：`201 {id,path,hash}`（`path` 由 `category/id` 派生，库行没有对应文件）。查重仍按 `hash = sha256(title\ncontent)`（服务层写前 SELECT，`409 DUPLICATE`；**无唯一索引**，不防并发穿透）；id 撞车捕 `23505` 主键冲突自动退 `-2`/`-3` 后缀（对齐文件版 `put()`）。库连不上 → `503 DB_UNAVAILABLE`，不静默退文件。`sync-to-db.mjs` 对账会恒报「库有文件没有」——只写库的资料预期如此。
+
+**字段契约对齐文件版**：列表项含 `id/title/category/date/tags/excerpt/path/hash`（`excerpt` 由 SQL 从 `body` 截 120 字、`path` 由 `category + '/' + id + '.md'` 派生）；详情返回 `{meta:{…}, content}` 两层结构——前端 `web/src/api/notes.js` 把 `listNotes`/`getNote` 的 fetch 从 `/api/notes` 换成 `/api/db/notes` 即完成切换，页面一行不用改。
 
 **字段契约对齐文件版**：列表项含 `id/title/category/date/tags/excerpt/path/hash`（`excerpt` 由 SQL 从 `body` 截 120 字、`path` 由 `category + '/' + id + '.md'` 派生）；详情返回 `{meta:{…}, content}` 两层结构——前端 `web/src/api/notes.js` 把 `listNotes`/`getNote` 的 fetch 从 `/api/notes` 换成 `/api/db/notes` 即完成切换，页面一行不用改。
 
@@ -384,7 +388,7 @@ vbcd/
 
 完整图见 `TECH_DESIGN.md` 第 4 章，此处只列要点：
 
-- **写入**：前端（JSON）→ Nginx → 后端（校验 → 写 `data/<分类>/…md`；隐私模式才先鉴权）→ 更新索引 → `git commit & push` → 私有仓；
+- **写入**：前端（JSON）→ Nginx → 后端（校验 → 写 `data/<分类>/…md`；隐私模式才先鉴权）→ 更新索引 → `git commit & push` → 私有仓。**Day 18 起**：配了 `DATABASE_URL` 时 `createNote` 只写 `notes` 表（不再落文件、不更新文件索引、不走 git），未配才走上面这条文件路径（见 §3.8 写侧）；
 - **读取**：前端 → 后端 →（必要时 `git pull`）→ 扫描资料目录重建索引 → 返回 JSON → 前端展示；
 - **权威副本**：Gitea 私有仓的 Git 版本；服务器目录与 `index.json` 都是可重建的副本。
 

@@ -297,7 +297,21 @@ docker pull docker.m.daocloud.io/library/python:3.11-slim && docker tag docker.m
 
 镜像站：`docker.m.daocloud.io`（示例）、`docker.1ms.run`、`hub.rat.dev`；`registry.cn-hangzhou.aliyuncs.com` 需带命名空间。
 
-**Postgres（Day 17）**：`pg` 服务用 `postgres:18-alpine`（本地已有镜像），数据进命名卷 `vbcd_pg-data`、不发布端口、只在 compose 内网被 `server` 访问。首次起库自动跑 `db/schema.sql` 建表（不跑 `db/seed.sql` —— 种子只给 Day 16 的临时库用）。口令走项目根 `.env` 的 `PG_PASSWORD`（compose 的 `${VAR}` 插值只认根 `.env`，不认 `server/.env`；见踩坑表最后一行）。
+**Postgres（Day 17 读 / Day 18 写）**：`pg` 服务用 `postgres:18-alpine`（本地已有镜像），数据进命名卷 `vbcd_pg-data`、不发布端口、只在 compose 内网被 `server` 访问。首次起库自动跑 `db/schema.sql` 建表（不跑 `db/seed.sql` —— 种子只给 Day 16 的临时库用）。口令走项目根 `.env` 的 `PG_PASSWORD`（compose 的 `${VAR}` 插值只认根 `.env`，不认 `server/.env`；见踩坑表最后一行）。
+
+**Day 18 起 `POST /api/notes` 落点自适应**：compose 里注入了 `DATABASE_URL` → `createNote()` 只写 `notes` 表（不落 `data/` 文件）；本地裸跑没配 → 照旧落文件。验证写库 + 重复/缺字段被拒：
+
+```bash
+# 正常写入 → 201 {id,path,hash}（路径是契约字段，库行没有对应 .md）
+curl -s -X POST http://localhost/api/notes -H 'Content-Type: application/json' \
+  -d '{"title":"测试标题","category":"learning","content":"测试正文"}'
+# 重复提交同 body → 409 DUPLICATE（查重按 sha256(title\ncontent)，库里有老行也拦得住）
+# 缺 title/content / 分类非 learning|life|work → 400 VALIDATION_FAILED + 中文提示
+# 同标题不同正文再 POST → 自动退 -2 后缀（撞主键 23505 重试）
+# 读回：curl -s http://localhost/api/db/notes/<id> 或 docker compose exec pg psql -U buddy -d buddy
+```
+
+⚠️ 只写库的资料此后会被 `sync-to-db.mjs` 对账报成「库有文件没有」——**预期内**分叉，别误删。改完 `server/src` 后记得 `docker compose up -d --build server` + `docker compose restart web`（后者防 nginx 解析旧 IP 的 502，见踩坑表）。
 
 起库与同步（数据进 compose 内网的 pg）：
 

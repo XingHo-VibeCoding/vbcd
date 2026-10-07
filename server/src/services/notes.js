@@ -2,6 +2,8 @@
 // 校验 → 组装 Note → 查重 → 交给存储适配层落盘。本文件不直接读写文件系统。
 import { createHash } from 'node:crypto'
 import * as storage from '../storage/files.js'
+import { dbConfigured } from '../db/pool.js'
+import { findDbNoteByHash, insertDbNote } from '../db/notes.js'
 import { fail } from './errors.js'
 
 export const CATEGORIES = ['learning', 'life', 'work']
@@ -65,15 +67,23 @@ export function validate(input) {
 /**
  * 新建资料（对应 POST /api/notes）：
  * 返回 { id, path, hash }；内容重复时抛 DUPLICATE（409），字段不合法时抛 VALIDATION_FAILED（400）。
+ *
+ * 落点自适应（Day 18，SPEC §7.3 迁移第 1 步的写侧）：
+ *   - 配了 DATABASE_URL → 只写 notes 表（库连不上 → 503 DB_UNAVAILABLE，不静默退文件）；
+ *   - 没配 → 照旧落 data/ 文件（本地裸跑 / smoke 的行为不变）。
+ * 好处：F13 转写、F14 收敛、note 任务这些走本函数的归档链路自动全部入库。
  */
 export async function createNote(input) {
   const { title, content, category, tags, sourceUrl } = validate(input)
   const hash = hashOf(title, content)
 
-  const { items } = await storage.list()
-  const duplicated = items.find((item) => item.hash && item.hash === hash)
+  const duplicated = dbConfigured()
+    ? await findDbNoteByHash(hash)
+    : (await storage.list()).items.find((item) => item.hash && item.hash === hash)
   if (duplicated) {
-    throw fail('DUPLICATE', `这条资料已存在（${duplicated.path}），未重复写入`, 409)
+    // 库行没有 path 字段，用 category/id 派生一个同形的展示值
+    const where = duplicated.path ?? `${duplicated.category}/${duplicated.id}.md`
+    throw fail('DUPLICATE', `这条资料已存在（${where}），未重复写入`, 409)
   }
 
   const { date, iso } = nowShanghai()
@@ -91,6 +101,9 @@ export async function createNote(input) {
     content,
   }
 
+  if (dbConfigured()) {
+    return await insertDbNote(note) // 内部已把错误转成 DB_UNAVAILABLE
+  }
   try {
     return await storage.put(note)
   } catch (err) {

@@ -33,6 +33,18 @@ function getPool() {
 }
 
 /**
+ * 与 query() 相同的执行入口，但**不**把驱动错误包成 DB_UNAVAILABLE ——
+ * 写路径要靠原始 SQLSTATE 分辨可预期错误（如 23505 主键冲突），包装后 code 会丢。
+ * 调用方必须自己兜错误：连接类错（ECONNREFUSED 等）与 SQL 错都会原样冒出，
+ * 由写路径决定是转 DB_UNAVAILABLE、重试还是上抛 INTERNAL。
+ */
+export async function execute(text, params = []) {
+  const p = getPool() // 未配 DATABASE_URL 时同样抛 DB_NOT_CONFIGURED
+  const result = await p.query(text, params)
+  return result.rows
+}
+
+/**
  * 执行一条参数化 SQL，返回 rows。
  * 连接类错误（pg 无法正常结束的）统一包装成 DB_UNAVAILABLE；
  * SQL 本身报错（语法、权限等）原样上抛给 errorHandler 记 INTERNAL。
