@@ -1,9 +1,8 @@
 // 资料业务逻辑（SPEC 第 2.1 节字段 / 第 3 章接口 3）：
-// 校验 → 组装 Note → 查重 → 交给存储适配层落盘。本文件不直接读写文件系统。
+// 校验 → 组装 Note → 查重 → 交给存储适配层落盘。
+// 本文件不直接读写文件系统，也不直接碰库——「存哪」由 storage/note-store.js 内部判定（Day 19 起）。
 import { createHash } from 'node:crypto'
-import * as storage from '../storage/files.js'
-import { dbConfigured } from '../db/pool.js'
-import { findDbNoteByHash, insertDbNote } from '../db/notes.js'
+import * as noteStore from '../storage/note-store.js'
 import { fail } from './errors.js'
 
 export const CATEGORIES = ['learning', 'life', 'work']
@@ -68,18 +67,16 @@ export function validate(input) {
  * 新建资料（对应 POST /api/notes）：
  * 返回 { id, path, hash }；内容重复时抛 DUPLICATE（409），字段不合法时抛 VALIDATION_FAILED（400）。
  *
- * 落点自适应（Day 18，SPEC §7.3 迁移第 1 步的写侧）：
- *   - 配了 DATABASE_URL → 只写 notes 表（库连不上 → 503 DB_UNAVAILABLE，不静默退文件）；
- *   - 没配 → 照旧落 data/ 文件（本地裸跑 / smoke 的行为不变）。
+ * 落点自适应（Day 18 落地、Day 19 收进存储层）：配了 DATABASE_URL → 只写 notes 表
+ * （库连不上 → 503 DB_UNAVAILABLE，不静默退文件）；没配 → 照旧落 data/ 文件。
+ * 判定细节在 storage/note-store.js，本函数不再感知 DATABASE_URL。
  * 好处：F13 转写、F14 收敛、note 任务这些走本函数的归档链路自动全部入库。
  */
 export async function createNote(input) {
   const { title, content, category, tags, sourceUrl } = validate(input)
   const hash = hashOf(title, content)
 
-  const duplicated = dbConfigured()
-    ? await findDbNoteByHash(hash)
-    : (await storage.list()).items.find((item) => item.hash && item.hash === hash)
+  const duplicated = await noteStore.findByHash(hash)
   if (duplicated) {
     // 库行没有 path 字段，用 category/id 派生一个同形的展示值
     const where = duplicated.path ?? `${duplicated.category}/${duplicated.id}.md`
@@ -101,13 +98,44 @@ export async function createNote(input) {
     content,
   }
 
-  if (dbConfigured()) {
-    return await insertDbNote(note) // 内部已把错误转成 DB_UNAVAILABLE
-  }
   try {
-    return await storage.put(note)
+    return await noteStore.put(note)
   } catch (err) {
     if (err.code) throw err
     throw fail('STORAGE_FAILED', `写入资料目录失败：${err.message}`, 503)
   }
+}
+
+// ── /api/db/* 读接口的业务封装（Day 19：把校验从 db 层上移回本层）──
+// routes/db.js 只负责接单回响应；limit/offset 合不合法是接口语义，归业务层管。
+// db/notes.js 从此是「给合法条件就查」的纯 SQL 实现，不再抛 VALIDATION_FAILED。
+
+const DB_LIST_MAX_LIMIT = 500 // 与 index-store 的 limit 上限一致；本期数据量 ≤500，默认等价不限
+
+/**
+ * GET /api/db/notes 的列表查询：先校验/归一化参数，再交给存储层查库。
+ * q（标题+正文+标签模糊）、category（精确）、limit（1–500）、offset（≥0）。
+ */
+export async function listNotesFromDb(params = {}) {
+  const limit = params.limit === undefined || params.limit === '' ? DB_LIST_MAX_LIMIT : Number(params.limit)
+  const offset = params.offset === undefined || params.offset === '' ? 0 : Number(params.offset)
+  const q = String(params.q ?? '').trim()
+  const category = String(params.category ?? '').trim()
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > DB_LIST_MAX_LIMIT) {
+    throw fail('VALIDATION_FAILED', `limit 必须是 1 到 ${DB_LIST_MAX_LIMIT} 之间的整数`)
+  }
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw fail('VALIDATION_FAILED', 'offset 必须是不小于 0 的整数')
+  }
+
+  return await noteStore.listDb({ limit, offset, q, category })
+}
+
+/**
+ * GET /api/db/notes/:id 的详情查询：库查不到返回 null，由路由层统一 404。
+ * 返回 { meta, content } 与文件版同构。
+ */
+export async function getNoteFromDb(id) {
+  return await noteStore.getDb(String(id))
 }

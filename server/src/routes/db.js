@@ -4,15 +4,16 @@
 // 与文件版 /api/notes 并存：这是迁移期的平行数据源，不动现有链路。
 // 需要 DATABASE_URL；未配置 → 503 DB_NOT_CONFIGURED，库连不上 → 503 DB_UNAVAILABLE。
 // 本路由整体挂在 requireAuth 之后（见 app.js），隐私模块开启时同样受保护。
+// Day 19 起不再直接调 db/notes.js：参数校验与业务封装在 services/notes.js，本层只接单回响应。
 import { Router } from 'express'
-import { listDbNotes, getDbNote } from '../db/notes.js'
+import { listNotesFromDb, getNoteFromDb } from '../services/notes.js'
 import { fail } from '../services/errors.js'
 
 const router = Router()
 
 router.get('/notes', async (req, res, next) => {
   try {
-    const data = await listDbNotes(req.query)
+    const data = await listNotesFromDb(req.query)
     res.json({ ok: true, data })
   } catch (err) {
     next(err)
@@ -21,7 +22,7 @@ router.get('/notes', async (req, res, next) => {
 
 router.get('/notes/:id', async (req, res, next) => {
   try {
-    const note = await getDbNote(String(req.params.id))
+    const note = await getNoteFromDb(String(req.params.id))
     if (!note) throw fail('NOT_FOUND', '这条资料不存在', 404)
     res.json({ ok: true, data: note })
   } catch (err) {
