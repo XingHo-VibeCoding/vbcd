@@ -6,9 +6,16 @@
 FROM python:3.11-slim
 
 ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG APT_MIRROR=                 # 可选：apt 换源（国内机器 http://mirrors.aliyun.com 秒下）
 
 # ffmpeg/ffprobe 是硬依赖（下载后归一化 + 静音检测 + 切片）
-RUN apt-get update \
+# APT_MIRROR 非空时先把 sources 换过去：海外/国内 ECS 直连 archive.ubuntu.com 常卡死
+RUN set -eux; \
+    if [ -n "$APT_MIRROR" ]; then \
+        sed -i "s|http://deb.debian.org|$APT_MIRROR|g; s|http://archive.ubuntu.com|$APT_MIRROR|g" \
+            /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    fi; \
+    apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 

@@ -47,6 +47,12 @@ services:
     build:
       context: .            # 仓库根，Dockerfile 里 COPY asr/ 才能打进包
       dockerfile: asr/Dockerfile
+      args:
+        # 可选 apt 换源：国内 ECS 直连 archive.ubuntu.com 会卡死，传镜像站秒下。
+        # 用法：APT_MIRROR=http://mirrors.aliyun.com docker compose build asr
+        # 也可写进根 .env 的 APT_MIRROR=...（compose 会自动展开）
+        APT_MIRROR: ${APT_MIRROR:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     restart: unless-stopped
     env_file:
       - ./asr/.env    # DASHSCOPE_API_KEY / SERVICE_TOKEN 等（.env.example 有样例）
