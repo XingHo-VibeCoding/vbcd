@@ -96,3 +96,48 @@
 - Obsidian：aisotools 2026 评测、CSDN《Obsidian 与 AI 笔记结合的结构性矛盾》
 - Windows Recall：rarebuildsoftware《Microsoft Recall Is Back（May 2026）》、geeklify、remio.ai
 - ChatGPT/Claude 记忆：mindlock.io、aifirstsearch、memorybase 2026 对比评测
+
+## 7. F12 Agent 工具化 · 参考实现调研（2026-10-09 追加）
+
+> 拍板背景见 PRD §7「已确认决策」。本节记「参考谁、借什么、不借什么」。
+
+### 7.1 候选成品与结论
+
+| 项目 | ★（2026-10-09 实查） | 技术栈 | 结论 |
+|---|---|---|---|
+| **Anything-LLM** | 66.9k | Node.js + Express + React | **主要参考**：自研 agent 循环 `aibitat`（~1600 行，不用 langgraph），一文件一工具 + 注册表 + 白名单 + websocket 推进度 |
+| **LibreChat** | 45.4k | TypeScript monorepo | **次要参考**：`packages/api/src/agents/` 建在 langgraph + MongoDB checkpointer 上；`api/app/clients/tools/` 的 `tool()`+zod 写法与 manifest 清单 |
+| Dify / Flowise / n8n | 158k / 55k / 207k | 可视化编排平台 | ❌ 不参考：节点编排模型与「代码定义工具 + 确认闸门」不同路 |
+| Mastra | 28.7k | TS 全栈 agent 框架 | ❌ 不当底座：框架约定过重；可读其工具 schema 设计 |
+| Vercel AI SDK | 27.2k | TS | 借前端「工具调用卡片」UI 契约（`toolInvocation{state,args,result}`） |
+| openai-agents-js | 3.9k | OpenAI 官方 | ❌ 锁供应商；`guardrails` 概念（输入/输出校验挂点）可借 |
+| Open WebUI / FastGPT | 154k / 29.8k | — | ❌ agent 能力弱，参考意义低 |
+
+### 7.2 「借零件不借骨架」清单
+
+**借**（概念与组织方式）：
+
+| 零件 | 出处 | 说明 |
+|---|---|---|
+| 一文件一工具 + 目录扫描注册 | aibitat `plugins/` | 每个工具导出 name/description/parameters/handler |
+| 工具白名单独立成模型 | `agentSkillWhitelist.js` | 对模型可见 ≠ 已注册 |
+| 事件推送语义 | aibitat emitter | `tool_call`/`tool_result`/`confirmation_required`（buddy 用 SSE 等价实现） |
+| `tool()` + zod schema 写法 | LibreChat `structured/*.js` | 入参校验的落点（铁律 2） |
+| manifest 与实现分离 | LibreChat `manifest.json` | 工具声明 name/desc/authFields/risk，前端可预判可用性 |
+| checkpointer 思路 | LibreChat `checkpointer.ts` | 循环状态可序列化、可恢复（buddy 落 JSON 不落 Mongo） |
+| 「等人确认」建模为工具的特殊返回 | LibreChat `hitl/` | 对应 buddy 428 闸门 |
+| 审计字段设计 | LibreChat `toolTiming.ts` | tool/args/duration/result/confirmed |
+
+**不借**：
+
+- aibitat 的循环主体与消息协议（buddy 用 langchain `AIMessage`/`ToolMessage` 体系自写调度）；
+- aibitat 的 41 个 provider 适配器（交给 langchain `ChatXxx`，buddy 只需 OpenAI 兼容一路）；
+- Anything-LLM 的 Prisma 数据模型 / 多用户 workspace / collector——buddy 的 `data/` 与 `notes` 表是自己的资产，不搬；
+- 函数级代码一律不移植（形状全错，且引入隐性依赖）。
+
+### 7.3 参考仓位置
+
+- `~/work/refs/anything-llm`（浅 clone，不进本仓库 git）
+- `~/work/refs/librechat`（同上）
+- Anything-LLM 容器实例：S1 前端动工时临时 `docker compose up`（127.0.0.1:3001）看工具卡片交互，看完即删，不常驻。
+

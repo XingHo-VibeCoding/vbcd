@@ -227,6 +227,8 @@ vbcd/
 | 19 | `GET /api/db/notes` | 资料列表（Day 17：Postgres 只读迁移口） | `q?`、`category?`、`limit?`（1–500，默认 500）、`offset?` | `200 {total, items[]}` | `VALIDATION_FAILED`、`DB_NOT_CONFIGURED`、`DB_UNAVAILABLE` |
 | 20 | `GET /api/db/notes/:id` | 资料详情（同文件版 `{meta, content}` 结构） | — | `200 {meta, content}` | `NOT_FOUND`、`DB_NOT_CONFIGURED`、`DB_UNAVAILABLE` |
 
+> **F12 预留（2026-10-09 拍板，未实现）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）与 `GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/`）——实现后上表扩至 22 行。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
+
 ### 3.1 知识库问答（F9）
 
 **索引（`POST /api/kb/index` 触发）**：
