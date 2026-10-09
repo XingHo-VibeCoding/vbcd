@@ -15,7 +15,7 @@ import { startOrganizeTask } from './organize.js'
 // transcribe_url 不是高风险：归档资料与 F1 同级，直接异步执行（SPEC 3.4）。
 export const TASK_TYPES = ['note', 'organize', 'remind', 'delete_note', 'transcribe_url']
 export const TASK_STATUSES = ['todo', 'doing', 'done', 'failed', 'attention']
-export const TASK_ORIGINS = ['phone', 'desktop']
+export const TASK_ORIGINS = ['phone', 'desktop', 'agent']
 export const CONFIRM_DECISIONS = ['approved', 'rejected']
 
 // 状态中文名：只用于服务端错误文案（前端有自己的展示层）
@@ -109,6 +109,11 @@ async function executeApproved(task, confirmation, iso) {
       task.result = removed
         ? `已删除 ${removed.path}（确认时间 ${iso}）`
         : '确认后发现资料已不存在，未做任何改动'
+    } else if (confirmation.action === 'agent_archive_note') {
+      // agent 发起的归档草案：确认后真正写入（复用 createNote，与 F1 同级）
+      const created = await createNote(task.payload)
+      task.status = 'done'
+      task.result = `已归档到 ${created.path ?? `${created.category}/${created.id}.md`}（确认时间 ${iso}）`
     } else {
       task.status = 'failed'
       task.result = `暂不支持的确认动作：${confirmation.action}`
