@@ -1,6 +1,6 @@
 # PRD — buddy：会成长的个人助手（MVP · 第 1 期）
 
-> 版本：v1.11（MVP）｜ 初版 2026-09-19 ｜ 最近更新 2026-10-09
+> 版本：v1.12（MVP）｜ 初版 2026-09-19 ｜ 最近更新 2026-10-09
 > 上游依据：`research.md` ｜ 下游产物：`TECH_DESIGN.md`、`SPEC.md`
 > 本期范围：只做「个人数据库」+「手机端联动」两项能力（其余见第 6 章）
 
@@ -286,6 +286,19 @@ data/
 
 **参考实现**（2026-10-09 调研结论，详见 `research.md`）：Anything-LLM（`~/work/refs/anything-llm`，借工具组织/白名单/事件语义）与 LibreChat（`~/work/refs/librechat`，借 langchain 工具写法/manifest/checkpointer 思路/hitl 建模）。
 
+**验收标准**（S0+S1+S2-lite 已实现部分，2026-10-09 实测）：
+
+- [x] `POST /api/agent/chat` 发消息 → SSE 事件流返回（`token`/`tool_call`/`tool_result`/`done`）；
+- [x] 问「资料库有什么」类问题 → agent 自主调用 `search_notes`/`get_note` 并基于返回作答（实测 vLLM Qwen3-4B，hermes tool-call）；
+- [x] 说「把这段归档」→ agent 生成 `archive_note` 草案 → `confirmation_required` 事件 → **此刻资料库未写入**；
+- [x] 确认链路批准（`PATCH /api/tasks/:id` `decision:approved`）→ `data/` 出现该资料；拒绝 → 不写入且任务 failed；
+- [x] `GET /api/agent/runs` → 审计列表含每次 `llm_call`/`tool_result` 的参数/耗时/成败；
+- [x] `GET /api/agent/tools` → 4 工具清单，`ask_kb` 缺 `CHROMA_URL` 时 `enabled:false`；
+- [x] 未配置/失效 LLM 端点 → SSE `error` 事件中文报错（非裸崩）；
+- [ ] 多轮追问保持上下文（session_id 串话）——代码路径就绪，前端多轮 UI 已上，**实测依赖真实端点稳定性**；
+- [ ] 确认后 agent 自动接话（`resumeAfterDecision`）——预留未接，S3；
+- [ ] `create_task`/`advance_task` 工具——下一期。
+
 ## 8. 风险与待确认项
 
 1. **训练营第 3 周验收口径**：手册按 CloudBase 编排，改用自建服务器部署需先与队长确认是否认可；
@@ -313,3 +326,4 @@ data/
 | 2026-10-05 | v1.9 | 追加 F15 ima 云端知识库只读视图：`/notes` 新增「本地 / 云端」切换，3 个新接口（14–16，只读 GET），验收标准 6 条；内容零落盘，Key 仅 `server/.env`；踩坑记：`limit` 文档写 50 实测上限 20 |
 | 2026-10-05 | v1.10 | 追加 F15b ima 笔记只读视图：云端首页「笔记」卡片 + `?panel=notes` 列表 + `/notes/ima/:docid` 详情（Markdown 正文、`<mark>` 已剥、失效图片文字占位），接口 16→18 个，验收标准 +5 条；如实标注 F15「文件夹可下钻」在真实数据上暂不成立（上游 `media_type:99` 形状变化，判据过时） |
 | 2026-10-09 | v1.11 | F12 五条待确认项全部拍板：边界 S0+S1+S2-lite（archive_note 单写工具）、技术路线 A 终态 + JSON 状态接缝、前端改 /ask 页、接口 +2（20→22）、时间盒 5 板块封顶；参考实现定为 Anything-LLM + LibreChat 借零件不借骨架 |
+| 2026-10-09 | v1.12 | F12 S0+S1+S2-lite 落地：agent 骨架（manifest/registry/state/audit/loop + tools×4）+ `POST /api/agent/chat` SSE + `GET /api/agent/runs` + `/api/agent/tools` + `/ask` 页改多轮对话（工具调用折叠行 + 确认提示）；接口 20→22（另有 tools 未计入）；`executeApproved` 补 `agent_archive_note` 分支；冒烟 ag①–ag⑤ 全过；实测本地 vLLM 链路批准/拒绝双路径通过 |

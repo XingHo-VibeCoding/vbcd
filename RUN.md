@@ -498,3 +498,48 @@ ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
 | Obsidian 里看不到 `buddy/` | 符号链接可能不被跟随 → 把 `DATA_DIR` 指向真实目录：`DATA_DIR=/home/bird/note/los/buddy npm run dev` |
 | 想换资料目录 | 改 `server/.env` 的 `DATA_DIR` 或启动时传 `DATA_DIR=…`，重启后端 |
 | 列表看不到 Obsidian 里新加的文件 | 确认第一行是 `---`；没有 frontmatter 会被索引跳过并在后端日志告警 |
+
+### 8.11 agent 对话（F12，2026-10-09）
+
+**接口**：`POST /api/agent/chat`（SSE）/ `GET /api/agent/runs` / `GET /api/agent/tools`（清单）。整体挂在 `requireAuth` 后。
+
+**本机跑通**（本地 vLLM，`server/.env` 已指）：
+
+```bash
+# 后端（.env 里 OPENAI_BASE_URL=http://127.0.0.1:8000/v1）
+npm run dev            # server 默认 3000，或 PORT=3210
+
+# 前端
+cd web && npm run dev  # /ask 页
+```
+
+**验证一条只读链路**（模型自主调 search_notes）：
+
+```bash
+curl -N -X POST http://localhost:3210/api/agent/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"资料库里 learning 类最新3条？"}'
+# 期望事件流：tool_call → tool_result → token* → done
+```
+
+**验证写操作闸门**（archive_note → 确认 → 真写）：
+
+```bash
+curl -N -X POST http://localhost:3210/api/agent/chat \
+  -d '{"message":"把这段归档：标题 X，分类 learning，正文 ..."}' -H 'Content-Type: application/json'
+# → confirmation_required 事件 + suspended:true；此刻 data/ 未写入
+# 去「日志 → 确认留痕」或用 PATCH 确认：
+curl -X PATCH http://localhost:3210/api/tasks/<task_id> -d '{"decision":"approved"}'
+# → data/learning/ 下出现该文件；decision:"rejected" 则不写入
+```
+
+**冒烟**：`smoke.mjs` 新增 ag①–ag⑤（工具清单 / 空消息 SSE error / 不存在 session / runs 接口 / 隐私模式 401），公开 24/24 通过。真实多轮对话链路已实测（vLLM Qwen3-4B + hermes tool-call）。
+
+**环境变量**：`AGENT_MAX_STEPS`（默认 8，单轮步数上限）、`AGENT_TOOLS`（逗号白名单收窄）。
+
+**已知边界**：
+- 确认完成后 agent 会话**不自动接话**（`resumeAfterDecision` 预留未接路由，S3 再议）——用户确认后想继续对话直接再发一条即可；
+- LLM 用 `invoke` 拿全量再推 token，非逐字流式（要打字机效果可自行改 `model.stream`）；
+- `routes/kb.js` 的 `/api/kb/stream` 存在同型 `req.on('close')` 误用 bug（SSE 提前判断开），待修；
+- 4B 级模型偶发编造 `source_url`——system prompt 已压「不要编造」，仍建议抽查。
+

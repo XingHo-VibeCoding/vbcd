@@ -633,6 +633,64 @@ if (FAKE_ASR_PORT) {
   }
 }
 
+// ===== agent 接口（F12）=====
+// 断言不依赖真实 LLM：只验证路由形状、鉴权、SSE 骨架与审计落盘；
+// 有 OPENAI_API_KEY + 可达端点时可另跑真实对话链路（见 RUN.md）。
+{
+  // ag① 工具清单：四个条目齐全、archive_note 为 needs-confirm、ask_kb 按 CHROMA_URL 置灰
+  const tools = await req('GET', '/api/agent/tools', { cookie })
+  const list = tools.json?.data?.tools ?? []
+  const byName = Object.fromEntries(list.map((t) => [t.name, t]))
+  check(
+    'ag① GET /api/agent/tools → 4 个工具且 archive_note 为 needs-confirm',
+    tools.status === 200 &&
+      ['search_notes', 'get_note', 'ask_kb', 'archive_note'].every((n) => byName[n]) &&
+      byName.archive_note?.risk === 'needs-confirm' &&
+      byName.search_notes?.risk === 'readonly',
+    `tools=${list.map((t) => `${t.name}:${t.enabled ? 'on' : 'off'}`).join(',')}`,
+  )
+
+  // ag② chat 空消息 → SSE 里 error VALIDATION_FAILED（不是 4xx：SSE 通道内错误走 event）
+  const badChat = await fetch(`${BASE}/api/agent/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+    body: JSON.stringify({ message: '   ' }),
+  })
+  const badText = await badChat.text()
+  check(
+    'ag② POST /api/agent/chat 空消息 → SSE error VALIDATION_FAILED',
+    badChat.status === 200 && /event: error/.test(badText) && /VALIDATION_FAILED/.test(badText),
+    badText.slice(0, 80).replace(/\n/g, ' '),
+  )
+
+  // ag③ chat 不存在的 session → SSE error NOT_FOUND
+  const noSess = await fetch(`${BASE}/api/agent/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+    body: JSON.stringify({ message: 'hi', session_id: 'sess-not-exist' }),
+  })
+  const noSessText = await noSess.text()
+  check(
+    'ag③ 不存在的 session_id → SSE error NOT_FOUND',
+    /NOT_FOUND/.test(noSessText),
+    noSessText.slice(0, 80).replace(/\n/g, ' '),
+  )
+
+  // ag④ GET /api/agent/runs → 200 + items 数组（有 audit 记录或空均可）
+  const runs = await req('GET', '/api/agent/runs?limit=5', { cookie })
+  check(
+    'ag④ GET /api/agent/runs → 200 且 items 为数组',
+    runs.status === 200 && Array.isArray(runs.json?.data?.items),
+    `items=${runs.json?.data?.items?.length}`,
+  )
+
+  // ag⑤ 隐私模式下未带 cookie → 401
+  if (authEnabled) {
+    const noAuth = await fetch(`${BASE}/api/agent/tools`)
+    check('ag⑤ 隐私模式未登录 /api/agent/tools → 401', noAuth.status === 401, `status=${noAuth.status}`)
+  }
+}
+
 if (authEnabled) {
   // ㉒ 登出 → 204
   const logout = await req('POST', '/api/logout', { cookie })

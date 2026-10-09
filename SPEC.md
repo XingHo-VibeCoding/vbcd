@@ -199,7 +199,7 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（20 个）
+## 3. API 列表（22 个）
 
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录。
 > 删除资料不单独开接口，复用任务链路（`POST /api/tasks` + `type=delete_note`）并强制走 3.3 确认流。
@@ -227,7 +227,7 @@ vbcd/
 | 19 | `GET /api/db/notes` | 资料列表（Day 17：Postgres 只读迁移口） | `q?`、`category?`、`limit?`（1–500，默认 500）、`offset?` | `200 {total, items[]}` | `VALIDATION_FAILED`、`DB_NOT_CONFIGURED`、`DB_UNAVAILABLE` |
 | 20 | `GET /api/db/notes/:id` | 资料详情（同文件版 `{meta, content}` 结构） | — | `200 {meta, content}` | `NOT_FOUND`、`DB_NOT_CONFIGURED`、`DB_UNAVAILABLE` |
 
-> **F12 预留（2026-10-09 拍板，未实现）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）与 `GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/`）——实现后上表扩至 22 行。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
+> **F12 已实现（2026-10-09，第 21–22 号接口）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）与 `GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/runs.jsonl` 倒序）。另有 `GET /api/agent/tools`（工具清单与可用状态，供前端灰显，未计入接口数）。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
 
 ### 3.1 知识库问答（F9）
 
@@ -525,6 +525,8 @@ vbcd/
 | `IMA_CACHE_TTL_MS` | `60000` | 上游成功响应的进程内缓存时长；`0`=关闭（不落盘） | ⬜ |
 | `DATABASE_URL` | `postgres://buddy:<口令>@pg:5432/buddy` | Day 17：`/api/db/*` 读库地址；compose 内由 `docker-compose.yml` 从 `PG_PASSWORD` 拼接 | 🟡 |
 | `PG_PASSWORD` | 随机 48 位 | compose 变量：同时作为 `POSTGRES_PASSWORD` 与 `DATABASE_URL` 的口令段（项目根 `.env`，不入库） | 🔴 |
+| `AGENT_MAX_STEPS` | `8` | F12：agent 单轮循环的工具调用步数上限（防模型兜圈） | ⬜ |
+| `AGENT_TOOLS` | （空=全量） | F12：逗号分隔的工具白名单，收窄注册表（如 `search_notes,get_note`） | ⬜ |
 
 `asr/` 服务侧变量见 `asr/.env.example`（完整清单以样例文件为准；高频项：`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / `MAAS_BASE_URL` / `ASR_MODEL` / `ASR_CHUNK_SECONDS` / **`ASR_MAX_AUDIO_SECONDS=300`（上游单请求时长硬上限，启动时把 `ASR_CHUNK_SECONDS` 夹紧到 ≤ 本值）** / `ASR_MAX_B64_BYTES` / `ASR_REQUEST_TIMEOUT` / `ASR_CHUNK_CONCURRENCY` / `ASR_GLOBAL_CONCURRENCY` / `ASR_HOST` `ASR_PORT` / `DOWNLOAD_TIMEOUT` `MAX_DOWNLOAD_MB` / `JOBS_DIR` `JOB_TTL_SECONDS` `JOB_TIMEOUT_SECONDS` / `YTDLP_*` / `CACHE_TTL_SECONDS`）。
 
