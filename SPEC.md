@@ -83,7 +83,7 @@ vbcd/
 
 **为什么不把「当前在哪个视图」放进组件 state 或全局状态管理**：state 刷新即丢、前进后退按钮不生效、链接发到手机对方只能看到默认视图。地址栏是唯一一个「刷新、前进后退、跨设备分享」三件事天然同时成立的地方——这也是本项目从 Day 10 起 `?view` / `?tab` / `?mode` / `?cal` 一路沿用同一套做法的原因。
 
-**代价（已知并接受）**：单页应用需要服务端把未知路径回落 `index.html`，否则 `/ask`、`/notes/xxx` 直接刷新会 404 —— 由 `web/nginx.conf` 的 `try_files $uri $uri/ /index.html` 兜住（Day 8 已落）。
+**代价（已知并接受）**：单页应用需要服务端把未知路径回落 `index.html`，否则 `/agent`、`/notes/xxx` 直接刷新会 404 —— 由 `web/nginx.conf` 的 `try_files $uri $uri/ /index.html` 兜住（Day 8 已落）。
 
 ### 视图树
 
@@ -94,12 +94,12 @@ vbcd/
 │                       └ ?src=local（默认） | ima（F15 云端只读视图，见 3.6）
 │                          └ ima 下 `panel=notes` → 笔记列表（F15b，见 3.7）
 ├── /log     日志      └ ?tab=tasks（默认） | confirm（确认留痕）
-├── /ask     agent 问答   （无参数：提问内容是临时输入，不入地址栏）
+├── /agent   agent 问答   （无参数：提问内容是临时输入，不入地址栏；旧 /ask 由前端 redirect 兼容）
 └── /about   关于      └ ?tab=intro（默认） | activity
 
 二级 · 路径参数下钻（从一级任一入口进入）
 ├── /notes/:id               入口 5 个：/notes 卡片、/notes?view=dir 目录行、
-│                            /about?tab=activity 时间线、/ask 问答来源、/archive 归档成功后提示
+│                            /about?tab=activity 时间线、/agent 问答来源、/archive 归档成功后提示
 ├── /notes/ima/:docid        ima 笔记详情（F15b）：入口 1 个（/notes?src=ima&panel=notes 列表行）；
 │                            /notes/ima 裸路径重定向回笔记列表
 └── /tasks/:id/confirm       入口 4 个：/log 任务行、/log?tab=confirm 留痕行、

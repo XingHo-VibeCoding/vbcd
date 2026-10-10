@@ -1692,7 +1692,7 @@ body {
 
 /* ===== Day 13：面包屑 + 「返回上一页」 =====
    两者分工不同：面包屑 = 这条页面在一级导航里的位置（静态、可预期）；
-   「返回上一页」= 我刚才从哪儿来（可能是 /about 时间线或 /ask 来源，写死父级会带错路）。
+   「返回上一页」= 我刚才从哪儿来（可能是 /about 时间线或 /agent 来源，写死父级会带错路）。
    颜色全部复用既有 token（--accent / --muted），未新增也未改任何色值
    → 深浅两套主题的对比度维持既有实测结果（浅色 accent 6.52:1、muted 7.37:1）。 */
 .breadcrumb {
@@ -1768,7 +1768,7 @@ body {
   font-size: var(--fs-1);
 }
 
-/* ── F12 agent 对话页（/ask）── */
+/* ── F12 agent 对话页（/agent）── */
 .agent-head {
   display: flex;
   align-items: baseline;

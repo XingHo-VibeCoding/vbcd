@@ -51,7 +51,7 @@ npm run dev                 # :5174，/api 代理到 :3100
 | `/tasks/:id/confirm` | 确认页 | 高风险动作的后果说明 + 确认 / 取消（F6） |
 | `/notes/:id` | 资料详情 | 正文 + 文件路径；底部「删除这条资料」入口（F6） |
 | `/new` `/tasks` `/confirmations` | — | 旧入口，重定向到 `/archive`、`/log`、`/log?tab=confirm` |
-| `/ask` | agent · 知识库问答 | 需配 KB env，见 8.6（本期仅改名 agent，功能未动；方向见 `AGENT.md`） |
+| `/agent` | agent 对话页（F12 工具化，原 /ask 已 redirect 至此） | 见 8.11 |
 | `/about` | 关于 | 自我介绍 / 研究动态页签（`?tab=activity`）；热力图按资料 date 聚合，时间线取最新 8 条（F11） |
 | `/login` | 登录 | 仅 `AUTH_ENABLED=1` 时可达 |
 
@@ -63,7 +63,7 @@ npm run dev                 # :5174，/api 代理到 :3100
 | 任务：发起（记资料 / 提醒 / 收敛 / 删除资料 / 视频转写）+ 查看与推进状态（F4/F5） | `remind` 的自动执行器：只登记待办；`note` 同步归档，`organize`（收敛）提交即异步整理归档（F14），`transcribe_url` 由轮询器异步归档（F13） |
 | 删除资料：详情页发起 → 确认页看后果 → 确认后才真删（F6） | smail 邮箱关联、ehall 事务（第 2–3 期） |
 | 确认留痕：每次请求与决定可回看（F6） | 多用户与权限、原生 App、自动后台记录 |
-| 个人主页；知识库问答 `/ask` | RAG 进阶：混合检索 / Rerank / 多轮记忆 |
+| 个人主页；agent 对话 `/agent` | RAG 进阶：混合检索 / Rerank / 多轮记忆 |
 | 全站深浅主题：主页方格开关，偏好存浏览器本地，首次跟随系统（F10） | 主题跨设备同步；跟随系统 / 浅 / 深 三态切换；切换动画 |
 | 关于页：自我介绍 / 研究动态（F11） | 真实横幅图、热力图按天点击查看资料 |
 | 视频转写：curl 提交 `transcribe_url` 任务 → 自动转写归档（F13，见 8.8） | 前端表单入口、上传文件转写、说话人分离 |
@@ -263,7 +263,7 @@ curl -X POST http://localhost:3000/api/kb/query \
 curl -N "http://localhost:3000/api/kb/stream?q=WSL"     # 流式
 ```
 
-前端 `/ask` 提问，逐字显示，来源可跳原文。
+前端 `/agent` 提问，逐字显示，来源可跳原文。
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
@@ -332,7 +332,7 @@ curl -s 'http://192.168.130.14/api/db/notes?limit=3'          # 内网机子的�
 ```bash
 docker compose ps                                            # 四个 Up（web/server/chroma/asr），server 应为 (healthy)
 curl -s http://localhost/api/health                          # {"ok":true,...}
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost/ask   # 200（SPA 回退生效）
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost/agent   # 200（SPA 回退生效；/ask 由前端 redirect）
 curl -sN 'http://localhost/api/kb/stream?q=test'             # 未配 key 应立刻回 event: error
 ls data/work/                                                # 主页「归档」方格 → /archive 提交一条后能看到新 .md
 ```
@@ -343,7 +343,7 @@ ls data/work/                                                # 主页「归档�
 
 | 现象 | 原因 | 现状 |
 |---|---|---|
-| 刷新 `/ask`、`/notes/xxx` 变 404 | 单页路由，Nginx 找不到文件 | `web/nginx.conf` 已配 `try_files $uri /index.html` |
+| 刷新 `/agent`、`/notes/xxx` 变 404 | 单页路由，Nginx 找不到文件 | `web/nginx.conf` 已配 `try_files $uri /index.html` |
 | 流式回答不逐字，卡一下全出来 | Nginx 缓冲 SSE | 已对 `/api/kb/stream` 关 `proxy_buffering` |
 | 模型端点挂掉要等 60 秒才回，且是 Nginx 英文 504 页 | OpenAI SDK 默认超时 600s + 重试 2 次，超过 `proxy_read_timeout 60s` | 已设 `LLM_TIMEOUT_MS=30000` + `LLM_MAX_RETRIES=1`，现约 1.8 秒返回中文 `LLM_FAILED` |
 | 彩排时开 `AUTH_ENABLED` 登录不了 | `NODE_ENV=production` 让 Cookie 带 `Secure`，彩排走 HTTP | 彩排不开；上线用 HTTPS 后正常 |
@@ -510,7 +510,7 @@ ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
 npm run dev            # server 默认 3000，或 PORT=3210
 
 # 前端
-cd web && npm run dev  # /ask 页
+cd web && npm run dev  # /agent 页（旧 /ask 由前端 redirect）
 ```
 
 **验证一条只读链路**（模型自主调 search_notes）：

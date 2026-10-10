@@ -118,7 +118,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["浏览器 /ask 问答页"] -->|"1  POST /api/kb/query 或 GET /api/kb/stream（SSE）"| B["Express 后端 routes/kb.js"]
+    A["浏览器 /agent 问答页（原 /ask）"] -->|"1  POST /api/kb/query 或 GET /api/kb/stream（SSE）"| B["Express 后端 routes/kb.js"]
     B -->|"2  问题向量化"| E["OpenAI 兼容端点<br/>Embedding 模型"]
     B -->|"3  Top-K 相似度检索"| C["Chroma 自托管<br/>collection: buddy-notes"]
     C -->|"4  命中段落 + 来源元数据"| B

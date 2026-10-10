@@ -237,7 +237,7 @@ data/
 > **本节已于 2026-10-09 拍板**：本期边界 S0+S1+S2-lite、技术路线 A 终态、接口 +2、时间盒 5 板块封顶。
 > 详见本节末尾「已确认决策」。
 
-**现状**：agent（`/ask` 页，显示名「agent」）目前只有 F9 的 RAG 问答——只读、单轮、不能触发任何动作。
+**现状**：agent（`/agent` 页，显示名「agent」；2026-10-10 由 /ask 改名）目前只有 F9 的 RAG 问答——只读、单轮、不能触发任何动作。
 扩大的本质 = 给它**工具**（能做事）+ **闸门**（不越权）+ **记忆**（能追问）。
 
 **三个可扩维度**（建议顺序：先可控性，再深度，最后广度）：
@@ -280,7 +280,7 @@ data/
 
 1. **本期边界**：S0 + S1 + S2-lite——只读三件套（`search_notes` / `get_note` / `ask_kb`）+ 多轮会话 + `archive_note` 一个写工具走确认闸门；`create_task` / `advance_task` 留到下一期；
 2. **技术路线**：A 当终态 + JSON 状态接缝——自写循环调度，`@langchain/core` 只出 `tool()`/`bindTools()`/消息类型；循环状态（`{messages, step, pendingConfirmationId}`）可序列化落 `data/.runtime/agent/`，为将来 langgraph 留门但不预留依赖；**参考 Anything-LLM `aibitat` 与 LibreChat 的零件（工具单文件/白名单/manifest/事件语义/checkpointer 思路），不借骨架、不移植函数级代码**；
-3. **前端形态**：改造 `/ask` 页本身（agent 是问答超集），工具调用先渲染为消息流折叠行，S2 写工具行升级为「草案 + 确认/取消」卡片；不新开 `/agent` 页；
+3. **前端形态**：改造原 `/ask` 页本身（agent 是问答超集；2026-10-10 路径更名为 `/agent`，旧 `/ask` redirect 兼容），工具调用先渲染为消息流折叠行，S2 写工具行升级为「草案 + 确认/取消」卡片；
 4. **接口口径**：**+3**——`POST /api/agent/chat`（SSE：`token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）+ `GET /api/agent/runs`（审计查看）+ `GET /api/agent/sessions/:id`（读回消息流，切页/刷新恢复用）；接口总数 20→23；会话状态文件不进接口本体（仍单用户一条活跃会话，列表切换 UI 留 S3）；
 5. **时间盒**：**5 个板块封顶**，按 S0→S1→S2-lite 顺序做、每板块收尾须本格内可验证；做完即止，超封则砍掉 S2 整体只上线已验证部分（最坏情况 = 只读 agent 上线）。
 
@@ -326,6 +326,6 @@ data/
 | 2026-09-28 | v1.8 | 追加 F14 链接收敛：「整理链接」补上后端解析（抓取 → 提取 → LLM 整理 → 归档）；验收标准 6 条；走任务链路 `organize`，接口仍 13 个；F8 标注「抓取与摘要已由 F14/F13 覆盖」；风险补第 8 条（SSRF / robots / 启发式提取） |
 | 2026-10-05 | v1.9 | 追加 F15 ima 云端知识库只读视图：`/notes` 新增「本地 / 云端」切换，3 个新接口（14–16，只读 GET），验收标准 6 条；内容零落盘，Key 仅 `server/.env`；踩坑记：`limit` 文档写 50 实测上限 20 |
 | 2026-10-05 | v1.10 | 追加 F15b ima 笔记只读视图：云端首页「笔记」卡片 + `?panel=notes` 列表 + `/notes/ima/:docid` 详情（Markdown 正文、`<mark>` 已剥、失效图片文字占位），接口 16→18 个，验收标准 +5 条；如实标注 F15「文件夹可下钻」在真实数据上暂不成立（上游 `media_type:99` 形状变化，判据过时） |
-| 2026-10-09 | v1.11 | F12 五条待确认项全部拍板：边界 S0+S1+S2-lite（archive_note 单写工具）、技术路线 A 终态 + JSON 状态接缝、前端改 /ask 页、接口 +2（20→22）、时间盒 5 板块封顶；参考实现定为 Anything-LLM + LibreChat 借零件不借骨架 |
+| 2026-10-09 | v1.11 | F12 五条待确认项全部拍板：边界 S0+S1+S2-lite（archive_note 单写工具）、技术路线 A 终态 + JSON 状态接缝、前端改原 /ask 页（2026-10-10 已更名 /agent）、接口 +2（20→22）、时间盒 5 板块封顶；参考实现定为 Anything-LLM + LibreChat 借零件不借骨架 |
 | 2026-10-10 | v1.13 | F12 补 `GET /api/agent/sessions/:id`（会话读回，修「切页后消息丢失」）；前端 sessionId 落 localStorage + 挂载时自动拉历史还原；smoke ag⑥⑦ + LLM 失败分支补发 done（接口 22→23） |
-| 2026-10-09 | v1.12 | F12 S0+S1+S2-lite 落地：agent 骨架（manifest/registry/state/audit/loop + tools×4）+ `POST /api/agent/chat` SSE + `GET /api/agent/runs` + `/api/agent/tools` + `/ask` 页改多轮对话（工具调用折叠行 + 确认提示）；接口 20→22（另有 tools 未计入）；`executeApproved` 补 `agent_archive_note` 分支；冒烟 ag①–ag⑤ 全过；实测本地 vLLM 链路批准/拒绝双路径通过 |
+| 2026-10-09 | v1.12 | F12 S0+S1+S2-lite 落地：agent 骨架（manifest/registry/state/audit/loop + tools×4）+ `POST /api/agent/chat` SSE + `GET /api/agent/runs` + `/api/agent/tools` + `/agent` 页改多轮对话（工具调用折叠行 + 确认提示）；接口 20→22（另有 tools 未计入）；`executeApproved` 补 `agent_archive_note` 分支；冒烟 ag①–ag⑤ 全过；实测本地 vLLM 链路批准/拒绝双路径通过 |

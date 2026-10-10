@@ -54,7 +54,7 @@ export default function App() {
           </NavLink>
           <NavLink to="/notes">档案</NavLink>
           <NavLink to="/log">日志</NavLink>
-          <NavLink to="/ask">agent</NavLink>
+          <NavLink to="/agent">agent</NavLink>
           <NavLink to="/about">关于</NavLink>
           {authEnabled ? <LogoutButton /> : null}
         </nav>
@@ -75,7 +75,8 @@ export default function App() {
           <Route path="/new" element={<Navigate to="/archive" replace />} />
           <Route path="/tasks" element={<Navigate to="/log" replace />} />
           <Route path="/confirmations" element={<Navigate to="/log?tab=confirm" replace />} />
-          <Route path="/ask" element={<KbAskPage />} />
+          <Route path="/agent" element={<KbAskPage />} />
+          <Route path="/ask" element={<Navigate to="/agent" replace />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/login" element={authEnabled ? <LoginPage /> : <Navigate to="/" replace />} />
         </Routes>
