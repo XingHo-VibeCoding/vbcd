@@ -80,3 +80,8 @@ export async function listAgentRuns(limit = 50) {
 export async function listAgentTools() {
   return request('/api/agent/tools')
 }
+
+/** 读回已有会话的消息流（页面切换/刷新后恢复用） */
+export async function getAgentSession(id) {
+  return request(`/api/agent/sessions/${id}`)
+}

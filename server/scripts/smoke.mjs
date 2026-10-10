@@ -676,6 +676,36 @@ if (FAKE_ASR_PORT) {
     noSessText.slice(0, 80).replace(/\n/g, ' '),
   )
 
+
+  // ag⑥ 会话读回：先发一条消息让会话落盘（LLM 失败也会 saveSession），
+  // 再 GET /api/agent/sessions/:id → 200 + rows 数组且首行是 human→user
+  const seed = await fetch(`${BASE}/api/agent/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+    body: JSON.stringify({ message: 'smoke-恢复测试' }),
+  })
+  const seedText = await seed.text()
+  const sid = /"session_id":"([a-f0-9-]+)"/.exec(seedText)?.[1]
+  if (!sid) {
+    check('ag⑥ POST /api/agent/chat → SSE done 含 session_id', false, seedText.slice(0, 100).replace(/\n/g, ' '))
+  } else {
+    const view = await req('GET', `/api/agent/sessions/${sid}`, { cookie })
+    const rows = view.json?.data?.rows
+    check(
+      'ag⑥ GET /api/agent/sessions/:id → 200 且 rows 含 user 消息',
+      view.status === 200 && Array.isArray(rows) && rows.some((r) => r.role === 'user' && r.text === 'smoke-恢复测试'),
+      `rows=${rows?.length}`,
+    )
+  }
+
+  // ag⑦ 读不存在的会话 → 404 NOT_FOUND
+  const noView = await req('GET', '/api/agent/sessions/sess-not-exist', { cookie })
+  check(
+    'ag⑦ 不存在会话 → 404 NOT_FOUND',
+    noView.status === 404 && noView.json?.error?.code === 'NOT_FOUND',
+    `status=${noView.status}`,
+  )
+
   // ag④ GET /api/agent/runs → 200 + items 数组（有 audit 记录或空均可）
   const runs = await req('GET', '/api/agent/runs?limit=5', { cookie })
   check(

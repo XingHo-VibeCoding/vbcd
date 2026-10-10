@@ -1,21 +1,43 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import MarkdownContent from '../components/MarkdownContent.jsx'
-import { streamAgentChat } from '../api/agent.js'
+import { getAgentSession, streamAgentChat } from '../api/agent.js'
 
 // agent 对话页（F12）：多轮会话 + 工具调用可见。
 // 消息流节点三种：user（用户气泡）/ assistant（agent 回答，Markdown 渲染）/ tool（工具调用折叠行）。
-// session_id 记在本组件 state——刷新即新会话（本期不留持久会话切换 UI）。
+// session_id 存 localStorage——切换页面/刷新后可从后端读回历史续聊；
+// 「新会话」按钮清掉本地记录。本期不做会话列表切换 UI。
 let uid = 0
 const nid = () => `m${++uid}`
+const SESSION_KEY = 'buddy.agent.sessionId'
 
 export default function KbAskPage() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState([]) // {id, role:'user'|'assistant'|'tool', text, toolName?, toolArgs?, toolOk?, streaming?}
-  const [sessionId, setSessionId] = useState(null)
+  const [sessionId, setSessionIdState] = useState(() => localStorage.getItem(SESSION_KEY))
+  function setSessionId(id) {
+    setSessionIdState(id)
+    if (id) localStorage.setItem(SESSION_KEY, id)
+    else localStorage.removeItem(SESSION_KEY)
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const abortRef = useRef(null)
   const bottomRef = useRef(null)
+  const restoredRef = useRef(false)
+
+  // 进页面时若有 sessionId，从后端读回历史还原消息流；会话已被清则静默开新
+  useEffect(() => {
+    if (restoredRef.current) return
+    restoredRef.current = true
+    if (!sessionId) return
+    getAgentSession(sessionId)
+      .then((res) => {
+        const rows = res?.data?.rows
+        if (!Array.isArray(rows) || rows.length === 0) return
+        setMessages(rows.map((r) => ({ id: nid(), ...r })))
+      })
+      .catch(() => setSessionId(null)) // 会话文件被清/损坏 → 开新会话
+  }, [sessionId])
 
   function scrollDown() {
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }))
@@ -105,7 +127,7 @@ export default function KbAskPage() {
   function reset() {
     abortRef.current?.abort()
     setMessages([])
-    setSessionId(null)
+    setSessionId(null) // 同时清 localStorage
     setError('')
     setBusy(false)
   }

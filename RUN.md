@@ -501,7 +501,7 @@ ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
 
 ### 8.11 agent 对话（F12，2026-10-09）
 
-**接口**：`POST /api/agent/chat`（SSE）/ `GET /api/agent/runs` / `GET /api/agent/tools`（清单）。整体挂在 `requireAuth` 后。
+**接口**：`POST /api/agent/chat`（SSE）/ `GET /api/agent/runs` / `GET /api/agent/tools`（清单）/ `GET /api/agent/sessions/:id`（读回消息流，切页/刷新恢复）。整体挂在 `requireAuth` 后。
 
 **本机跑通**（本地 vLLM，`server/.env` 已指）：
 

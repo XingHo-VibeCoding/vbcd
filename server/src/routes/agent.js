@@ -7,6 +7,8 @@
 import { Router } from 'express'
 import { runTurn } from '../services/agent/loop.js'
 import { listRuns } from '../services/agent/audit.js'
+import { loadSession, sessionToView } from '../services/agent/state.js'
+import { fail } from '../services/errors.js'
 import { manifestStatus } from '../services/agent/registry.js'
 
 const router = Router()
@@ -41,6 +43,18 @@ router.post('/chat', async (req, res) => {
     send('done', { suspended: false })
   } finally {
     if (!closed) res.end()
+  }
+})
+
+
+// 读回已有会话的展示数据：页面刷新/切换后恢复消息流用
+router.get('/sessions/:id', async (req, res, next) => {
+  try {
+    const session = await loadSession(req.params.id)
+    if (!session) throw fail('NOT_FOUND', `会话不存在：${req.params.id}`, 404)
+    res.json({ ok: true, data: sessionToView(session) })
+  } catch (err) {
+    next(err)
   }
 })
 

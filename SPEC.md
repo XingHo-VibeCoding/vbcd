@@ -199,7 +199,7 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（22 个）
+## 3. API 列表（23 个）
 
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录。
 > 删除资料不单独开接口，复用任务链路（`POST /api/tasks` + `type=delete_note`）并强制走 3.3 确认流。
@@ -226,8 +226,11 @@ vbcd/
 | 18 | `GET /api/ima/notes/:id` | ima 笔记详情：meta + Markdown 正文（F15b，只读） | — | `200 {meta, content}` | `IMA_NOT_CONFIGURED`、`IMA_UPSTREAM_FAILED`、`IMA_NOTE_NOT_FOUND`（404） |
 | 19 | `GET /api/db/notes` | 资料列表（Day 17：Postgres 只读迁移口） | `q?`、`category?`、`limit?`（1–500，默认 500）、`offset?` | `200 {total, items[]}` | `VALIDATION_FAILED`、`DB_NOT_CONFIGURED`、`DB_UNAVAILABLE` |
 | 20 | `GET /api/db/notes/:id` | 资料详情（同文件版 `{meta, content}` 结构） | — | `200 {meta, content}` | `NOT_FOUND`、`DB_NOT_CONFIGURED`、`DB_UNAVAILABLE` |
+| 21 | `POST /api/agent/chat` | agent 对话（SSE，F12） | `message`、`session_id?` | `text/event-stream`（`token`/`tool_call`/`tool_result`/`confirmation_required`/`done`） | 错误以 `event: error` 推送 |
+| 22 | `GET /api/agent/runs` | agent 调用审计查看 | `limit?` | `200 {total, items[]}` | `INTERNAL` |
+| 23 | `GET /api/agent/sessions/:id` | 读回 agent 会话消息流（页面切换/刷新后恢复用） | — | `200 {session_id, rows[], pending_confirmation_id, created_at, updated_at}` | `NOT_FOUND` |
 
-> **F12 已实现（2026-10-09，第 21–22 号接口）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）与 `GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/runs.jsonl` 倒序）。另有 `GET /api/agent/tools`（工具清单与可用状态，供前端灰显，未计入接口数）。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
+> **F12 已实现（2026-10-09 起，第 21–23 号接口）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）、`GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/runs.jsonl` 倒序）、`GET /api/agent/sessions/:id`（读回会话消息流，前端切页/刷新恢复用；rows 已把 langchain 消息还原成 user/assistant/tool 行）。另有 `GET /api/agent/tools`（工具清单与可用状态，供前端灰显，未计入接口数）。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
 
 ### 3.1 知识库问答（F9）
 

@@ -92,6 +92,8 @@ export async function runTurn({ sessionId, message, emit, registry: injectedRegi
       await audit({ session_id: session.id, step, type: 'llm_call', ok: false, error: err.message, duration_ms: Date.now() - t0 })
       emit('error', { code: 'LLM_FAILED', message: `模型调用失败：${err.message}` })
       await saveSession(session)
+      // 失败也是本轮终态：补发 done 让前端正常收尾（并带出 session_id 供恢复）
+      emit('done', { session_id: session.id, suspended: false })
       return { sessionId: session.id, suspended: false }
     }
     await audit({ session_id: session.id, step, type: 'llm_call', ok: true, duration_ms: Date.now() - t0 })

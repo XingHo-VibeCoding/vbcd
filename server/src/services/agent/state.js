@@ -65,3 +65,75 @@ export async function saveSession(session) {
     throw storageError(`写入会话状态失败：${err.message}`)
   }
 }
+
+/**
+ * 把落盘会话还原成前端可渲染的消息行（GET /api/agent/sessions/:id 用）。
+ * 还原规则：
+ *   human → user 气泡；ai → assistant 气泡（空正文且有 tool_calls 时省略气泡，
+ *   只留工具行）；ai.data.tool_calls 与后续 tool 消息按 tool_call_id 配对成
+ *   「工具调用行」（toolOk/toolResult 由 tool 消息回填，找不到配对就单列）。
+ *   session.pendingConfirmationId 非空 → 末尾追加一行确认提示。
+ * 返回的是纯展示数据，不含 langchain 私有字段。
+ */
+export function sessionToView(session) {
+  const rows = []
+  const pendingByCallId = new Map() // tool_call_id → row index（等回填）
+
+  for (const m of session.messages ?? []) {
+    const data = m?.data ?? {}
+    if (m.type === 'human') {
+      rows.push({ role: 'user', text: contentText(data.content) })
+    } else if (m.type === 'ai') {
+      const text = contentText(data.content)
+      const calls = Array.isArray(data.tool_calls) ? data.tool_calls : []
+      if (text) rows.push({ role: 'assistant', text })
+      for (const call of calls) {
+        pendingByCallId.set(call.id, rows.length)
+        rows.push({ role: 'tool', toolName: call.name, toolArgs: call.args ?? {}, pending: true })
+      }
+    } else if (m.type === 'tool') {
+      const idx = data.tool_call_id != null ? pendingByCallId.get(data.tool_call_id) : undefined
+      const result = contentText(data.content)
+      const row = {
+        role: 'tool',
+        toolName: data.name ?? 'tool',
+        toolOk: !String(result).startsWith('工具执行失败'),
+        toolResult: String(result).slice(0, 500), // 与 SSE tool_result 同口径截断
+        pending: false,
+      }
+      if (idx !== undefined) {
+        rows[idx] = { ...rows[idx], ...row, toolArgs: rows[idx].toolArgs }
+        pendingByCallId.delete(data.tool_call_id)
+      } else {
+        rows.push(row) // 配对不上的孤立 tool 消息也如实显示
+      }
+    }
+  }
+
+  // 历史里没等到结果的调用：pending 保留但不再显示转圈（页面刷新后没有进行中的流）
+  for (const row of rows) if (row.pending) row.pending = false
+
+  if (session.pendingConfirmationId) {
+    rows.push({
+      role: 'tool',
+      toolName: 'confirmation',
+      confirm: { confirmation_id: session.pendingConfirmationId, note: '等待确认中' },
+      text: '这个动作需要你先确认',
+    })
+  }
+
+  return {
+    session_id: session.id,
+    created_at: session.created_at,
+    updated_at: session.updated_at,
+    pending_confirmation_id: session.pendingConfirmationId ?? null,
+    rows,
+  }
+}
+
+/** ai/tool 消息的 content 统一取文本（可能是字符串或多模态块数组） */
+function contentText(content) {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) return content.map((c) => c?.text || '').join('')
+  return content == null ? '' : String(content)
+}

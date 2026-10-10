@@ -41,6 +41,6 @@
 ## 4. 本期边界（2026-10-09 已拍板）
 
 - 「agent」页当前只是「知识库问答」改名——F12 工具化方向已定（PRD §7「已确认决策」）：本期边界 **S0+S1+S2-lite**（只读三件套 + 多轮 + `archive_note` 一个写工具走闸门），时间盒 5 板块封顶。
-- 接口口径放宽为 **+2**（`POST /api/agent/chat` SSE + `GET /api/agent/runs`），总数 20→22：agent 化是**在接口之上加一层工具编排**，不推翻现有链路。
+- 接口口径放宽为 **+3**（`POST /api/agent/chat` SSE + `GET /api/agent/runs` + `GET /api/agent/sessions/:id`），总数 20→23：agent 化是**在接口之上加一层工具编排**，不推翻现有链路。
 - 技术路线：自写循环 + `@langchain/core` 协议层，循环状态落 `data/.runtime/agent/`（JSON 接缝）；参考实现 Anything-LLM / LibreChat（借零件不借骨架，源码 clone 于 `~/work/refs/`）。
 - `transcribe_url` 已是现成的长任务模板：agent 调它时同样走「提交 → 轮询 → 归档」任务链路，写操作无需新闸门（归档与 F1 同级）。
