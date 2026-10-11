@@ -7,7 +7,7 @@ import TaskConfirmPage from './pages/TaskConfirmPage.jsx'
 import NoteDetailPage from './pages/NoteDetailPage.jsx'
 import ImaNoteDetailPage from './pages/ImaNoteDetailPage.jsx'
 import ArchivePage from './pages/ArchivePage.jsx'
-import KbAskPage from './pages/KbAskPage.jsx'
+import AgentPageV2 from './pages/AgentPageV2.jsx'
 import AboutPage from './pages/AboutPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { logout } from './api/auth.js'
@@ -75,7 +75,8 @@ export default function App() {
           <Route path="/new" element={<Navigate to="/archive" replace />} />
           <Route path="/tasks" element={<Navigate to="/log" replace />} />
           <Route path="/confirmations" element={<Navigate to="/log?tab=confirm" replace />} />
-          <Route path="/agent" element={<KbAskPage />} />
+          <Route path="/agent" element={<AgentPageV2 />} />
+          <Route path="/agent-v2" element={<Navigate to="/agent" replace />} />
           <Route path="/ask" element={<Navigate to="/agent" replace />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/login" element={authEnabled ? <LoginPage /> : <Navigate to="/" replace />} />

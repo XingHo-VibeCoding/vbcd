@@ -1,0 +1,220 @@
+/* ── F12 agent 对话页（assistant-ui 版，/agent-v2）──
+   风格参考 Claude + Anything-LLM：
+   - user 消息：右对齐圆角气泡（右下角小缺角），轻量灰底不是重色块
+   - assistant：通栏无气泡，正文阅读宽
+   - 工具调用：左侧竖线 + 折叠行（独立卡片感）
+   - 确认审批：居中卡片橙边，视觉焦点
+   - 输入框：底部固定，圆角大输入
+*/
+
+.aui-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 160px);
+  min-height: 400px;
+}
+
+.aui-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 消息流滚动区 */
+.aui-viewport {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-4) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.aui-empty {
+  color: var(--muted);
+  padding: var(--sp-8, 48px) var(--sp-4);
+  text-align: center;
+  font-size: var(--fs-3, 15px);
+  line-height: 1.7;
+}
+
+/* 消息行：user 右对齐，assistant 通栏 */
+.aui-row {
+  display: flex;
+  width: 100%;
+}
+.aui-row.user { justify-content: flex-end; }
+.aui-row.assistant { justify-content: flex-start; }
+
+/* user 气泡：圆角 20px 右下角小缺角（Anything-LLM 形态），轻灰底 */
+.aui-bubble.user {
+  background: var(--bg-soft, #f0f1f3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  border-bottom-right-radius: 4px;
+  padding: 12px 16px;
+  max-width: 600px;
+  line-height: 1.65;
+  font-size: var(--fs-3, 15px);
+}
+
+/* assistant 通栏无气泡，正文阅读宽 */
+.aui-bubble.assistant {
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  max-width: 720px;
+  width: 100%;
+  line-height: 1.7;
+  font-size: var(--fs-3, 15px);
+}
+
+/* assistant 内 markdown 紧凑一点 */
+.aui-bubble.assistant p { margin: 0 0 var(--sp-2); }
+.aui-bubble.assistant p:last-child { margin-bottom: 0; }
+.aui-bubble.assistant ul, .aui-bubble.assistant ol { margin: var(--sp-1) 0 var(--sp-2); }
+
+/* 输入区：底部固定，圆角胶囊大输入 */
+.aui-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.aui-input {
+  flex: 1;
+  min-height: 44px;
+  max-height: 200px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  font-size: var(--fs-3, 15px);
+  font-family: inherit;
+  background: var(--bg-soft, #f6f7f9);
+  color: var(--text);
+  resize: none;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.aui-input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+.aui-input::placeholder { color: var(--muted); }
+
+.aui-send, .aui-cancel {
+  padding: 10px 18px;
+  border-radius: 22px;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: #fff;
+  font-size: var(--fs-3, 15px);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  min-height: 44px;
+}
+.aui-send:hover:not(:disabled) { opacity: 0.9; }
+.aui-send:disabled { opacity: 0.4; cursor: not-allowed; }
+.aui-cancel {
+  background: var(--bg-soft, #f6f7f9);
+  color: var(--text);
+  border-color: var(--border);
+}
+.aui-cancel:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 工具调用卡（ToolFallback）：左竖线 + 折叠行 */
+.aui-tool {
+  font-size: var(--fs-2, 13px);
+  color: var(--muted);
+  border-left: 2px solid var(--border);
+  padding: var(--sp-1) var(--sp-2);
+  margin: var(--sp-2) 0;
+}
+.aui-tool summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.aui-tool summary::-webkit-details-marker { display: none; }
+.aui-tool-icon { font-size: 14px; }
+.aui-tool-name {
+  font-weight: 600;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+.aui-tool-args {
+  font-size: 12px;
+  opacity: 0.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.aui-tool-status { font-style: normal; margin-left: auto; }
+.aui-tool-status.ok { color: var(--success, #2f9e44); }
+.aui-tool-status.bad { color: var(--danger, #c0392b); }
+.aui-tool-result {
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--bg-soft, #f6f7f9);
+  border-radius: var(--radius-1);
+  max-height: 320px;
+  overflow-y: auto;
+  color: var(--text);
+}
+.aui-tool.fail { border-left-color: var(--danger, #c0392b); }
+
+/* 确认审批卡：居中 + 橙边，视觉焦点 */
+.aui-tool.confirm {
+  border: 1px solid var(--warn, #b7791f);
+  border-left: 4px solid var(--warn, #b7791f);
+  border-radius: var(--radius-2);
+  padding: var(--sp-4);
+  margin: var(--sp-3) auto;
+  max-width: 480px;
+  background: #fffbf2;
+  display: flex;
+  gap: var(--sp-3);
+  color: var(--text);
+  font-size: var(--fs-3, 15px);
+}
+.aui-tool-confirm-icon { font-size: 22px; line-height: 1; }
+.aui-tool-confirm-body { flex: 1; }
+.aui-tool-confirm-title {
+  font-weight: 600;
+  color: var(--warn, #b7791f);
+  margin-bottom: var(--sp-1);
+}
+.aui-tool-confirm-draft {
+  margin: var(--sp-2) 0;
+  font-size: var(--fs-3, 15px);
+}
+.aui-tool-confirm-id {
+  font-size: 11px;
+  opacity: 0.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.aui-tool-confirm-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: var(--sp-2);
+}
+
+
+/* 页头（标题 + 新会话按钮） */
+.agent-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+}
