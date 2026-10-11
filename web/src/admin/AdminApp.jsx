@@ -10,6 +10,8 @@ import { Route, Routes } from 'react-router-dom'
 import { dataProvider } from './dataProvider.js'
 import { authProvider } from './authProvider.js'
 import Dashboard from './pages/Dashboard.jsx'
+import TaskList from './pages/TaskList.jsx'
+import { UnorderedListOutlined } from '@ant-design/icons'
 
 export default function AdminApp() {
   return (
@@ -26,6 +28,11 @@ export default function AdminApp() {
               list: '/admin',
               meta: { label: '仪表盘', icon: <DashboardOutlined /> },
             },
+            {
+              name: 'tasks',
+              list: '/admin/tasks',
+              meta: { label: '任务队列', icon: <UnorderedListOutlined /> },
+            },
           ]}
           options={{ syncWithLocation: true }}
         >
@@ -35,6 +42,14 @@ export default function AdminApp() {
               element={
                 <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
                   <Dashboard />
+                </ThemedLayout>
+              }
+            />
+            <Route
+              path="tasks"
+              element={
+                <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
+                  <TaskList />
                 </ThemedLayout>
               }
             />
