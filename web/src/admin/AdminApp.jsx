@@ -1,5 +1,5 @@
 // AdminApp：Refine 后台实例。挂在 /admin/* 下，独立于主站布局。
-// 板块①骨架：Refine + AntD 主题 + 侧边栏 + 占位仪表盘；资源页后续板块再加。
+// 板块①只搭骨架：Refine + AntD 主题 + 侧边栏 + 占位仪表盘；资源页后续板块再加。
 import { Refine } from '@refinedev/core'
 import { ThemedLayout, ThemedTitle, useNotificationProvider } from '@refinedev/antd'
 import routerProvider from '@refinedev/react-router'

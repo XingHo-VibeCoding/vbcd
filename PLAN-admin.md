@@ -38,6 +38,12 @@ Admin（运维）              第一期
   · 站点设置：头像 / 主站背景 → data/site.json
   · 卡片：独立内容类型（标题+图+文，类 flomo/Notion gallery）→ data/cards/
 
+环境变量管理              第二期
+  · 全 .env 浏览（server/asr/根，敏感键只显状态不回显明文）
+  · 敏感键"粘贴覆盖"式修改（GET 永不回显，PATCH 只接新值）
+  · 非敏感键可读写；改后需重启生效（业界通用，Vercel/Netlify 同）
+  · 配套：GET/PATCH /api/admin/env + （可选）重启触发
+
 Agent 治理               第二/三期
   · 工具清单只读（第一期已含）
   · 工具启停开关（改 registry，中期）
@@ -61,6 +67,7 @@ Agent 治理               第二/三期
 | D7 | 编辑冲突策略 | **A：网站改动直接覆盖**，Obsidian 靠远程同步刷新 | 最简单；风险是 Obsidian 未保存编辑可能被同步覆盖——接受，单人使用可控 |
 | D8 | 卡片类型 | **独立内容类型**（非图片附件） | 第二期工程：`data/cards/`，标题+图+文 |
 | D9 | 第一期写操作 | 仅安全触发：任务重试 / KB reindex / agent 确认 | 零新数据语义；编辑/删除放板块⑥ |
+| D10 | .env 管理 | 后台管**所有 .env**：敏感键只显状态+可覆盖（不回显）、非敏感可读写；改后重启生效 | 使用者明确要"所有 .env"；安全边界=强鉴权+只写明文+审计；热生效键挪 data/site.json |
 
 ## 4. 第一期板块切分（一次一步，当天出成果）
 
@@ -77,11 +84,16 @@ Agent 治理               第二/三期
 
 复用现有：`GET /api/tasks`、`PATCH /api/tasks/:id`、`GET /api/agent/runs`、`GET /api/agent/tools`、`GET /api/notes`、`GET /api/notes/:id`、`POST /api/kb/index`。
 
-新增：
+新增（第一期）：
 - `GET /api/admin/overview` → `{ ok, data:{ services:[{name,ok,latencyMs}], counts:{notes,tasks,runs}, recentTasks:[...] } }`
 - `GET /api/admin/services`（或并入 overview）
 - `PATCH /api/notes/:id`（板块⑥，`{title?,content?,tags?,category?}` → 覆盖写文件，策略 A）
 - `DELETE /api/notes/:id`（板块⑥，物理删文件 + 处理 `.index.json` 缓存）
+
+新增（第二期 · env 管理）：
+- `GET /api/admin/env` → 各服务 env 键 + 状态。敏感键只回 `{set:true, preview:"sk-…a1b2"}`；非敏感回 `{value:"..."}`
+- `PATCH /api/admin/env` → body `{service, key, value}`，写回对应 .env 文件 + 记 audit；敏感键允许覆盖但 GET 永不回显明文
+- `POST /api/admin/env/restart`（可选）→ 触发 `docker compose restart <service>`；或仅提示手动重启
 
 dataProvider 适配层职责：
 - 请求路径映射 Refine 资源 → `/api/*`
@@ -103,6 +115,7 @@ dataProvider 适配层职责：
 - `?limit` 上限 500 的资料，超量需游标分页（存量已知债）
 - 公开模式下 API 裸露是**存量风险**，后台上线不放大它，但建议后续给 `/api/*` 加整体鉴权或只读降级
 - 第二期依赖：`/api/uploads`、`/api/images`、`data/site.json`、`data/cards/` 均未建
+- **env 管理安全边界**：`/api/admin/env` 把密钥暴露面从"服务器文件"扩到"HTTP 接口"，必须——① `requireAuth` + 后台专属门禁；② GET 永不回显敏感键明文（只 `set:true` + `preview`）；③ PATCH 只接新值不落日志；④ 全程 HTTPS；⑤ 每次改动记 audit。改 `.env` 不自动生效（进程启动时读），需重启——热生效键应挪 `data/site.json`
 
 ## 8. 提交纪律（AGENTS.md §9.4）
 

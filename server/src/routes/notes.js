@@ -4,7 +4,7 @@
 //   GET  /api/notes/:id   读原文（F2）
 // 本路由整体挂在 requireAuth 之后（见 app.js），未登录一律 401 AUTH_REQUIRED。
 import { Router } from 'express'
-import { createNote } from '../services/notes.js'
+import { createNote, updateNote, removeNote } from '../services/notes.js'
 import { loadIndex, queryEntries } from '../services/index-store.js'
 import { fail } from '../services/errors.js'
 import * as storage from '../storage/files.js'
@@ -38,6 +38,28 @@ router.get('/:id', async (req, res, next) => {
     const note = await storage.get(String(req.params.id))
     if (!note) throw fail('NOT_FOUND', '这条资料不存在', 404)
     res.json({ ok: true, data: note })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// 板块⑥ 后台编辑：PATCH /api/notes/:id
+// 冲突策略 A（PLAN-admin §3 D7）：网站改动直接覆盖文件，Obsidian 靠远程同步刷新。
+// 文件模式专用；数据库模式由 service 抛 501 NOT_SUPPORTED。
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const updated = await updateNote(String(req.params.id), req.body ?? {})
+    res.json({ ok: true, data: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// 板块⑥ 后台删除：DELETE /api/notes/:id —— 物理删 Markdown 文件。
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const removed = await removeNote(String(req.params.id))
+    res.json({ ok: true, data: removed })
   } catch (err) {
     next(err)
   }

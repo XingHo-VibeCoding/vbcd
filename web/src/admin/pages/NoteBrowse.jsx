@@ -1,8 +1,8 @@
 // 板块⑤资料浏览：GET /api/notes 只读列表（搜索/分类/分页）+ 行点击开详情抽屉。
-// 第一期只读——编辑/删除留板块⑥。
+// 第一期只读——编辑/删除留板块⑥；这里给"打开主站"与复制 id 两个便捷动作。
 import { useEffect, useState } from 'react'
-import { Table, Tag, Input, Select, Space, Button, Drawer, Descriptions, Typography, message } from 'antd'
-import { ReloadOutlined, SearchOutlined, LinkOutlined } from '@ant-design/icons'
+import { Table, Tag, Input, Select, Space, Button, Drawer, Descriptions, Typography, message, Modal, Form, Popconfirm } from 'antd'
+import { ReloadOutlined, SearchOutlined, LinkOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { request } from '../../api/client.js'
@@ -19,7 +19,7 @@ export default function NoteBrowse() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [loading, setLoading] = useState(true)
-  const [detail, setDetail] = useState(null)
+  const [detail, setDetail] = useState(null)   // 抽屉里的完整 note
   const [detailLoading, setDetailLoading] = useState(false)
   const [msg, msgCtx] = message.useMessage()
 
@@ -51,6 +51,52 @@ export default function NoteBrowse() {
       msg.error(e?.message || '详情加载失败')
     } finally {
       setDetailLoading(false)
+    }
+  }
+
+  // ── 板块⑥ 编辑 / 删除 ──────────────────────────────────────
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form] = Form.useForm()
+
+  function openEdit() {
+    form.setFieldsValue({
+      title: detail?.meta?.title,
+      category: detail?.meta?.category,
+      tags: (detail?.meta?.tags || []).join(', '),
+      content: detail?.content,
+    })
+    setEditing(true)
+  }
+
+  async function saveEdit() {
+    const v = await form.validateFields()
+    setSaving(true)
+    try {
+      const tags = String(v.tags || '').split(',').map((t) => t.trim()).filter(Boolean)
+      await request(`/api/notes/${detail.meta.id}`, {
+        method: 'PATCH',
+        body: { title: v.title, category: v.category, tags, content: v.content },
+      })
+      msg.success('已保存（文件已覆盖，Obsidian 端同步刷新后生效）')
+      setEditing(false)
+      setDetail(null)
+      await load()
+    } catch (e) {
+      msg.error(e?.message || '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function doDelete() {
+    try {
+      await request(`/api/notes/${detail.meta.id}`, { method: 'DELETE' })
+      msg.success('已删除')
+      setDetail(null)
+      await load()
+    } catch (e) {
+      msg.error(e?.message || '删除失败')
     }
   }
 
@@ -99,9 +145,18 @@ export default function NoteBrowse() {
         onClose={() => setDetail(null)}
         extra={
           detail && (
-            <Button type="link" icon={<LinkOutlined />} href={`/notes/${detail.meta?.id}`} target="_blank">
-              主站打开
-            </Button>
+            <Space>
+              <Button size="small" icon={<EditOutlined />} onClick={openEdit}>编辑</Button>
+              <Popconfirm
+                title="删除这条资料？"
+                description="物理删除 Markdown 文件，Obsidian 同步后不可恢复。"
+                okText="删除" okButtonProps={{ danger: true }} cancelText="取消"
+                onConfirm={doDelete}
+              >
+                <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
+              </Popconfirm>
+              <Button type="link" icon={<LinkOutlined />} href={`/notes/${detail.meta?.id}`} target="_blank">主站打开</Button>
+            </Space>
           )
         }
       >
@@ -119,6 +174,31 @@ export default function NoteBrowse() {
           </>
         )}
       </Drawer>
+
+      <Modal
+        title="编辑资料（覆盖文件，Obsidian 同步刷新生效）"
+        open={editing}
+        onOk={saveEdit}
+        confirmLoading={saving}
+        onCancel={() => setEditing(false)}
+        width={720}
+        okText="保存" cancelText="取消"
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item name="title" label="标题" rules={[{ required: true, message: '标题不能为空' }]}>
+            <Input maxLength={80} showCount />
+          </Form.Item>
+          <Form.Item name="category" label="分类" rules={[{ required: true, message: '选分类' }]}>
+            <Select options={CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))} />
+          </Form.Item>
+          <Form.Item name="tags" label="标签（逗号分隔）">
+            <Input placeholder="tag1, tag2" />
+          </Form.Item>
+          <Form.Item name="content" label="正文（Markdown）" rules={[{ required: true, message: '正文不能为空' }]}>
+            <Input.TextArea rows={12} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

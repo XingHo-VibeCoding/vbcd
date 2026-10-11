@@ -3,6 +3,8 @@
 // 本文件不直接读写文件系统，也不直接碰库——「存哪」由 storage/note-store.js 内部判定（Day 19 起）。
 import { createHash } from 'node:crypto'
 import * as noteStore from '../storage/note-store.js'
+import * as files from '../storage/files.js'
+import { dbConfigured } from '../db/pool.js'
 import { fail } from './errors.js'
 
 export const CATEGORIES = ['learning', 'life', 'work']
@@ -138,4 +140,63 @@ export async function listNotesFromDb(params = {}) {
  */
 export async function getNoteFromDb(id) {
   return await noteStore.getDb(String(id))
+}
+
+// ── 板块⑥ 后台资料编辑 / 删除（文件层专属）───────────────────────────────
+// 边界（PLAN-admin §3 D6+D7）：后台可对 note 做编辑与删除，权限高于主站；
+// 冲突策略 A = 网站改动直接覆盖文件，Obsidian 靠远程同步刷新（单人可控，不乐观锁）。
+// 仅文件模式支持：配了 DATABASE_URL 时写侧在 notes 表，编辑/删除走库是另一套，
+// 第一期不做（PLAN §7 遗留）——此处如实抛 NOT_SUPPORTED，不静默退到文件层。
+
+/**
+ * 编辑资料：先删旧文件再重 put（put 永不覆盖，故须先 remove）。
+ * 保留原 id / created_at / source_url；title/category/tags/content 可改，updated_at 刷新。
+ * 字段校验复用 validate()；不存在 → NOT_FOUND。
+ */
+export async function updateNote(id, input) {
+  if (dbConfigured()) {
+    throw fail('NOT_SUPPORTED', '数据库模式下的资料编辑未实现：后台编辑目前只支持文件存储模式', 501)
+  }
+  const existing = await files.get(String(id))
+  if (!existing) throw fail('NOT_FOUND', '这条资料不存在', 404)
+
+  const { title, content, category, tags } = validate({ ...existing.meta, ...input, source_url: existing.meta.source_url })
+  const { iso } = nowShanghai()
+
+  // 先删后建：put 永不覆盖同名文件；删除失败抛 STORAGE_FAILED。
+  const removed = await files.remove(String(id))
+  if (!removed) throw fail('NOT_FOUND', '这条资料不存在', 404)
+
+  const note = {
+    id: existing.meta.id, // 保留原 id——同分类同日期下重 put 会落同名文件（旧文件已删）
+    title,
+    category,
+    date: existing.meta.date,
+    tags,
+    source_url: existing.meta.source_url,
+    created_at: existing.meta.created_at,
+    updated_at: iso,
+    hash: hashOf(title, content),
+    schema_version: existing.meta.schema_version ?? 1,
+    content,
+  }
+  try {
+    return await files.put(note)
+  } catch (err) {
+    if (err.code) throw err
+    throw fail('STORAGE_FAILED', `写入资料目录失败：${err.message}`, 503)
+  }
+}
+
+/**
+ * 删除资料：物理删 Markdown 文件。索引缓存按目录指纹自动重建，无需手工失效。
+ * 不存在 → NOT_FOUND。返回 { id, path } 供路由回显。
+ */
+export async function removeNote(id) {
+  if (dbConfigured()) {
+    throw fail('NOT_SUPPORTED', '数据库模式下的资料删除未实现：后台删除目前只支持文件存储模式', 501)
+  }
+  const removed = await files.remove(String(id))
+  if (!removed) throw fail('NOT_FOUND', '这条资料不存在', 404)
+  return removed
 }
