@@ -5,6 +5,8 @@ import { Router } from 'express'
 import { listTasks } from '../services/tasks.js'
 import { dbConfigured, query as dbQuery } from '../db/pool.js'
 import * as storage from '../storage/files.js'
+import { listEnv } from '../services/env.js'
+import { getSettings, patchSettings } from '../services/settings.js'
 
 const router = Router()
 
@@ -98,6 +100,32 @@ router.get('/overview', async (req, res, next) => {
         auth_enabled: process.env.AUTH_ENABLED === '1',
       },
     })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// env 只读总览（配置分层：基础设施秘密网页只读不编辑）
+router.get('/env', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await listEnv() })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// 站点业务配置：读/写 data/site.json（热生效、容器可达）
+router.get('/settings', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await getSettings() })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.patch('/settings', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await patchSettings(req.body ?? {}) })
   } catch (err) {
     next(err)
   }

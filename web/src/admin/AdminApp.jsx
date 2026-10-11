@@ -14,7 +14,9 @@ import TaskList from './pages/TaskList.jsx'
 import AgentRuns from './pages/AgentRuns.jsx'
 import AgentTools from './pages/AgentTools.jsx'
 import NoteBrowse from './pages/NoteBrowse.jsx'
-import { UnorderedListOutlined, RobotOutlined, ToolOutlined, FileTextOutlined } from '@ant-design/icons'
+import EnvManager from './pages/EnvManager.jsx'
+import SiteSettings from './pages/SiteSettings.jsx'
+import { UnorderedListOutlined, RobotOutlined, ToolOutlined, FileTextOutlined, SettingOutlined, ControlOutlined } from '@ant-design/icons'
 
 export default function AdminApp() {
   return (
@@ -50,6 +52,16 @@ export default function AdminApp() {
               name: 'notes',
               list: '/admin/notes',
               meta: { label: '资料浏览', icon: <FileTextOutlined /> },
+            },
+            {
+              name: 'settings',
+              list: '/admin/settings',
+              meta: { label: '站点设置', icon: <ControlOutlined /> },
+            },
+            {
+              name: 'env',
+              list: '/admin/env',
+              meta: { label: '环境变量', icon: <SettingOutlined /> },
             },
           ]}
           options={{ syncWithLocation: true }}
@@ -92,6 +104,22 @@ export default function AdminApp() {
               element={
                 <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
                   <NoteBrowse />
+                </ThemedLayout>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
+                  <SiteSettings />
+                </ThemedLayout>
+              }
+            />
+            <Route
+              path="env"
+              element={
+                <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
+                  <EnvManager />
                 </ThemedLayout>
               }
             />
