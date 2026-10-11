@@ -12,6 +12,10 @@ import AboutPage from './pages/AboutPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { logout } from './api/auth.js'
 import { request } from './api/client.js'
+import { lazy, Suspense } from 'react'
+
+// 后台控制台：lazy 加载，AntD/Refine 大依赖只在进 /admin 时才下载，不拖累主站首屏
+const AdminApp = lazy(() => import('./admin/AdminApp.jsx'))
 
 function LogoutButton() {
   const navigate = useNavigate()
@@ -80,6 +84,15 @@ export default function App() {
           <Route path="/ask" element={<Navigate to="/agent" replace />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/login" element={authEnabled ? <LoginPage /> : <Navigate to="/" replace />} />
+          {/* 后台控制台：/admin 及子路径全部交给 Refine 的 AdminApp */}
+          <Route
+            path="/admin/*"
+            element={
+              <Suspense fallback={<div style={{ padding: 24 }}>后台加载中…</div>}>
+                <AdminApp />
+              </Suspense>
+            }
+          />
         </Routes>
       </main>
 
