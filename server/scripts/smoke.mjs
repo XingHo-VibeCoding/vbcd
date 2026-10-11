@@ -21,6 +21,11 @@ const FAKE_ASR_PORT = process.env.SMOKE_FAKE_ASR_PORT || ''
 // 不设 SMOKE_FAKE_IMA_PORT 时只做「未配置态」断言；后端配了真实凭据时会跳过一次真实只读调用。
 // 笔记断言（im⑧–im⑪）覆盖：列表字段映射 / 详情 meta+Markdown 且 <mark> 已剥 / 404 / 隐私模式 401。
 const FAKE_IMA_PORT = process.env.SMOKE_FAKE_IMA_PORT || ''
+// GitHub 聚合冒烟：设 SMOKE_FAKE_GH_PORT（如 8096）时，自动拉起 scripts/fake-github.mjs 桩并跑断言；
+// 需后端以 GITHUB_USERNAME=fake-user GITHUB_TOKEN=fake GITHUB_API_BASE=http://127.0.0.1:<同一端口>
+//   GITHUB_GRAPHQL_BASE=http://127.0.0.1:<同一端口>/graphql GITHUB_CACHE_TTL_MS=60000 启动。
+// 不设时只做「未配置态」断言（configured:false）。
+const FAKE_GH_PORT = process.env.SMOKE_FAKE_GH_PORT || ''
 
 let passed = 0
 let failed = 0
@@ -98,7 +103,25 @@ async function startFakeIma() {
   console.error('fake-ima 未能启动')
   process.exit(2)
 }
-process.on('exit', () => { if (fakeAsr) fakeAsr.kill(); if (fakeIma) fakeIma.kill() })
+// ===== 按需拉起假 GitHub（F16 聚合断言用）=====
+let fakeGh = null
+async function startFakeGh() {
+  if (!FAKE_GH_PORT) return false
+  fakeGh = spawn(process.execPath, [fileURLToPath(new URL('./fake-github.mjs', import.meta.url))], {
+    env: { ...process.env, GH_PORT: FAKE_GH_PORT },
+    stdio: 'ignore',
+  })
+  for (let i = 0; i < 30; i += 1) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${FAKE_GH_PORT}/counts`)
+      if (r.ok) return true
+    } catch { /* 还没起来 */ }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  console.error('fake-github 未能启动')
+  process.exit(2)
+}
+process.on('exit', () => { if (fakeAsr) fakeAsr.kill(); if (fakeIma) fakeIma.kill(); if (fakeGh) fakeGh.kill() })
 
 /** 轮询任务直到终态（done/failed/attention）或超时；返回最后一次看到的任务对象。
  *  默认 60s：归档类任务可能含一次真实 LLM 整理（fallback 或慢端点都要打满等待预算）。 */
@@ -719,6 +742,38 @@ if (FAKE_ASR_PORT) {
     const noAuth = await fetch(`${BASE}/api/agent/tools`)
     check('ag⑤ 隐私模式未登录 /api/agent/tools → 401', noAuth.status === 401, `status=${noAuth.status}`)
   }
+}
+
+// ===== GitHub 聚合（F16）=====
+await startFakeGh()
+const ghRes = await req('GET', '/api/github/activity', { cookie })
+if (FAKE_GH_PORT) {
+  check(
+    'gh① GET /api/github/activity → configured + profile/calendar/events 齐',
+    ghRes.status === 200 && ghRes.json?.data?.configured === true
+      && ghRes.json?.data?.profile?.login === 'fake-user'
+      && Array.isArray(ghRes.json?.data?.calendar?.weeks) && ghRes.json?.data?.calendar?.weeks.length === 53
+      && Array.isArray(ghRes.json?.data?.events),
+    `total=${ghRes.json?.data?.calendar?.totalContributions} events=${ghRes.json?.data?.events?.length}`,
+  )
+  check(
+    'gh② events 过滤白名单外类型（WatchEvent 被丢）',
+    ghRes.json?.data?.events?.every((e) => e.type !== 'WatchEvent') && ghRes.json?.data?.events?.length === 2,
+    JSON.stringify(ghRes.json?.data?.events?.map((e) => e.type)),
+  )
+  const ghAgain = await req('GET', '/api/github/activity', { cookie })
+  const counts = await fetch(`http://127.0.0.1:${FAKE_GH_PORT}/counts`).then((r) => r.json())
+  check(
+    'gh③ TTL 内第二次请求命中缓存（上游计数不再涨）',
+    ghAgain.status === 200 && counts.profile === 1 && counts.graphql === 1 && counts.events === 1,
+    JSON.stringify(counts),
+  )
+} else {
+  check(
+    'gh① 未配 GITHUB_USERNAME → configured:false 降级（不报错）',
+    ghRes.status === 200 && ghRes.json?.data?.configured === false,
+    `status=${ghRes.status} data=${JSON.stringify(ghRes.json?.data)}`,
+  )
 }
 
 if (authEnabled) {

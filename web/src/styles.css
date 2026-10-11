@@ -33,10 +33,11 @@
   --warn-line: #d47c22; /* 确认区块的左侧警示竖线（原 #d9822b 对白底仅 2.93:1，加深一档到 3.13:1）*/
   --danger-bg-hover: #fbdcd8; /* 危险按钮 hover 底 */
 
-  /* ===== F11 追加：贡献热力图三档绿（GitHub 色系，0 档直接用 --surface-hover）===== */
+  /* ===== F11 追加：贡献热力图四档绿（GitHub 浅色系；0 档用 --surface-hover）===== */
   --contrib-1: #9be9a8;
   --contrib-2: #40c463;
-  --contrib-3: #216e39;
+  --contrib-3: #30a14e;
+  --contrib-4: #216e39;
 
   /* ===== 字号：7 档，关键相邻差 ≥2px（Day 9 · P1/P2）=====
      正文基准 = --fs-3（15px）；12px 档取消（最小为 13px）。 */
@@ -101,6 +102,7 @@
   --contrib-1: #0e4429;
   --contrib-2: #006d32;
   --contrib-3: #26a641;
+  --contrib-4: #39d353;
 }
 
 * {
@@ -798,11 +800,6 @@ body {
 }
 
 /* ===== F9 · 知识库问答页 ===== */
-.kb-ask-form {
-  display: flex;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
-}
 
 .kb-answer {
   margin-top: var(--sp-3);
@@ -844,8 +841,7 @@ body {
 
 /* Day 9 · P5：超窄屏工具栏允许换行（搜索框一行、筛选一行） */
 @media (max-width: 480px) {
-  .toolbar,
-  .kb-ask-form {
+  .toolbar {
     flex-wrap: wrap;
   }
 }
@@ -1467,6 +1463,61 @@ body {
   margin-top: var(--sp-4);
 }
 
+/* GitHub 资料卡（自我介绍页签内嵌） */
+.gh-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--sp-2);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.gh-card:hover {
+  border-color: var(--muted);
+}
+
+.gh-card-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.gh-card-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.gh-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gh-card-login {
+  font-weight: 600;
+}
+
+.gh-card-desc {
+  font-size: var(--fs-1);
+  color: var(--muted);
+}
+
+.gh-card-arrow {
+  margin-left: auto;
+  color: var(--muted);
+}
+
 /* 贡献热力图卡片 */
 .contrib-card {
   background: var(--surface-subtle);
@@ -1482,9 +1533,9 @@ body {
   font-weight: 600;
 }
 
-/* 外层负责横向滚动：月份标签文字可以向右溢出自身 10px 格，被父容器吃掉 */
+/* 外层不再滚动：格子随容器宽自适应收窄（53 周一屏完整显示） */
 .contrib-scroll {
-  overflow-x: auto;
+  overflow: hidden;
 }
 
 .contrib-graph {
@@ -1497,10 +1548,10 @@ body {
 .contrib-months {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 10px;
-  gap: var(--sp-1);
-  /* 几何推导值，不是间距阶梯：= .contrib-weekdays span 的 width(24px) + .contrib-body 的 gap(--sp-2) */
-  margin-left: calc(24px + var(--sp-2));
+  grid-auto-columns: 1fr;
+  gap: 3px;
+  /* 几何推导值，不是间距阶梯：= .contrib-weekdays span 的 width(32px) + .contrib-body 的 gap(--sp-2) */
+  margin-left: calc(32px + var(--sp-2));
   font-size: var(--fs-1);
   color: var(--muted);
 }
@@ -1523,22 +1574,21 @@ body {
 }
 
 .contrib-weekdays span {
-  width: 24px;
-  height: 10px;
-  line-height: 10px;
+  width: 32px;
+  height: 12px;
+  line-height: 12px;
 }
 
 .contrib-cells {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: repeat(7, 10px);
-  grid-auto-columns: 10px;
-  gap: var(--sp-1);
+  grid-template-rows: repeat(7, 12px);
+  grid-auto-columns: 1fr;
+  gap: 3px;
 }
 
 .contrib-cell {
-  width: 10px;
-  height: 10px;
+  height: 12px;
   border-radius: 2px;
   background: var(--surface-hover); /* 0 档 = 空格 */
 }
@@ -1555,6 +1605,10 @@ body {
   background: var(--contrib-3);
 }
 
+.contrib-cell--4 {
+  background: var(--contrib-4);
+}
+
 .contrib-legend {
   display: flex;
   align-items: center;
@@ -1563,6 +1617,12 @@ body {
   margin-top: var(--sp-3);
   font-size: var(--fs-1);
   color: var(--muted);
+}
+
+/* 图例里的格子要固定小方块（不参与 .contrib-cells 的 1fr 均分） */
+.contrib-legend .contrib-cell {
+  width: 12px;
+  height: 12px;
 }
 
 /* 活动时间线：左竖线 + 圆点 + 行 */
@@ -1604,29 +1664,19 @@ body {
   border-radius: var(--radius);
 }
 
-.activity-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  object-fit: cover;
+.activity-badge {
   flex-shrink: 0;
-}
-
-.activity-avatar-fallback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent);
-  color: var(--text-on-accent);
   font-size: var(--fs-1);
-}
-
-.activity-name {
   font-weight: 600;
+  padding: 2px var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
-.activity-act {
-  color: var(--accent);
+.activity-badge-gh {
+  background: var(--text);
+  color: var(--surface);
 }
 
 .activity-title {
@@ -1768,85 +1818,3 @@ body {
   font-size: var(--fs-1);
 }
 
-/* ── F12 agent 对话页（/agent）── */
-.agent-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
-}
-.agent-chat {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  margin: var(--sp-4) 0;
-  min-height: 200px;
-}
-.chat-row {
-  display: flex;
-}
-.chat-row.user {
-  justify-content: flex-end;
-}
-.chat-bubble {
-  max-width: 82%;
-  padding: var(--sp-2) var(--sp-3);
-  border-radius: var(--radius-2);
-  line-height: 1.65;
-}
-.chat-bubble.user {
-  background: var(--accent);
-  color: #fff;
-}
-.chat-bubble.assistant {
-  background: var(--bg-soft, #f6f7f9);
-  border: 1px solid var(--border);
-}
-.chat-tool {
-  font-size: var(--fs-2, 13px);
-  color: var(--muted);
-  border-left: 2px solid var(--border);
-  padding: var(--sp-1) var(--sp-2);
-}
-.chat-tool summary {
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-}
-.chat-tool summary code {
-  font-size: 12px;
-  opacity: 0.75;
-}
-.chat-tool pre {
-  margin: var(--sp-2) 0 0;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.chat-tool.fail {
-  border-left-color: var(--danger, #c0392b);
-}
-.chat-tool.confirm {
-  border-left-color: var(--warn, #b7791f);
-  color: var(--warn, #b7791f);
-}
-.chat-tool.confirm code {
-  font-size: 11px;
-  opacity: 0.7;
-}
-.chat-tool-hint {
-  font-size: 12px;
-  opacity: 0.7;
-}
-.chat-tool em {
-  font-style: normal;
-}
-.chat-tool em.ok {
-  color: var(--success, #2f9e44);
-}
-.chat-tool em.bad {
-  color: var(--danger, #c0392b);
-}

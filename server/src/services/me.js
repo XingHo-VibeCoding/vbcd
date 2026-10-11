@@ -1,5 +1,5 @@
 // 个人主页数据（个人主页接口的数据源）：
-//   data/profile.md   frontmatter 取 nickname / avatar / bio 三个字段
+//   data/profile.md   frontmatter 取 nickname / avatar / bio / github 四个字段
 //   data/schedule.md  正文逐行一条日程：- YYYY-MM-DD [HH:mm] 事项
 // 两个文件都在 data/ 根级而非子目录——files.js:list() 只遍历子目录，不会进资料索引。
 // 文件缺失或为空不抛错：返回空 profile / 空 schedule，由前端降级展示。
@@ -22,9 +22,9 @@ async function readOrEmpty(file) {
   }
 }
 
-/** 只取 frontmatter 里关心的三个字段；没有 frontmatter 视为空 profile */
+/** 只取 frontmatter 里关心的四个字段；没有 frontmatter 视为空 profile */
 function parseProfile(raw) {
-  const profile = { nickname: '', avatar: '', bio: '' }
+  const profile = { nickname: '', avatar: '', bio: '', github: '' }
   if (!raw.startsWith('---')) return profile
   const close = raw.indexOf('\n---', 3)
   if (close === -1) return profile

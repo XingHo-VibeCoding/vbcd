@@ -13,6 +13,7 @@ import meRouter from './routes/me.js'
 import imaRouter from './routes/ima.js'
 import dbRouter from './routes/db.js'
 import agentRouter from './routes/agent.js'
+import githubRouter from './routes/github.js'
 
 export function createApp() {
   const app = express()
@@ -37,6 +38,7 @@ export function createApp() {
   app.use('/api/ima', requireAuth, imaRouter)
   app.use('/api/db', requireAuth, dbRouter)
   app.use('/api/agent', requireAuth, agentRouter)
+  app.use('/api/github', requireAuth, githubRouter)
 
   // 兜底：找不到的路由返回统一的 404
   app.use(notFound)

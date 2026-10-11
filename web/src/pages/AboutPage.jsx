@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { getMe } from '../api/me.js'
 import { listNotes } from '../api/notes.js'
+import { getGithubActivity } from '../api/github.js'
 
-const WEEKDAY_LABELS = ['一', '', '三', '', '五', '', '']
+const WEEKDAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', '']
 const TIMELINE_COUNT = 8
 
 // F11 占位文案：正式使用前把这段换成使用者自己的介绍（改这一个常量即可）
@@ -30,6 +31,35 @@ const INTRO_SECTIONS = [
   },
 ]
 
+/** GitHub 资料卡（自我介绍页签内嵌）：头像走 github.com/<login>.png 公开端点，无需 token。
+    login 为空（profile.md 未配 github 字段）时整块不渲染。 */
+function GitHubCard({ login }) {
+  const [broken, setBroken] = useState(false)
+  const url = `https://github.com/${login}`
+  return (
+    <a className="gh-card" href={url} target="_blank" rel="noreferrer">
+      {!broken ? (
+        <img
+          className="gh-card-avatar"
+          src={`${url}.png?size=96`}
+          alt=""
+          aria-hidden="true"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <span className="gh-card-avatar gh-card-avatar-fallback" aria-hidden="true">
+          {login.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      <span className="gh-card-body">
+        <span className="gh-card-login">@{login}</span>
+        <span className="gh-card-desc">在 GitHub 上关注我</span>
+      </span>
+      <span className="gh-card-arrow" aria-hidden="true">→</span>
+    </a>
+  )
+}
+
 /** 本地时区的 YYYY-MM-DD（与 HomePage 的 dateStr 同一口径） */
 function dateStr(d) {
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -46,12 +76,16 @@ function englishName(nickname) {
   return letters ? letters.toUpperCase() : 'BUDDY'
 }
 
-/** 贡献热力图：本周一往前推 52 周，共 53 列 × 7 行（col-major 扁平数组）；null = 还没到的那一天 */
-function contribCells(items) {
+/** 贡献热力图：本周一往前推 52 周，共 53 列 × 7 行（col-major 扁平数组）；null = 还没到的那一天。
+ *  F16：ghCounts 是 GitHub 日历的 Map<date,count>——同一天资料条数与 commit 数加总成一格。 */
+function contribCells(items, ghCounts = new Map()) {
   const counts = new Map()
   for (const n of items) {
     if (!n.date) continue
     counts.set(n.date, (counts.get(n.date) || 0) + 1)
+  }
+  for (const [date, count] of ghCounts) {
+    counts.set(date, (counts.get(date) || 0) + count)
   }
 
   const today = new Date()
@@ -70,7 +104,8 @@ function contribCells(items) {
         continue
       }
       const ds = dateStr(d)
-      cells.push({ date: ds, month: d.getMonth(), count: counts.get(ds) || 0 })
+      const count = counts.get(ds) || 0
+      cells.push({ date: ds, month: d.getMonth(), count, level: levelOf(count) })
     }
   }
   return cells
@@ -82,18 +117,66 @@ function monthLabels(cells) {
   let prevMonth = -1
   for (let col = 0; col < 53; col++) {
     const first = cells.slice(col * 7, col * 7 + 7).find(Boolean)
-    labels.push(first && first.month !== prevMonth ? `${first.month + 1}月` : '')
-    if (first) prevMonth = first.month
+    // GitHub 端 cell 没有 month 字段，从 date（YYYY-MM-DD）解析；资料端有 month 直接用
+    const m = first ? (first.month ?? Number(first.date.slice(5, 7)) - 1) : -1
+    labels.push(first && m !== prevMonth ? `${m + 1}月` : '')
+    if (first) prevMonth = m
   }
   return labels
 }
 
-/** 贡献档：0 空 / 1 条 / 2 条 / ≥3 条（与图例四档一致） */
+/** 贡献档：0 空 / 1 条 / 2–3 条 / 4–6 条 / ≥7 条（GitHub 四档非空，与图例 5 格一致） */
 function levelOf(count) {
   if (count <= 0) return 0
   if (count === 1) return 1
-  if (count === 2) return 2
-  return 3
+  if (count <= 3) return 2
+  if (count <= 6) return 3
+  return 4
+}
+
+/** 热力图骨架：传入 53×7 的格子扁平数组（col-major，null=未来），渲染月份/星期/格子/图例。
+ *  GitHub 版直接喂 calendar.weeks 拍平；资料版喂 contribCells() 的输出。 */
+function ContribGraph({ cells, title, legendUnit }) {
+  const labels = monthLabels(cells)
+  return (
+    <section className="contrib-card">
+      <p className="contrib-title">{title}</p>
+      <div className="contrib-scroll">
+        <div className="contrib-graph">
+          <div className="contrib-months" aria-hidden="true">
+            {labels.map((label, i) => (
+              <span key={i}>{label}</span>
+            ))}
+          </div>
+          <div className="contrib-body">
+            <div className="contrib-weekdays" aria-hidden="true">
+              {WEEKDAY_LABELS.map((w, i) => (
+                <span key={i}>{w}</span>
+              ))}
+            </div>
+            <div className="contrib-cells">
+              {cells.map((c, i) => (
+                <span
+                  key={i}
+                  className={`contrib-cell contrib-cell--${c ? c.level : 0}`}
+                  title={c ? `${c.date}：${c.count} ${legendUnit}` : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="contrib-legend">
+          Less
+          <span className="contrib-cell" aria-hidden="true" />
+          <span className="contrib-cell contrib-cell--1" aria-hidden="true" />
+          <span className="contrib-cell contrib-cell--2" aria-hidden="true" />
+          <span className="contrib-cell contrib-cell--3" aria-hidden="true" />
+          <span className="contrib-cell contrib-cell--4" aria-hidden="true" />
+          More
+        </div>
+      </div>
+    </section>
+  )
 }
 
 export default function AboutPage() {
@@ -102,6 +185,8 @@ export default function AboutPage() {
   const [meError, setMeError] = useState('')
   const [notes, setNotes] = useState(null) // null = 加载中
   const [notesError, setNotesError] = useState('')
+  const [gh, setGh] = useState(null) // null = 加载中；{configured:false} 或 {profile,calendar,events}
+  const [ghError, setGhError] = useState('')
   const [avatarBroken, setAvatarBroken] = useState(false)
 
   // 页签状态写进地址栏（?tab=activity），与 ?cal=month / ?view=dir 同一套约定
@@ -132,7 +217,14 @@ export default function AboutPage() {
         if (alive) setNotes(d.items || [])
       })
       .catch(() => {
-        if (alive) setNotesError('资料列表拉取失败，研究动态暂不可用')
+        if (alive) setNotesError('资料列表拉取失败，资料动态暂不可用')
+      })
+    getGithubActivity()
+      .then((d) => {
+        if (alive) setGh(d)
+      })
+      .catch(() => {
+        if (alive) setGhError('GitHub 动态拉取失败')
       })
     return () => {
       alive = false
@@ -148,10 +240,32 @@ export default function AboutPage() {
   const en = englishName(nickname)
 
   const items = notes || []
-  const cells = contribCells(items)
-  const labels = monthLabels(cells)
+  // GitHub 日历 → Map<date,count>（calendar 为 null 时传空 map，等价于只有资料）
+  const ghCounts = new Map()
+  if (gh?.calendar?.weeks) {
+    for (const week of gh.calendar.weeks) {
+      for (const d of week) {
+        if (d.date && d.count) ghCounts.set(d.date, d.count)
+      }
+    }
+  }
+  const cells = contribCells(items, ghCounts)
   const total = cells.reduce((sum, c) => sum + (c ? c.count : 0), 0)
-  const recent = items.slice(0, TIMELINE_COUNT)
+  // 分报数：GitHub 贡献总数直接用上官方的 totalContributions；资料总数 = 合并总量 - GitHub 格子里实际叠加的量
+  // （ghCounts 的 key 可能与 cells 窗口不完全对齐——53 周外的不计入 total，用格子 count 反推才一致）
+  const ghCellSum = [...ghCounts.keys()]
+    .filter((d) => cells.some((c) => c && c.date === d))
+    .reduce((s, d) => s + ghCounts.get(d), 0)
+  const noteTotal = total - ghCellSum
+  const ghTotal = gh?.calendar?.totalContributions ?? null
+
+  // 混排时间线：资料更新 + GitHub 事件按时间 desc 合并；日期粒度不同（YYYY-MM-DD vs ISO），取前 10 位对齐
+  const timeline = [
+    ...items.map((n) => ({ kind: 'note', date: n.date || '', title: n.title || n.id, url: `/notes/${n.id}`, id: `n-${n.id}` })),
+    ...(gh?.events || []).map((e) => ({ kind: 'gh', date: (e.createdAt || '').slice(0, 10), title: e.title, url: e.url, id: `g-${e.createdAt}-${e.title}` })),
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, TIMELINE_COUNT)
 
   return (
     <div className="about">
@@ -203,74 +317,52 @@ export default function AboutPage() {
             <div className="loading">载入中…</div>
           ) : (
             <>
-              <section className="contrib-card">
-                <p className="contrib-title">过去一年共 {total} 条资料</p>
-                <div className="contrib-scroll">
-                  <div className="contrib-graph">
-                    <div className="contrib-months" aria-hidden="true">
-                      {labels.map((label, i) => (
-                        <span key={i}>{label}</span>
-                      ))}
-                    </div>
-                    <div className="contrib-body">
-                      <div className="contrib-weekdays" aria-hidden="true">
-                        {WEEKDAY_LABELS.map((w, i) => (
-                          <span key={i}>{w}</span>
-                        ))}
-                      </div>
-                      <div className="contrib-cells">
-                        {cells.map((c, i) => (
-                          <span
-                            key={i}
-                            className={`contrib-cell contrib-cell--${c ? levelOf(c.count) : 0}`}
-                            title={c ? `${c.date}：${c.count} 条资料` : undefined}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="contrib-legend">
-                    少
-                    <span className="contrib-cell" aria-hidden="true" />
-                    <span className="contrib-cell contrib-cell--1" aria-hidden="true" />
-                    <span className="contrib-cell contrib-cell--2" aria-hidden="true" />
-                    <span className="contrib-cell contrib-cell--3" aria-hidden="true" />
-                    多
-                  </div>
-                </div>
-              </section>
+              {ghError ? (
+                <p className="activity-empty">{ghError}（仅显示资料数据）</p>
+              ) : gh === null ? (
+                <div className="loading">GitHub 动态载入中…</div>
+              ) : gh.configured === false ? (
+                <p className="activity-empty">GitHub 动态未配置（server/.env 加 GITHUB_USERNAME 后生效）；热力图仅含资料数据</p>
+              ) : gh.calendar === null ? (
+                <p className="activity-empty">GitHub 贡献日历不可用（需配置 GITHUB_TOKEN）；热力图仅含资料数据</p>
+              ) : null}
+              <ContribGraph
+                cells={cells}
+                title={
+                  ghTotal !== null
+                    ? `过去一年共 ${ghCellSum} 次 GitHub 贡献 + ${noteTotal} 条资料`
+                    : `过去一年共 ${total} 条资料`
+                }
+                legendUnit="次动态"
+              />
 
-              {recent.length ? (
+              {timeline.length ? (
                 <ul className="activity-list">
-                  {recent.map((n) => (
-                    <li className="activity-item" key={n.id}>
+                  {timeline.map((it) => (
+                    <li className="activity-item" key={it.id}>
                       <span className="activity-dot" aria-hidden="true" />
                       <div className="activity-card">
-                        {profile.avatar && !avatarBroken ? (
-                          <img
-                            className="activity-avatar"
-                            src={profile.avatar}
-                            alt=""
-                            aria-hidden="true"
-                            onError={() => setAvatarBroken(true)}
-                          />
+                        {it.kind === 'gh' ? (
+                          <span className="activity-badge activity-badge-gh">GitHub</span>
                         ) : (
-                          <span className="activity-avatar activity-avatar-fallback" aria-hidden="true">
-                            {initial}
-                          </span>
+                          <span className="activity-badge">资料</span>
                         )}
-                        <span className="activity-name">{nickname}</span>
-                        <span className="activity-act">更新了资料</span>
-                        <Link className="activity-title" to={`/notes/${n.id}`}>
-                          {n.title || n.id}
-                        </Link>
-                        <span className="activity-date">{n.date}</span>
+                        {it.kind === 'gh' ? (
+                          <a className="activity-title" href={it.url} target="_blank" rel="noreferrer">
+                            {it.title}
+                          </a>
+                        ) : (
+                          <Link className="activity-title" to={it.url}>
+                            {it.title}
+                          </Link>
+                        )}
+                        <span className="activity-date">{it.date}</span>
                       </div>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="activity-empty">最近一年还没有资料，去主页「归档」记一条吧</p>
+                <p className="activity-empty">最近一年还没有动态，去主页「归档」或在 GitHub 上提交一笔吧</p>
               )}
             </>
           )
@@ -289,6 +381,7 @@ export default function AboutPage() {
                     ))}
                   </ul>
                 ) : null}
+                {i === 0 && profile.github ? <GitHubCard login={profile.github} /> : null}
               </div>
             ))}
           </section>
