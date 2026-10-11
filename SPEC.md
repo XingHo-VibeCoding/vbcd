@@ -68,7 +68,7 @@ vbcd/
 - **颜色只有一处定义**：`web/src/styles.css` 的 `:root`（浅色）与 `:root[data-theme='dark']`（深色覆盖），两套同名 token；组件规则里不出现硬编码色值。
 - **真值**：`<html data-theme="light|dark">`；首屏由 `web/index.html` 的内联脚本在渲染前写好（避免浅色闪一下），运行期读写归 `web/src/theme.js`。
 - **默认与持久化**：无 `localStorage['buddy-theme']` 时跟随系统 `prefers-color-scheme`；用户点过之后固定，写入该键（仅 `light`/`dark`，写失败静默不报错）。
-- **服务端不参与**：不写 `data/profile.md`，不新增接口，不跨设备同步。
+- **服务端不参与**：不写 `data/profile.md（frontmatter 取 `nickname/avatar/bio/github` 四字段；`github` 供 F16 资料卡）`，不新增接口，不跨设备同步。
 - **无动画**：不引入 `transition` / `animation` / `@keyframes`；深色下原生控件由 `color-scheme` 跟随。
 - **关于页热力图色（F11）**：两套主题各 3 个 `--contrib-*`（0 档复用 `--surface-hover`）。
 
@@ -199,7 +199,7 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（23 个）
+## 3. API 列表（24 个）
 
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录。
 > 删除资料不单独开接口，复用任务链路（`POST /api/tasks` + `type=delete_note`）并强制走 3.3 确认流。
@@ -229,6 +229,7 @@ vbcd/
 | 21 | `POST /api/agent/chat` | agent 对话（SSE，F12） | `message`、`session_id?` | `text/event-stream`（`token`/`tool_call`/`tool_result`/`confirmation_required`/`done`） | 错误以 `event: error` 推送 |
 | 22 | `GET /api/agent/runs` | agent 调用审计查看 | `limit?` | `200 {total, items[]}` | `INTERNAL` |
 | 23 | `GET /api/agent/sessions/:id` | 读回 agent 会话消息流（页面切换/刷新后恢复用） | — | `200 {session_id, rows[], pending_confirmation_id, created_at, updated_at}` | `NOT_FOUND` |
+| 24 | `GET /api/github/activity` | GitHub 动态聚合（F16） | — | `200 {configured, profile?, calendar?, events?}` | `GITHUB_UPSTREAM` |
 
 > **F12 已实现（2026-10-09 起，第 21–23 号接口）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）、`GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/runs.jsonl` 倒序）、`GET /api/agent/sessions/:id`（读回会话消息流，前端切页/刷新恢复用；rows 已把 langchain 消息还原成 user/assistant/tool 行）。另有 `GET /api/agent/tools`（工具清单与可用状态，供前端灰显，未计入接口数）。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
 
@@ -389,6 +390,29 @@ vbcd/
 
 **幂等同步**：`server/scripts/sync-to-db.mjs`（`DATABASE_URL=… node scripts/sync-to-db.mjs [--dry-run]`）扫 `data/` 子目录 → `INSERT … ON CONFLICT (id) DO UPDATE WHERE hash 变了`；跑完对账「库里有而文件没有」的行，只报告不自动删。
 
+### 3.9 GitHub 动态聚合（F16 · /api/github）
+
+**一个接口（`services/github.js` + `routes/github.js` + `services/github/client.js`）**：
+
+| 方法与路径 | 上游 | 返回 | 说明 |
+|---|---|---|---|
+| `GET /api/github/activity` | REST `/users/:login` + GraphQL `contributionsCollection` + REST `/users/:login/events` | `{configured, profile?, calendar?, events?}` | 聚合三块：资料卡 / 一年贡献热力图 / 事件时间线 |
+
+**字段契约**：
+- `configured:false` —— 未配 `GITHUB_USERNAME`，其余字段缺省；前端据此渲染灰条。
+- `profile` —— `{login, avatarUrl, bio, followers, publicRepos, htmlUrl}`（REST 公开信息，不需 token）。
+- `calendar` —— `{totalContributions, weeks[53][7]}`，每格 `{date, count, level}`（level 0–4 档，由 GraphQL `contributionLevel` 枚举映射）；**必须 `GITHUB_TOKEN`**，未配或 GraphQL 失败时为 `null`（其余字段照常）。
+- `events` —— `≤10` 条 `{type, repo, title, url, createdAt}`；只保留 `PushEvent/PullRequestEvent/IssuesEvent/CreateEvent/ReleaseEvent`，其余静默丢弃；REST `payload.size` 不可靠（实测常见 0），Push 文案不带提交数。
+
+**降级口径**（三层）：
+1. 未配 `GITHUB_USERNAME` → `{configured:false}`（200，不报错）；
+2. 配用户名、`profile`/`events` 可达但 `calendar` 失败（未配 token / GraphQL 挂）→ `configured:true` + `calendar:null`；
+3. `profile` 都抓不到（用户名错 / 网络断）→ `502 GITHUB_UPSTREAM`。
+
+**缓存**：进程内 `GITHUB_CACHE_TTL_MS`（默认 30 分钟）TTL + 单飞（过期瞬间并发只打一次上游）；`0` 关闭。不落盘、重启即失。
+
+**上游地址可注入**：`GITHUB_API_BASE` / `GITHUB_GRAPHQL_BASE` 供冒烟桩覆盖（`SMOKE_FAKE_GH_PORT` + `server/scripts/fake-github.mjs`）。冒烟断言 gh①–③：聚合结构齐 / `WatchEvent` 被过滤 / TTL 内第二次请求上游计数不涨。
+
 ## 4. 数据流
 
 完整图见 `TECH_DESIGN.md` 第 4 章，此处只列要点：
@@ -427,6 +451,7 @@ vbcd/
 | `IMA_NOTE_NOT_FOUND` | 404 | ima 笔记不存在（列表里扫不到该 docid，可能已删除） |
 | `DB_NOT_CONFIGURED` | 503 | Postgres 读接口未配置（缺 `DATABASE_URL` / `PG_PASSWORD`） |
 | `DB_UNAVAILABLE` | 503 | 库连不上 / SQL / 认证错误（不透裸 SQLSTATE，细节进服务端日志） |
+| `GITHUB_UPSTREAM` | 502 | GitHub 不可达 / 超时 / 非 2xx（F16；不往前端透 fetch 裸错） |
 | `INTERNAL` | 500 | 其他未预期错误 |
 
 ### 5.3 用户可见文案
@@ -530,6 +555,12 @@ vbcd/
 | `PG_PASSWORD` | 随机 48 位 | compose 变量：同时作为 `POSTGRES_PASSWORD` 与 `DATABASE_URL` 的口令段（项目根 `.env`，不入库） | 🔴 |
 | `AGENT_MAX_STEPS` | `8` | F12：agent 单轮循环的工具调用步数上限（防模型兜圈） | ⬜ |
 | `AGENT_TOOLS` | （空=全量） | F12：逗号分隔的工具白名单，收窄注册表（如 `search_notes,get_note`） | ⬜ |
+| `GITHUB_USERNAME` | `bird-z` | F16：要展示的 GitHub 用户名（不配 → `configured:false`） | ⬜ |
+| `GITHUB_TOKEN` | Classic PAT `read:user` | F16：贡献日历的 GraphQL 必须；不配则 `calendar:null`（profile/events 仍走公开 REST） | 🟡 |
+| `GITHUB_CACHE_TTL_MS` | `1800000` | F16：聚合结果进程内缓存（默认 30 分钟）；`0`=关闭 | ⬜ |
+| `GITHUB_TIMEOUT_MS` | `10000` | F16：单次上游请求超时 | ⬜ |
+| `GITHUB_API_BASE` | `https://api.github.com` | F16：REST 上游；仅供冒烟桩覆盖（`SMOKE_FAKE_GH_PORT`） | ⬜ |
+| `GITHUB_GRAPHQL_BASE` | `https://api.github.com/graphql` | F16：GraphQL 上游；同上 | ⬜ |
 
 `asr/` 服务侧变量见 `asr/.env.example`（完整清单以样例文件为准；高频项：`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / `MAAS_BASE_URL` / `ASR_MODEL` / `ASR_CHUNK_SECONDS` / **`ASR_MAX_AUDIO_SECONDS=300`（上游单请求时长硬上限，启动时把 `ASR_CHUNK_SECONDS` 夹紧到 ≤ 本值）** / `ASR_MAX_B64_BYTES` / `ASR_REQUEST_TIMEOUT` / `ASR_CHUNK_CONCURRENCY` / `ASR_GLOBAL_CONCURRENCY` / `ASR_HOST` `ASR_PORT` / `DOWNLOAD_TIMEOUT` `MAX_DOWNLOAD_MB` / `JOBS_DIR` `JOB_TTL_SECONDS` `JOB_TIMEOUT_SECONDS` / `YTDLP_*` / `CACHE_TTL_SECONDS`）。
 

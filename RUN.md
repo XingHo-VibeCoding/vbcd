@@ -499,9 +499,11 @@ ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
 | 想换资料目录 | 改 `server/.env` 的 `DATA_DIR` 或启动时传 `DATA_DIR=…`，重启后端 |
 | 列表看不到 Obsidian 里新加的文件 | 确认第一行是 `---`；没有 frontmatter 会被索引跳过并在后端日志告警 |
 
-### 8.11 agent 对话（F12，2026-10-09）
+### 8.11 agent 对话（F12，2026-10-09 上线；2026-10-10 前端重构）
 
 **接口**：`POST /api/agent/chat`（SSE）/ `GET /api/agent/runs` / `GET /api/agent/tools`（清单）/ `GET /api/agent/sessions/:id`（读回消息流，切页/刷新恢复）。整体挂在 `requireAuth` 后。
+
+**前端（2026-10-10 起）**：`/agent` 页改用 [`@assistant-ui/react`](https://github.com/assistant-ui/assistant-ui) 的 `useExternalStoreRuntime` + `ThreadPrimitive`/`ComposerPrimitive`/`MessagePrimitive` 组装，适配器在 `web/src/agent/runtime.js`（SSE 事件 → `ThreadMessageLike` 数组），工具卡/审批卡渲染在 `web/src/agent/ToolFallback.jsx`，样式自写于 `web/src/agent/theme.css`（无 Tailwind，沿用 `--sp-*`/`--accent` 变量）。`/agent-v2` 与旧 `/ask` 一律 redirect 至 `/agent`。
 
 **本机跑通**（本地 vLLM，`server/.env` 已指）：
 
@@ -510,7 +512,7 @@ ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
 npm run dev            # server 默认 3000，或 PORT=3210
 
 # 前端
-cd web && npm run dev  # /agent 页（旧 /ask 由前端 redirect）
+cd web && npm run dev  # /agent 页（旧 /ask、/agent-v2 均 redirect 至此）
 ```
 
 **验证一条只读链路**（模型自主调 search_notes）：
@@ -542,4 +544,29 @@ curl -X PATCH http://localhost:3210/api/tasks/<task_id> -d '{"decision":"approve
 - LLM 用 `invoke` 拿全量再推 token，非逐字流式（要打字机效果可自行改 `model.stream`）；
 - `routes/kb.js` 的 `/api/kb/stream` 存在同型 `req.on('close')` 误用 bug（SSE 提前判断开），待修；
 - 4B 级模型偶发编造 `source_url`——system prompt 已压「不要编造」，仍建议抽查。
+
+### 8.12 关于页 × GitHub 动态（F16，2026-10-10）
+
+`/about` 页签接 GitHub：研究动态页签变成「资料热力图（上）+ GitHub 一年贡献热力图（下）」+ 混排时间线（GitHub 事件与资料更新按日期穿插，徽章区分来源）；自我介绍页签在「个人简介」下方渲染 GitHub 资料卡。
+
+```bash
+# ① server/.env 两行（用户名必填，token 可选）
+#   GITHUB_USERNAME=bird-z
+#   GITHUB_TOKEN=<Classic PAT>   # https://github.com/settings/tokens 勾选 read:user 一个 scope
+# ② data/profile.md frontmatter 加一行（自我介绍页资料卡的 login 来源）
+#   github: bird-z
+# ③ 重启后端 → /about?tab=activity 见两块热力图 + 混排时间线
+```
+
+**接口**：`GET /api/github/activity` → `{configured, profile?, calendar?, events?}`。进程内 30 分钟 TTL 缓存 + 单飞；`GITHUB_CACHE_TTL_MS=0` 关闭。
+
+**三档降级**：
+
+| 状态 | 接口返回 | 页面表现 |
+|---|---|---|
+| 未配 `GITHUB_USERNAME` | `200 {configured:false}` | 「GitHub 动态未配置」灰条 |
+| 配用户名没配 token | `configured:true` + `calendar:null` | 资料卡 + 事件时间线正常，热力图区提示「贡献日历不可用（需配置 GITHUB_TOKEN）」 |
+| GitHub 整体不可达 | `502 GITHUB_UPSTREAM` | 「GitHub 动态拉取失败」灰条 |
+
+**冒烟**：`SMOKE_FAKE_GH_PORT=8096` 拉起 `scripts/fake-github.mjs` 桩，断言 gh①–③（聚合结构 / `WatchEvent` 白名单过滤 / TTL 内上游计数不涨）；不设端口时只断言 `configured:false` 降级。
 

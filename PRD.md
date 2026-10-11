@@ -1,6 +1,6 @@
 # PRD — buddy：会成长的个人助手（MVP · 第 1 期）
 
-> 版本：v1.12（MVP）｜ 初版 2026-09-19 ｜ 最近更新 2026-10-09
+> 版本：v1.14（MVP）｜ 初版 2026-09-19 ｜ 最近更新 2026-10-10
 > 上游依据：`research.md` ｜ 下游产物：`TECH_DESIGN.md`、`SPEC.md`
 > 本期范围：只做「个人数据库」+「手机端联动」两项能力（其余见第 6 章）
 
@@ -59,6 +59,7 @@
 | F13 | 视频/音频转写归档 | 能力组合 | P1 | 提交媒体链接 → fun-asr 微服务（`asr/`）转写 → LLM 整理摘要/要点 → 归档为资料；走既有任务链路 `transcribe_url`，不新增对外接口（2026-09-28 追加） |
 | F14 | 链接收敛（整理链接的后端解析） | 个人数据库 / 能力组合 | P1 | 归档页「收敛」贴链接 → 后端抓网页（SSRF 闸门）→ 提取正文 → LLM 整理摘要/要点 → 归档为资料；走既有任务链路 `organize`，F15 之前接口 13 个（2026-09-28 追加） |
 | F15 | ima 云端知识库只读视图 | 个人数据库 | P1 | `/notes` 页「云端」标签：列表/浏览/搜索你 ima 里的知识库；F15b 续加「笔记」卡片与详情（只读 Markdown），内容零落盘、不进向量库（2026-10-05 追加） |
+| F16 | 关于页 × GitHub 动态 | 个人数据库 / 能力组合 | P1 | `/about` 研究动态页签接入 GitHub：贡献热力图（GraphQL 一年贡献）+ 事件时间线与资料更新混排；自我介绍页签加 GitHub 资料卡；聚合接口 `GET /api/github/activity`（接口 23→24），进程内 30 分钟缓存（2026-10-10 追加） |
 
 P0 = 本期必须完成；P1 = 本期尽量完成，实在紧张可延后一天。
 
@@ -166,6 +167,15 @@ P0 = 本期必须完成；P1 = 本期尽量完成，实在紧张可延后一天�
 - [ ] 点某篇进 `/notes/ima/:docid` 详情：版式与档案详情同款（面包屑「主页 / 档案 / 笔记 / 标题」），正文渲染 Markdown；`<mark>` 不显露、失效图片显示「图片已失效（ima 签名过期）」纯文字占位；
 - [ ] 不存在的 docid → `404 IMA_NOTE_NOT_FOUND`，页面显示「ima 里没有找到这篇笔记」+ 返回链接；
 - [ ] 隐私模式下未登录访问笔记接口返回 `401 AUTH_REQUIRED`；公开模式免登录可看（与知识库同口径，不加独立门禁）。
+
+### F16 关于页 × GitHub 动态
+做法：`server/.env` 配 `GITHUB_USERNAME`（必填）+ `GITHUB_TOKEN`（Classic PAT、仅 `read:user`，可选）→ `GET /api/github/activity` 聚合 `profile`（REST `/users/:login`）+ `calendar`（GraphQL contributionCalendar，一年 53 周）+ `events`（REST `/events`，白名单 Push/PR/Issue/Create/Release ≤10 条）→ `/about` 研究动态页签显示「资料热力图（上）+ GitHub 热力图（下）」+ 混排时间线（来源徽章区分）；自我介绍页签在「个人简介」后渲染 GitHub 资料卡（头像 + @login + 跳转链接），login 取自 `data/profile.md` 的 `github` 字段（`/api/me` 透传）。进程内缓存 `GITHUB_CACHE_TTL_MS`（默认 30 分钟）、单飞防穿透。
+- [ ] 未配 `GITHUB_USERNAME` → 接口 `200 {configured:false}`，研究动态页签显示「GitHub 动态未配置」灰条而非错误页；
+- [ ] 配了用户名但没配 token → `configured:true` + `profile`/`events` 正常、`calendar:null`，页面显示资料卡与事件但热力图区提示「贡献日历不可用（需配置 GITHUB_TOKEN）」；
+- [ ] 配齐后研究动态页签出现两块热力图：上为资料条数、下为 GitHub 一年贡献（53 周、四档色阶、月份/星期标签齐）；
+- [ ] 混排时间线里 GitHub 事件（徽章「GitHub」）与资料更新（徽章「资料」）按日期倒序穿插，GitHub 条目点击外链跳 github.com；
+- [ ] 自我介绍页签「个人简介」下方出现 GitHub 资料卡：头像（`github.com/<login>.png`）、`@login`、「在 GitHub 上关注我」，整卡可点跳 GitHub；
+- [ ] 缓存生效：`GITHUB_CACHE_TTL_MS` 内连续两次请求，GitHub 上游只被打一次（fake-github 桩计数断言）。
 
 ### 全局验收
 - [ ] 本文档的每条验收标准都能照着复现（不需额外解释）；
@@ -328,4 +338,5 @@ data/
 | 2026-10-05 | v1.10 | 追加 F15b ima 笔记只读视图：云端首页「笔记」卡片 + `?panel=notes` 列表 + `/notes/ima/:docid` 详情（Markdown 正文、`<mark>` 已剥、失效图片文字占位），接口 16→18 个，验收标准 +5 条；如实标注 F15「文件夹可下钻」在真实数据上暂不成立（上游 `media_type:99` 形状变化，判据过时） |
 | 2026-10-09 | v1.11 | F12 五条待确认项全部拍板：边界 S0+S1+S2-lite（archive_note 单写工具）、技术路线 A 终态 + JSON 状态接缝、前端改原 /ask 页（2026-10-10 已更名 /agent）、接口 +2（20→22）、时间盒 5 板块封顶；参考实现定为 Anything-LLM + LibreChat 借零件不借骨架 |
 | 2026-10-10 | v1.13 | F12 补 `GET /api/agent/sessions/:id`（会话读回，修「切页后消息丢失」）；前端 sessionId 落 localStorage + 挂载时自动拉历史还原；smoke ag⑥⑦ + LLM 失败分支补发 done（接口 22→23） |
+| 2026-10-10 | v1.14 | 追加 F16 关于页 × GitHub 动态：聚合接口 `GET /api/github/activity`（接口 23→24，`profile`+`calendar`+`events`、进程内 30 分钟缓存）；研究动态页签双热力图 + 混排时间线带来源徽章；自我介绍页签 GitHub 资料卡（`data/profile.md` 加 `github` 字段、`/api/me` 透传）；验收标准 +6 条 |
 | 2026-10-09 | v1.12 | F12 S0+S1+S2-lite 落地：agent 骨架（manifest/registry/state/audit/loop + tools×4）+ `POST /api/agent/chat` SSE + `GET /api/agent/runs` + `/api/agent/tools` + `/agent` 页改多轮对话（工具调用折叠行 + 确认提示）；接口 20→22（另有 tools 未计入）；`executeApproved` 补 `agent_archive_note` 分支；冒烟 ag①–ag⑤ 全过；实测本地 vLLM 链路批准/拒绝双路径通过 |

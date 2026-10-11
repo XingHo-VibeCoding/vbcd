@@ -5,7 +5,7 @@
 
 ## 1. 设计目标与约束
 
-**要支撑的功能**（第 2 周收尾时对齐 PRD v1.8）：F1 资料录入 / F2 列表与检索 / F3 索引自动更新 / F4 手机端发起任务 / F5 查看进度 / F6 确认操作 / F7 数据自托管与可迁移 / F9 知识库问答 / F10 深色模式 / F11 关于页 / F13 视频音频转写归档 / F14 链接收敛。**F8（学习留痕）与 F12（Agent 工具化）明确不在本期**——F12 只留路线图（见 `PLAN.md` 与 PRD 第 7 章）。
+**要支撑的功能**（2026-10-10 对齐 PRD v1.14）：F1 资料录入 / F2 列表与检索 / F3 索引自动更新 / F4 手机端发起任务 / F5 查看进度 / F6 确认操作 / F7 数据自托管与可迁移 / F9 知识库问答 / F10 深色模式 / F11 关于页 / F12 Agent 工具化（S0+S1+S2-lite 已落地）/ F13 视频音频转写归档 / F14 链接收敛 / F15 ima 云端只读视图 / F16 关于页 × GitHub 动态。**F8（学习留痕）留作第 2 期候选**。
 
 | 约束 | 来源 |
 |---|---|
@@ -67,6 +67,7 @@
 | 19 | 主题（F10） | CSS 变量两套 token（`:root` 浅色 + `:root[data-theme='dark']` 深色覆盖）+ `index.html` 首屏内联脚本先定主题 | 零动画、渲染前就定好主题所以不闪浅色；25 个 token 全覆盖后组件里不写死色值，加主题不用动组件 | 多套样式表 / CSS-in-JS：切换要重算样式，硬编码色值容易漏改（本次就回收了 5 处组件里的 9 行写死色值） |
 | 20 | 交互反馈（Day 11） | 单例 Toast（`role="status"` 容器**常驻 DOM**）+ 三档反馈口径（即时态 / 短暂提示 / 结果留痕） | 容器常驻读屏才会播报新内容；失败降级不依赖 HTTPS（`navigator.clipboard` 不可用时用 Selection API 自动选中供手动复制） | 各页各写 inline 提示：重复实现、状态容易残留；引 UI 库：为一条提示条引整套组件不划算 |
 | 21 | ima 云端接入（F15/F15b） | 同源 BFF 代理（`/api/ima/*` → `ima.qq.com`）+ 进程内 TTL 缓存；前端只打自家接口 | 浏览器直连 ima 会被 CORS 拒（上游不允许 `ima-openapi-*` 自定义头跨源），必须经后端；BFF 顺便藏住 ApiKey、可做缓存与超时收口；**零落盘**靠「只进内存缓存、不写文件」这条硬规矩 | ima 官方 skill（`@tencent-adm/ima-skills`）：面向 CLI agent 场景，buddy 是 Web 应用用不上；前端直连：CORS 被拒 + Key 会进浏览器 |
+| 22 | GitHub 动态（F16） | 同源聚合接口 `GET /api/github/activity`（REST profile/events + GraphQL contributionsCalendar）+ 进程内 TTL 缓存（30 分钟）+ 单飞 | 贡献日历 REST 拿不到、必须 GraphQL + PAT——PAT 不能进浏览器所以必须后端代理；三块上游（REST×2 / GraphQL×1）由后端聚成一个出口，前端一次请求拿全；单飞防 TTL 过期瞬间并发打穿上游 | 前端直调 `api.github.com`：未认证 60 次/小时、GraphQL 直接不可用；嵌第三方图床（ghchart 等）：样式不可控、依赖别人服务活着、隐私上把访客的 IP 交给第三方 |
 
 **一句话技术路线**：
 > 前端 React（Vite 构建）→ 后端 Node.js + Express（REST/JSON）→ 存储为 Git 仓库里的 Markdown 文件与 JSON 索引 → 部署在阿里云 ECS（Docker + Nginx + HTTPS）。
@@ -178,7 +179,7 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    U["手机 / 电脑浏览器"] -->|"契约 A：HTTP(S) + JSON（16 个接口，SSE 除外），前后端同源"| W["web 容器：Nginx<br/>静态产物 + SPA try_files 回退 + /api 反代"]
+    U["手机 / 电脑浏览器"] -->|"契约 A：HTTP(S) + JSON（24 个接口，SSE 除外），前后端同源"| W["web 容器：Nginx<br/>静态产物 + SPA try_files 回退 + /api 反代"]
     W -->|"proxy_pass /api"| S["server 容器：Node + Express<br/>（带 healthy 探针）"]
     S -->|"契约 B：文件读写 + Git 提交"| D[("data/（绑定挂载到宿主机）<br/>*.md + .index.json + .runtime/")]
     S -->|"契约 C：Bearer + job 信封"| A["asr 容器：Python + FastAPI"]
@@ -291,3 +292,4 @@ flowchart TB
 | 2026-10-03 | v1.5 | 补齐第 2 周（Day 8–13）设计落点：功能清单更新为 F1–F14（并注明 F8/F12 不在本期）、第 2 章补「实际进程」表、选型 +4（17 compose 编排 / 18 地址栏即状态 / 19 主题双 token / 20 反馈三档）、新增 4.8 部署与运行时拓扑、5.1 架构全景补 ⑤ 微服务与外部依赖（契约 C）、4.5 补 **asr 契约现状（6 个端点已实现 4 个）**、技术债 +5、已知弱点补线上未收尾 |
 | 2026-10-05 | v1.6 | 追加 F15 ima 云端知识库只读视图：3 个新接口（14–16，只读 GET），接口契约升至 16 个；选型 +1（同源 BFF 代理 + 进程内 TTL 缓存，内容零落盘）；上游依据升至 PRD v1.9；踩坑记：ima `limit` 文档写 50、实测上限 20 |
 | 2026-10-05 | v1.7 | 追加 F15b ima 笔记只读视图：2 个新接口（17–18：`GET /api/ima/notes` 列表、`GET /api/ima/notes/:id` 详情），接口契约升至 18 个；`openapi/note/v1` 与知识库 `wiki/v1` 是两个模块，复用同一套 BFF 代理与 TTL 缓存；笔记正文为 Markdown（`target_content_format:1` 实测可用，官方文档写「不支持」不实），`<mark>` 服务端剥掉、失效图片前端 `onError` 占位；上游依据升至 PRD v1.10 |
+| 2026-10-10 | v1.8 | 追加 F16 关于页 × GitHub 动态：1 个新接口（24：`GET /api/github/activity`，聚合 REST profile/events + GraphQL 一年贡献日历），接口契约升至 24 个；选型 +1（同源聚合 + 进程内 TTL 缓存 + 单飞）；三层降级口径（未配用户名 → `configured:false` / 无 token → `calendar:null` / 整体不可达 → `GITHUB_UPSTREAM`）；上游依据升至 PRD v1.14 |
