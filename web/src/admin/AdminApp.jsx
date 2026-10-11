@@ -13,7 +13,8 @@ import Dashboard from './pages/Dashboard.jsx'
 import TaskList from './pages/TaskList.jsx'
 import AgentRuns from './pages/AgentRuns.jsx'
 import AgentTools from './pages/AgentTools.jsx'
-import { UnorderedListOutlined, RobotOutlined, ToolOutlined } from '@ant-design/icons'
+import NoteBrowse from './pages/NoteBrowse.jsx'
+import { UnorderedListOutlined, RobotOutlined, ToolOutlined, FileTextOutlined } from '@ant-design/icons'
 
 export default function AdminApp() {
   return (
@@ -44,6 +45,11 @@ export default function AdminApp() {
               name: 'agent-tools',
               list: '/admin/agent/tools',
               meta: { label: 'agent 工具', icon: <ToolOutlined /> },
+            },
+            {
+              name: 'notes',
+              list: '/admin/notes',
+              meta: { label: '资料浏览', icon: <FileTextOutlined /> },
             },
           ]}
           options={{ syncWithLocation: true }}
@@ -78,6 +84,14 @@ export default function AdminApp() {
               element={
                 <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
                   <AgentTools />
+                </ThemedLayout>
+              }
+            />
+            <Route
+              path="notes"
+              element={
+                <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
+                  <NoteBrowse />
                 </ThemedLayout>
               }
             />
