@@ -54,6 +54,7 @@ export function useBuddyAgentRuntime() {
         role: 'user',
         content: [{ type: 'text', text }],
         createdAt: new Date(),
+        metadata: {},
       }
       const assistantId = nid()
       const assistantMsg = {
@@ -62,6 +63,7 @@ export function useBuddyAgentRuntime() {
         content: [{ type: 'text', text: '' }],
         createdAt: new Date(),
         status: { type: 'running' },
+        metadata: {},
       }
       setMessages((prev) => [...prev, userMsg, assistantMsg])
 
@@ -181,6 +183,7 @@ function rowToLike(row, i) {
       id: `r${i}-u`,
       role: 'user',
       content: [{ type: 'text', text: row.text ?? '' }],
+      metadata: {},
     }
   }
   if (row.role === 'assistant') {
@@ -189,6 +192,7 @@ function rowToLike(row, i) {
       role: 'assistant',
       content: [{ type: 'text', text: row.text ?? '' }],
       status: { type: 'complete', reason: 'stop' },
+      metadata: {},
     }
   }
   // tool 行 → tool-call part 塞到最近一个 assistant 消息上？
@@ -209,5 +213,6 @@ function rowToLike(row, i) {
       },
     ],
     status: { type: 'complete', reason: 'stop' },
+    metadata: {},
   }
 }
