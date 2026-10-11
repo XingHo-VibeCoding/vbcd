@@ -1,5 +1,5 @@
 // 个人主页接口
-//   GET /api/me → { profile: { nickname, avatar, bio }, schedule: [{ date, time, title }] }
+//   GET /api/me → { profile: { nickname, avatar, bio, github }, schedule: [{ date, time, title }], site: {...}|null }
 // 本路由整体挂在 requireAuth 之后（见 app.js），隐私模块开启时同样受保护。
 import { Router } from 'express'
 import { getMe } from '../services/me.js'

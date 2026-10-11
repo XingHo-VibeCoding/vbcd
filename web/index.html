@@ -18,11 +18,22 @@
                 : 'light'
           }
           document.documentElement.dataset.theme = theme
+          // Tailwind 的 dark: 变体走 .dark 类（见 styles.css @custom-variant），
+          // 与既有 data-theme 属性并行写，两套机制都能命中。
+          document.documentElement.classList.toggle('dark', theme === 'dark')
         } catch (e) {
           document.documentElement.dataset.theme = 'light'
         }
       })()
     </script>
+    <!-- 字体（Q5 拍板）：正文 Noto Serif SC，拉丁/数字兜底 Geist Sans，代码 Geist Mono。
+         Google Fonts 走 preconnect + display=swap；思源宋体的 900 档用于标题。 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>

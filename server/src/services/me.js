@@ -1,4 +1,6 @@
 // 个人主页数据（个人主页接口的数据源）：
+//   data/site.json     站点视觉配置（2026-10-11 设计改版）：title/subtitle/background/social/cover/accent
+//   data/profile.md   frontmatter 取 nickname / avatar / bio / github 四个字段
 //   data/profile.md   frontmatter 取 nickname / avatar / bio / github 四个字段
 //   data/schedule.md  正文逐行一条日程：- YYYY-MM-DD [HH:mm] 事项
 // 两个文件都在 data/ 根级而非子目录——files.js:list() 只遍历子目录，不会进资料索引。
@@ -9,6 +11,7 @@ import { DATA_DIR } from '../storage/files.js'
 
 const PROFILE_FILE = path.join(DATA_DIR, 'profile.md')
 const SCHEDULE_FILE = path.join(DATA_DIR, 'schedule.md')
+const SITE_FILE = path.join(DATA_DIR, 'site.json')
 
 // 日程行：- 2026-09-26 14:00 训练营打卡（HH:mm 可省略）
 const SCHEDULE_LINE = /^-\s+(\d{4}-\d{2}-\d{2})(?:\s+(\d{1,2}:\d{2}))?\s+(.+)$/
@@ -54,8 +57,27 @@ function parseSchedule(raw) {
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))
 }
 
-/** 个人主页接口数据：{ profile, schedule } */
+/** 站点视觉配置：JSON 解析失败 / 文件缺失都返回 null，由前端走内置默认 */
+function parseSite(raw) {
+  if (!raw.trim()) return null
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+/** 个人主页接口数据：{ profile, schedule, site } */
 export async function getMe() {
-  const [profileRaw, scheduleRaw] = await Promise.all([readOrEmpty(PROFILE_FILE), readOrEmpty(SCHEDULE_FILE)])
-  return { profile: parseProfile(profileRaw), schedule: parseSchedule(scheduleRaw) }
+  const [profileRaw, scheduleRaw, siteRaw] = await Promise.all([
+    readOrEmpty(PROFILE_FILE),
+    readOrEmpty(SCHEDULE_FILE),
+    readOrEmpty(SITE_FILE),
+  ])
+  return {
+    profile: parseProfile(profileRaw),
+    schedule: parseSchedule(scheduleRaw),
+    site: parseSite(siteRaw),
+  }
 }

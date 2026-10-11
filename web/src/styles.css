@@ -1,3 +1,68 @@
+/* ==========================================================================
+   Tailwind v4 层（2026-10-11 设计改版 · XHBlogs 配方移植）
+   --------------------------------------------------------------------------
+   本文件分两层：
+     ① 顶部 @theme = 新 token 真值（Tailwind 原子类由此生成）；
+     ② 下方原有 :root + 组件规则 = 旧手写 CSS 体系，逐页迁移后逐步删除。
+   迁移期两套并存，新页面类用原子类，旧类继续走旧 token。
+   ========================================================================== */
+@import 'tailwindcss';
+
+/* dark: 变体挂 .dark 类（index.html 首屏脚本 + theme.js 双写维护），
+   不用默认 prefers-color-scheme——因为用户可手动切到与系统相反的主题。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ---- 字体（Q5）：正文 Noto Serif SC，拉丁/数字 Geist，代码 Geist Mono ---- */
+  --font-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif;
+  --font-sans: 'Geist', 'PingFang SC', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  /* ---- 主色（XHBlogs 配方逐字） ---- */
+  --color-brand: #615fff;        /* indigo-500 主按钮/激活 */
+  --color-brand-hover: #4f39f6;  /* indigo-600 */
+  --color-brand-soft: #eef2ff;   /* indigo-50 淡底 */
+  --color-brand-dark-text: #7c86ff; /* indigo-400 暗色强调字 */
+  --color-brand-hard: #6366f1;   /* 品牌硬编码：仅滑块/滚动条/accent-color */
+  --color-creative: #f6339a;     /* pink-500 创意操作 */
+  --color-success: #00bc7d;      /* emerald-500 */
+  --color-warning: #fe9a00;      /* amber-500 */
+  --color-info: #2b7fff;         /* blue-500 */
+  --color-danger: #fb2c36;       /* red-500 */
+  --color-danger-hover: #e7000b; /* red-600 */
+
+  /* ---- 灰阶（slate 直接沿用 Tailwind 默认色板，不另设） ---- */
+
+  /* ---- 圆角：rounded-2xl 16px 主流 / 3xl 24px / full 胶囊 ---- */
+  --radius-card: 1rem;    /* 16px = 2xl */
+  --radius-card-lg: 1.5rem; /* 24px = 3xl */
+
+  /* ---- 阴影层级（e1..e5 对齐 XHBlogs 景深表） ---- */
+  --shadow-card: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); /* shadow-lg */
+  --shadow-card-hover: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); /* shadow-xl */
+  --shadow-brand-glow: 0 10px 15px -3px rgb(97 95 255 / 0.3); /* shadow-indigo-500/30 */
+
+  /* ---- 玻璃：模糊档位 ---- */
+  --blur-glass: 12px; /* backdrop-blur-xl 默认值，导航/卡片通用 */
+
+  /* ---- z 轴白名单（五层 + L5 模态，对齐 XHBlogs §1） ----
+     -9..-1 背景 / 10 内容 / 50 悬浮 / 60 移动胶囊或 tab bar / 65 遮罩 / 70 模态 */
+}
+
+/* 玻璃拟态兜底（XHBlogs globals.css 同款，禁止删除）：
+   所有 backdrop-blur 元素强制合成层，Firefox 下 md 档降级防糊。 */
+[class*='backdrop-blur-'] {
+  will-change: backdrop-filter;
+}
+@-moz-document url-prefix() {
+  [class*='backdrop-blur-md'] {
+    backdrop-filter: blur(8px) !important;
+  }
+}
+
+/* ==========================================================================
+   以下为旧手写 CSS 体系（迁移期保留，逐页替换后删除）
+   ========================================================================== */
 :root {
   /* 主题（F10）：浅色为默认值；深色由 index.html 的首屏脚本写入
      <html data-theme="dark"> 后，靠下面的覆盖块生效。

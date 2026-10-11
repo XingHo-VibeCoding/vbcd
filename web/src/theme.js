@@ -14,7 +14,11 @@ export function getTheme() {
 
 /** 只改当前页面的主题，不碰存储 */
 export function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme === DARK ? DARK : LIGHT
+  const isDark = theme === DARK
+  document.documentElement.dataset.theme = isDark ? DARK : LIGHT
+  // Tailwind 的 dark: 变体挂在 .dark 类上（styles.css @custom-variant）——
+  // 与 data-theme 并行写，运行时切换才能同时命中新原子类与旧 CSS 变量两套。
+  document.documentElement.classList.toggle('dark', isDark)
 }
 
 /** 记住用户的选择；隐私模式等场景 localStorage 不可用时静默失败（当次会话仍生效） */
