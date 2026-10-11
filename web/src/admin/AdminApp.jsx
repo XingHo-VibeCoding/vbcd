@@ -9,16 +9,7 @@ import { DashboardOutlined } from '@ant-design/icons'
 import { Route, Routes } from 'react-router-dom'
 import { dataProvider } from './dataProvider.js'
 import { authProvider } from './authProvider.js'
-
-// 占位仪表盘：板块②再接 /api/admin/overview 真数据
-function Dashboard() {
-  return (
-    <div>
-      <h2>运维仪表盘</h2>
-      <p>后台骨架已就位。服务健康、任务统计将在板块②接入。</p>
-    </div>
-  )
-}
+import Dashboard from './pages/Dashboard.jsx'
 
 export default function AdminApp() {
   return (

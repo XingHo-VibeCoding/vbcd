@@ -14,6 +14,7 @@ import imaRouter from './routes/ima.js'
 import dbRouter from './routes/db.js'
 import agentRouter from './routes/agent.js'
 import githubRouter from './routes/github.js'
+import adminRouter from './routes/admin.js'
 
 export function createApp() {
   const app = express()
@@ -39,6 +40,8 @@ export function createApp() {
   app.use('/api/db', requireAuth, dbRouter)
   app.use('/api/agent', requireAuth, agentRouter)
   app.use('/api/github', requireAuth, githubRouter)
+  // 后台运维聚合：同样要求登录态（公开模式下 requireAuth 直通，见 §2 D4 取舍）
+  app.use('/api/admin', requireAuth, adminRouter)
 
   // 兜底：找不到的路由返回统一的 404
   app.use(notFound)
