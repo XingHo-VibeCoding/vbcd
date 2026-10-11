@@ -11,7 +11,9 @@ import { dataProvider } from './dataProvider.js'
 import { authProvider } from './authProvider.js'
 import Dashboard from './pages/Dashboard.jsx'
 import TaskList from './pages/TaskList.jsx'
-import { UnorderedListOutlined } from '@ant-design/icons'
+import AgentRuns from './pages/AgentRuns.jsx'
+import AgentTools from './pages/AgentTools.jsx'
+import { UnorderedListOutlined, RobotOutlined, ToolOutlined } from '@ant-design/icons'
 
 export default function AdminApp() {
   return (
@@ -33,6 +35,16 @@ export default function AdminApp() {
               list: '/admin/tasks',
               meta: { label: '任务队列', icon: <UnorderedListOutlined /> },
             },
+            {
+              name: 'agent-runs',
+              list: '/admin/agent/runs',
+              meta: { label: 'agent 审计', icon: <RobotOutlined /> },
+            },
+            {
+              name: 'agent-tools',
+              list: '/admin/agent/tools',
+              meta: { label: 'agent 工具', icon: <ToolOutlined /> },
+            },
           ]}
           options={{ syncWithLocation: true }}
         >
@@ -50,6 +62,22 @@ export default function AdminApp() {
               element={
                 <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
                   <TaskList />
+                </ThemedLayout>
+              }
+            />
+            <Route
+              path="agent/runs"
+              element={
+                <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
+                  <AgentRuns />
+                </ThemedLayout>
+              }
+            />
+            <Route
+              path="agent/tools"
+              element={
+                <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
+                  <AgentTools />
                 </ThemedLayout>
               }
             />
