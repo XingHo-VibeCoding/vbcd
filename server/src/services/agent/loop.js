@@ -177,7 +177,7 @@ export async function resumeAfterDecision({ sessionId, confirmationId, decision,
     throw fail('VALIDATION_FAILED', '该会话没有这项待确认操作（可能已处理过）')
   }
   session.pendingConfirmationId = null
-  const note = decision === 'approve'
+  const note = decision === 'approved'
     ? '用户已确认归档，任务链路将执行写入。'
     : '用户拒绝了这次归档，未做任何改动。'
   const toolMsg = new ToolMessage({ content: note, tool_call_id: `confirm-${confirmationId}`, name: 'archive_note' })

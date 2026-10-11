@@ -10,6 +10,9 @@ import { createNote, nowShanghai } from './notes.js'
 import { fail } from './errors.js'
 import { submitTranscribeTask } from './transcribe.js'
 import { startOrganizeTask } from './organize.js'
+// agent 闭环：确认完成后清 agent 会话的 pendingConfirmationId 并回灌结果，
+// 让用户接着对话（避免「点了确认但 agent 还卡住」）。
+// 用 dynamic import 而不是顶层 import：tasks ←→ agent/loop 会形成循环依赖。
 
 // delete_note 是高风险类型：建任务只生成「待确认」记录，必须经 decision=approved 才会真删（F6）。
 // transcribe_url 不是高风险：归档资料与 F1 同级，直接异步执行（SPEC 3.4）。
@@ -143,14 +146,38 @@ async function decideTask(task, decision) {
   confirmation.confirmed_at = iso
   await confirmationStore.put(confirmation)
 
+  let result
   if (decision === 'rejected') {
     task.status = 'failed'
     task.result = `已取消：你在 ${iso} 拒绝了这次操作，未做任何改动`
     task.updated_at = iso
-    return taskStore.put(task)
+    result = await taskStore.put(task)
+  } else {
+    result = await executeApproved(task, confirmation, iso)
   }
 
-  return executeApproved(task, confirmation, iso)
+  // agent 闭环：confirmation.action === 'agent_archive_note' 时找到对应会话并恢复
+  // （emit 用 noop——这里不推 SSE，只让会话状态离开挂起态；下次用户发消息时正常进主循环）
+  if (confirmation.action === 'agent_archive_note') {
+    try {
+      const { findSessionByPendingConfirmation } = await import('./agent/state.js')
+      const { resumeAfterDecision } = await import('./agent/loop.js')
+      const session = await findSessionByPendingConfirmation(confirmation.id)
+      if (session) {
+        await resumeAfterDecision({
+          sessionId: session.id,
+          confirmationId: confirmation.id,
+          decision,
+          emit: () => {},
+        })
+      }
+    } catch (err) {
+      // agent 恢复失败不阻塞任务确认——只记日志
+      console.warn(`[agent] resumeAfterDecision 失败（confirmation=${confirmation.id}）:`, err.message)
+    }
+  }
+
+  return result
 }
 
 /**

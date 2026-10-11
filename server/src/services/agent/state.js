@@ -137,3 +137,17 @@ function contentText(content) {
   if (Array.isArray(content)) return content.map((c) => c?.text || '').join('')
   return content == null ? '' : String(content)
 }
+
+/** 按 pendingConfirmationId 反查会话：确认链路完成时用它找到该通知哪个会话 */
+export async function findSessionByPendingConfirmation(confirmationId) {
+  await ensureReady()
+  const { readdir } = await import('node:fs/promises')
+  const files = await readdir(AGENT_DIR).catch(() => [])
+  for (const name of files) {
+    if (!name.endsWith('.json')) continue
+    const id = name.slice(0, -5)
+    const session = await loadSession(id).catch(() => null)
+    if (session?.pendingConfirmationId === confirmationId) return session
+  }
+  return null
+}

@@ -83,6 +83,11 @@ services:
       ASR_SERVICE_URL: http://asr:8000
       # Postgres 走内网服务名 pg；口令同样从 server/.env 的 PG_PASSWORD 展开（compose 会插值 env_file）
       DATABASE_URL: postgres://buddy:${PG_PASSWORD:?请在 server/.env 里设置 PG_PASSWORD}@pg:5432/buddy
+      # 本机 vLLM 跑在宿主机 8000：容器里 127.0.0.1 指自己，要走 host.docker.internal
+      # （下方 extra_hosts 已配 host-gateway）。想切回云端 LLM 时删这一行 + 改 server/.env。
+      OPENAI_BASE_URL: http://host.docker.internal:8000/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # 资料目录绑定挂载：宿主机上也能直接备份/Obsidian 打开
       - ./data:/app/data
