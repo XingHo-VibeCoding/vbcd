@@ -311,12 +311,12 @@ export default function AboutPage() {
         <hr className="about-divider" />
 
         {isActivity ? (
-          notesError ? (
-            <p className="activity-empty">{notesError}</p>
-          ) : notes === null ? (
+          // notes 挂了只影响资料数据源；GitHub 热力图与时间线照常渲染
+          notes === null && gh === null && !notesError && !ghError ? (
             <div className="loading">载入中…</div>
           ) : (
             <>
+              {notesError ? <p className="activity-empty">{notesError}</p> : null}
               {ghError ? (
                 <p className="activity-empty">{ghError}（仅显示资料数据）</p>
               ) : gh === null ? (

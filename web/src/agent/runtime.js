@@ -21,6 +21,7 @@ export function useBuddyAgentRuntime() {
   const [sessionId, setSessionIdState] = useState(() => localStorage.getItem(SESSION_KEY))
   const [busy, setBusy] = useState(false)
   const abortRef = useRef(null)
+  const inFlightRef = useRef(false)  // 同步守卫：state 异步更新追不上双触发的 send
   const restoredRef = useRef(false)
 
   const setSessionId = useCallback((id) => {
@@ -36,16 +37,22 @@ export function useBuddyAgentRuntime() {
     if (!sessionId) return
     getAgentSession(sessionId)
       .then((res) => {
-        const rows = res?.data?.rows
+        // request() 已把后端 { ok, data } 解包成 data → res 即 { session_id, rows, ... }
+        const rows = res?.rows
         if (!Array.isArray(rows) || rows.length === 0) return
         setMessages(rows.map(rowToLike))
       })
-      .catch(() => setSessionId(null))
+      .catch((err) => {
+        // 仅 404（会话文件真没了）才清 sessionId；
+        // 网络抖动/502/超时保留 id——下次进页面还能再试，不丢历史
+        if (err?.status === 404 || err?.code === 'NOT_FOUND') setSessionId(null)
+      })
   }, [sessionId, setSessionId])
 
   const send = useCallback(
     async (text) => {
-      if (!text.trim() || busy) return
+      if (!text.trim() || busy || inFlightRef.current) return
+      inFlightRef.current = true
       abortRef.current?.abort()
       setBusy(true)
 
@@ -99,13 +106,15 @@ export function useBuddyAgentRuntime() {
               return next
             })
           } else if (ev.type === 'confirmation_required') {
+            // 不用 assistant-ui 的 interrupt/approval 字段（会触发它内置审批 UI 渲染两遍）。
+            // 塞自定义字段由 ToolFallback 识别。
             appendPart(assistantId, {
               type: 'tool-call',
               toolCallId: `confirm-${ev.confirmation_id}`,
               toolName: 'confirmation_required',
               args: ev.draft ?? {},
               argsText: JSON.stringify(ev.draft ?? {}),
-              interrupt: { type: 'human', payload: ev },
+              result: { __pendingConfirm: true, confirmation_id: ev.confirmation_id, task_id: ev.task_id, draft: ev.draft, note: ev.note },
             })
           }
         },
@@ -116,11 +125,13 @@ export function useBuddyAgentRuntime() {
           ])
           markDone(assistantId)
           setBusy(false)
+          inFlightRef.current = false
         },
         onDone: (info) => {
           if (info?.session_id) setSessionId(info.session_id)
           markDone(assistantId)
           setBusy(false)
+          inFlightRef.current = false
         },
       })
     },
@@ -147,6 +158,7 @@ export function useBuddyAgentRuntime() {
 
   const reset = useCallback(() => {
     abortRef.current?.abort()
+    inFlightRef.current = false
     setMessages([])
     setSessionId(null)
     setBusy(false)
@@ -167,6 +179,7 @@ export function useBuddyAgentRuntime() {
       onCancel: async () => {
         abortRef.current?.abort()
         setBusy(false)
+        inFlightRef.current = false
       },
     }),
     [messages, busy, send],

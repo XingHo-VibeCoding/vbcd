@@ -47,33 +47,33 @@
 .aui-row.user { justify-content: flex-end; }
 .aui-row.assistant { justify-content: flex-start; }
 
-/* user 气泡：圆角 20px 右下角小缺角（Anything-LLM 形态），轻灰底 */
-.aui-bubble.user {
-  background: var(--bg-soft, #f0f1f3);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  border-bottom-right-radius: 4px;
-  padding: 12px 16px;
-  max-width: 600px;
-  line-height: 1.65;
+/* 双气泡式（ChatGPT 风格）：
+   - user 右对齐蓝色气泡
+   - assistant 左对齐浅灰气泡
+   - 圆角统一 12px（不要瘦高缺角形态），padding 紧凑（8/12 比 12/16 更贴文字）
+*/
+.aui-bubble {
+  padding: 6px 12px;          /* 上下更紧凑，单行短消息不显得气泡比字大 */
+  border-radius: 12px;
+  line-height: 1.55;          /* 略收紧行高 */
   font-size: var(--fs-3, 15px);
+  max-width: 78%;
+  word-break: break-word;
 }
-
-/* assistant 通栏无气泡，正文阅读宽 */
-.aui-bubble.assistant {
-  background: transparent;
-  color: var(--text);
-  padding: 0;
-  max-width: 720px;
-  width: 100%;
-  line-height: 1.7;
-  font-size: var(--fs-3, 15px);
-}
-
-/* assistant 内 markdown 紧凑一点 */
+.aui-bubble p { margin: 0; }   /* MessagePrimitive 的 <p> 默认 margin 会让气泡撑高 */
 .aui-bubble.assistant p { margin: 0 0 var(--sp-2); }
 .aui-bubble.assistant p:last-child { margin-bottom: 0; }
+.aui-bubble.user {
+  background: var(--accent);
+  color: #fff;
+}
+.aui-bubble.assistant {
+  background: var(--bg-soft, #f6f7f9);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+/* assistant 内 markdown 列表缩进 */
 .aui-bubble.assistant ul, .aui-bubble.assistant ol { margin: var(--sp-1) 0 var(--sp-2); }
 
 /* 输入区：底部固定，圆角胶囊大输入 */

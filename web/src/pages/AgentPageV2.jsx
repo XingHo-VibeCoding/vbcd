@@ -77,7 +77,12 @@ function AssistantMessage() {
       <div className="aui-bubble assistant">
         <MessagePrimitive.Content
           components={{
-            Text: ({ text }) => <MarkdownContent content={text} />,
+            Text: ({ text }) => {
+              // 空文本（streaming 起点 / 只调了工具没回文字）不渲染气泡——
+              // 让 MarkdownContent 的 emptyHint 不冒出来，整块留白等工具卡接管
+              if (!text || !String(text).trim()) return null
+              return <MarkdownContent content={text} />
+            },
             tools: { Fallback: ToolFallback },
           }}
         />
