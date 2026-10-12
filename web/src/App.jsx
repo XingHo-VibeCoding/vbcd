@@ -86,7 +86,7 @@ function BackgroundLayer({ site, theme }) {
                         dark:from-slate-950 dark:via-slate-900 dark:to-fuchsia-950" />
       )}
       {/* veil：浅色压白、深色压黑，让卡片文字可读、玻璃仍可透 */}
-      <div className="absolute inset-0 bg-white/25 dark:bg-slate-950/50" />
+      <div className="absolute inset-0 bg-white/85 dark:bg-slate-950/50" />
     </div>
   )
 }

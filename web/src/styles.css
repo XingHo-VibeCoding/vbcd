@@ -70,10 +70,10 @@
   color-scheme: light;
 
   /* ===== 颜色（Day 9 步骤 1：值不变，先把散落的内联色值收进 token）===== */
-  --bg: #f7f7f5;
+  --bg: #fdfdfd; /* 近纯白，只留极淡粉，高亮度 */
   --surface: #ffffff;
-  --surface-subtle: #fcfcfb; /* 预览面板底 */
-  --border: #cfcec6; /* Day 9 · P3：e3e2dd → 加深一档，卡片/输入框边界可辨 */
+  --surface-subtle: #fbf7fa; /* 极浅粉，次级面板 */
+  --border: #efe0e6; /* 极浅粉灰，弱化边界感 */
   --text: #2c2c2a;
   --muted: #57564f; /* Day 9 · P3：6b6a65(5.4:1) → 57564f(7.37:1)，次要文字更深 */
   --accent: #185fa5;
