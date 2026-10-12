@@ -52,9 +52,7 @@ function weekDates(base) {
 }
 
 // 玻璃卡通用类（所有大卡共用）
-const GLASS =
-  'rounded-3xl border border-white/40 bg-white/40 shadow-lg backdrop-blur-xl ' +
-  'transition-all duration-300 hover:shadow-xl dark:border-white/10 dark:bg-slate-800/50'
+const GLASS = 'site-glass-card'
 
 /**
  * 轮播卡：热点与项目共用。
@@ -365,18 +363,18 @@ export default function HomePage() {
           {projects.length ? (
             <div className="grid flex-1 gap-4 md:grid-cols-[1.3fr_.7fr]">
               {/* 左：项目轮播（跟随 projIdx） */}
-              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-brand">
+              <div className="relative isolate min-h-48 overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-brand">
                 {curProject.image ? (
-                  <img src={curProject.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  <img src={curProject.image} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover" />
                 ) : null}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
-                <div className="absolute inset-0 flex flex-col justify-end p-5 text-white">
+                <div className="absolute inset-0 -z-0 bg-gradient-to-tr from-slate-950/85 via-slate-950/20 to-transparent" />
+                <div className="absolute inset-0 z-10 flex flex-col items-start justify-end p-5 text-white">
                   {curProject.tag ? (
                     <span className="mb-2 self-start rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-black tracking-widest">
                       {curProject.tag}
                     </span>
                   ) : null}
-                  <div className="text-lg font-black">{curProject.name} · {curProject.desc}</div>
+                  <div className="max-w-[78%] text-lg font-black leading-snug drop-shadow">{curProject.name} · {curProject.desc}</div>
                 </div>
                 {projects.length > 1 && (
                   <div className="absolute right-3 top-3 flex gap-1">

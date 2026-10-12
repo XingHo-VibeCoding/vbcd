@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { listNotes } from '../api/notes'
 import NoteFileList from '../components/NoteFileList.jsx'
@@ -11,6 +11,73 @@ const CATEGORIES = [
   { value: 'life', label: '生活' },
   { value: 'work', label: '事务' },
 ]
+
+// 分类菜单使用主站样式；筛选值与原 select 完全一致。
+function CategoryPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const root = useRef(null)
+  const trigger = useRef(null)
+  const options = useRef([])
+  const menuId = useId()
+  const selected = Math.max(0, CATEGORIES.findIndex((c) => c.value === value))
+
+  useEffect(() => {
+    if (!open) return
+    options.current[selected]?.focus()
+    const closeOutside = (event) => {
+      if (!root.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  }, [open, selected])
+
+  function close() {
+    setOpen(false)
+    trigger.current?.focus()
+  }
+
+  function navigate(event, index) {
+    let next
+    if (event.key === 'ArrowDown') next = (index + 1) % CATEGORIES.length
+    if (event.key === 'ArrowUp') next = (index + CATEGORIES.length - 1) % CATEGORIES.length
+    if (event.key === 'Home') next = 0
+    if (event.key === 'End') next = CATEGORIES.length - 1
+    if (next !== undefined) {
+      event.preventDefault()
+      options.current[next]?.focus()
+    }
+    if (event.key === 'Escape') { event.preventDefault(); close() }
+  }
+
+  return (
+    <div className="category-picker" ref={root} onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+    }}>
+      <button type="button" className="category-trigger" ref={trigger}
+        aria-label={`资料分类：${CATEGORIES[selected].label}`} aria-haspopup="menu"
+        aria-expanded={open} aria-controls={open ? menuId : undefined}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault(); setOpen(true)
+          }
+        }}>
+        {CATEGORIES[selected].label}<span aria-hidden="true">⌄</span>
+      </button>
+      {open && <div id={menuId} className="category-menu" role="menu" aria-label="资料分类">
+        {CATEGORIES.map((category, index) => (
+          <button key={category.value} type="button" role="menuitemradio"
+            aria-checked={value === category.value} tabIndex={-1}
+            ref={(element) => { options.current[index] = element }}
+            onKeyDown={(event) => navigate(event, index)}
+            onClick={() => { onChange(category.value); close() }}>
+            {category.label}<span aria-hidden="true">{value === category.value ? '✓' : ''}</span>
+          </button>
+        ))}
+      </div>}
+    </div>
+  )
+}
 
 function fmtTime(iso) {
   if (!iso) return '—'
@@ -72,44 +139,38 @@ export default function NoteListPage() {
     setCategory('')
   }
 
+  // 两种资料来源共用标题和来源切换，云端组件把自己的搜索接在其后。
+  const toolbarHeader = (
+    <>
+      <div className="archive-heading">
+        <h1>档案</h1>
+        <Link className="btn-primary" to="/archive">＋ 归档</Link>
+      </div>
+      <div className="view-switch" role="group" aria-label="资料来源">
+        <button type="button" aria-pressed={src === 'local'} className={src === 'local' ? 'active' : ''}
+          onClick={() => setSearchParams({})}>本地</button>
+        <button type="button" aria-pressed={src === 'ima'} className={src === 'ima' ? 'active' : ''}
+          onClick={() => setSearchParams({ src: 'ima' })}>云端</button>
+      </div>
+    </>
+  )
+
   return (
-    <section>
-      <div className="toolbar">
-        {/* F15 · 来源切换放工具栏最前：本地视图除了多出这一组按钮，其余控件照旧 */}
-        <div className="view-switch" role="group" aria-label="资料来源">
-          <button
-            type="button"
-            aria-pressed={src === 'local'}
-            className={src === 'local' ? 'active' : ''}
-            onClick={() => setSearchParams({})}
-          >
-            本地
-          </button>
-          <button
-            type="button"
-            aria-pressed={src === 'ima'}
-            className={src === 'ima' ? 'active' : ''}
-            onClick={() => setSearchParams({ src: 'ima' })}
-          >
-            云端
-          </button>
-        </div>
+    <section className="archive-page">
+      {src === 'local' && <header className="site-glass-card archive-tools">
+        {toolbarHeader}
+        <div className="toolbar">
         {src === 'local' && (
           <>
             <input
               className="search-input"
               type="search"
+              aria-label="搜索本地资料"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="搜索标题、内容或标签…"
             />
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            <CategoryPicker value={category} onChange={setCategory} />
             <div className="view-switch" role="group" aria-label="列表视图">
               <button
                 type="button"
@@ -130,20 +191,22 @@ export default function NoteListPage() {
             </div>
           </>
         )}
-        <Link className="btn-primary" to="/archive">
-          + 归档
-        </Link>
-      </div>
+        </div>
+      </header>}
 
       {src === 'ima' ? (
-        <ImaPanel />
+        <ImaPanel toolbarHeader={toolbarHeader} />
       ) : (
         <>
           {/* 错误时不说「共 N 条」：这个数字此时不可信 */}
           {state === 'error' ? null : (
-            <p className="meta">
-              共 {total} 条 · {indexNote}
-            </p>
+            <div className="archive-summary">
+              <p className="meta">{loading ? '正在更新资料…' : `共 ${total} 条资料`}</p>
+              <details className="archive-index">
+                <summary>索引信息</summary>
+                <p>{indexNote}</p>
+              </details>
+            </div>
           )}
 
       <StateBlock
@@ -152,8 +215,8 @@ export default function NoteListPage() {
         onRetry={() => setRetryTick((t) => t + 1)}
         emptyText={
           hasFilter
-            ? '没有匹配的资料，试试'
-            : '没有找到，点上面「+ 归档」记一条吧'
+            ? '没有匹配的资料，请换个关键词或清空筛选。'
+            : '还没有资料，点击「＋ 归档」添加第一条。'
         }
         emptyAction={
           // Day 12 已记录「筛选后无结果缺一个显式出口」，本次四态补齐时一并补上
@@ -166,17 +229,19 @@ export default function NoteListPage() {
       >
         {isDirView ? (
           // 目录视图与卡片视图共用同一份过滤结果（items），筛选行为完全一致
-          <NoteFileList items={items} />
+          <div className="site-glass-card archive-directory"><NoteFileList items={items} /></div>
         ) : (
           <ul className="note-list">
             {items.map((n) => (
               <li key={n.id} className="note-item">
                 <Link to={`/notes/${encodeURIComponent(n.id)}`}>
+                  <div className="note-item-meta archive-card-top">
+                    <span className="badge">{CATEGORIES.find((c) => c.value === n.category)?.label || n.category}</span>
+                    <span>{n.date}</span>
+                  </div>
                   <div className="note-item-title">{n.title}</div>
                   <div className="note-item-excerpt">{n.excerpt}</div>
                   <div className="note-item-meta">
-                    <span className="badge">{n.category}</span>
-                    <span>{n.date}</span>
                     {(n.tags || []).map((t) => (
                       <span key={t} className="tag">
                         #{t}

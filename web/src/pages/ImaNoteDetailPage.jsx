@@ -29,7 +29,11 @@ function CloudImg({ node, ...props }) {
   }
   return <img {...props} alt={props.alt ?? ''} onError={() => setBroken(true)} />
 }
-const CLOUD_MD_COMPONENTS = { img: CloudImg }
+const CLOUD_MD_COMPONENTS = { img: CloudImg, table: ReadingTable }
+
+function ReadingTable({ node, children, ...props }) {
+  return <div className="reading-table" tabIndex={0} role="region" aria-label="表格，可横向滚动"><table {...props}>{children}</table></div>
+}
 
 export default function ImaNoteDetailPage() {
   const { docid } = useParams()
@@ -92,33 +96,40 @@ export default function ImaNoteDetailPage() {
 
   const meta = note.meta
   return (
-    <article className="card">
+    <article className="site-glass-card reading-card">
+      <header className="reading-header">
       <Breadcrumb
         items={[{ label: '档案', to: '/notes' }, { label: '笔记', to: LIST_URL }, { label: meta.title }]}
       />
-      <h2 className="detail-title">{meta.title}</h2>
+      <h1 className="detail-title">{meta.title}</h1>
 
       <div className="note-item-meta">
         <span className="badge">云端笔记</span>
         {meta.folder_name ? <span className="tag">{meta.folder_name}</span> : null}
       </div>
 
-      <dl className="detail-meta">
+      <p className="reading-source">来源：ima 笔记（只读）</p>
+      <details className="reading-info">
+        <summary>资料信息</summary>
+        <dl className="detail-meta">
         <dt>创建</dt>
         <dd>{fmtTime(meta.created_at)}</dd>
         <dt>更新</dt>
         <dd>{fmtTime(meta.updated_at)}</dd>
-        <dt>来源</dt>
-        <dd>ima 笔记（只读）</dd>
-      </dl>
+
+        </dl>
+      </details>
+      </header>
 
       <div className="detail-content">
         <MarkdownContent content={note.content} components={CLOUD_MD_COMPONENTS} />
       </div>
 
+      <footer className="reading-footer">
       <p className="detail-back">
         <BackLink fallback={LIST_URL} fallbackLabel="返回笔记列表" />
       </p>
+      </footer>
     </article>
   )
 }

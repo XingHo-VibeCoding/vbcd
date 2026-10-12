@@ -5,7 +5,7 @@
 // · 「整理链接」（收敛）已收编到归档页（/archive?mode=converge），本页只提交「提醒 / 记一条资料」
 // · 状态推进走 PATCH /api/tasks/:id；高风险任务（attention）在确认前推不动，后端会回 428
 // · 确认留痕只读：记录由 PATCH /api/tasks/:id 带 decision 时写入，这里不产生任何数据
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createTask, listConfirmations, listTasks, updateTaskStatus } from '../api/tasks'
 
@@ -94,8 +94,31 @@ function summaryOf(task) {
   return task.type
 }
 
+// 结果与确认摘要共用两行预览，只有实际溢出时显示展开入口。
+function RecordText({ text }) {
+  const [expanded, setExpanded] = useState(false)
+  const [overflow, setOverflow] = useState(false)
+  const body = useRef(null)
+  const id = useId()
+  useEffect(() => {
+    const element = body.current
+    if (!element || expanded) return
+    const measure = () => setOverflow(element.scrollHeight > element.clientHeight + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [text, expanded])
+  if (!text) return null
+  return <div className="log-result">
+    <p id={id} ref={body} className={expanded ? 'record-text expanded' : 'record-text'}>{text}</p>
+    {(overflow || expanded) && <button type="button" className="btn-ghost" aria-expanded={expanded}
+      aria-controls={id} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '展开详情'}</button>}
+  </div>
+}
+
 /** 任务页签：提交表单 + 任务列表（原 /tasks 页全部行为） */
-function TasksTab() {
+function TasksTab({ formOpen, setFormOpen }) {
   const navigate = useNavigate()
   const [type, setType] = useState('remind')
   const [title, setTitle] = useState('')
@@ -115,7 +138,7 @@ function TasksTab() {
     let alive = true
     setLoading(true)
     setError('')
-    listTasks({ status })
+    listTasks({})
       .then((data) => {
         if (alive) setResult(data)
       })
@@ -130,7 +153,7 @@ function TasksTab() {
     return () => {
       alive = false
     }
-  }, [status, tick, navigate])
+  }, [tick, navigate])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -143,6 +166,7 @@ function TasksTab() {
       setTitle('')
       setContent('')
       setText('')
+      setFormOpen(false)
       setNotice(
         `已提交：「${summaryOf(task)}」→ ${STATUS_LABELS[task.status] ?? task.status}` +
           (task.result ? `｜${task.result}` : ''),
@@ -176,24 +200,29 @@ function TasksTab() {
     }
   }
 
-  const { total, items } = result
+  const { total, items: loadedItems } = result
+  const items = status ? loadedItems.filter((task) => task.status === status) : loadedItems
+  const counts = Object.fromEntries(['attention', 'failed', 'doing'].map((value) =>
+    [value, loadedItems.filter((task) => task.status === value).length]))
 
   return (
     <>
-      <p className="hint">手机浏览器打开这一页就能提交；提交后电脑端刷新也能看到同一条任务</p>
-
+      <div className="log-overview" role="group" aria-label="任务状态概览">
+        {['attention', 'failed', 'doing'].map((value) => <button key={value} type="button"
+          className={`site-glass-card log-overview-item ${status === value ? 'selected' : ''}`}
+          aria-pressed={status === value} onClick={() => setStatus(value)}>
+          <span>{STATUS_LABELS[value]}</span><strong>{loading ? '—' : error ? '—' : counts[value]}</strong>
+        </button>)}
+      </div>
+      {formOpen && <section className="site-glass-card log-create" aria-label="新建任务">
+      <div className="log-create-head"><h2>新建任务</h2><button type="button" className="btn-ghost" onClick={() => setFormOpen(false)}>收起</button></div>
+      <p className="hint">添加提醒或记录资料，提交后可在任务列表查看。</p>
       <form onSubmit={handleSubmit} className="form">
-        <label>
-          任务类型
-          <select value={type} onChange={(e) => setType(e.target.value)}>
-            {TASK_KINDS.map((kind) => (
-              <option key={kind.value} value={kind.value}>
-                {kind.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
+        <div className="view-switch" role="group" aria-label="任务类型">
+          {TASK_KINDS.map((kind) => <button type="button" key={kind.value}
+            className={type === kind.value ? 'active' : ''} aria-pressed={type === kind.value}
+            onClick={() => setType(kind.value)}>{kind.label}</button>)}
+        </div>
         {type === 'note' ? (
           <>
             <label>
@@ -245,12 +274,13 @@ function TasksTab() {
           </button>
         </div>
       </form>
+      </section>}
 
       {error ? <p className="error-bar">{error}</p> : null}
       {notice ? <p className="ok-bar">{notice}</p> : null}
 
       <div className="toolbar">
-        <span className="editor-label">任务列表（{total}）</span>
+        <span className="editor-label">任务记录 · {loading ? '更新中…' : error ? '暂不可用' : `${items.length} 条`}</span>
         <div className="view-switch" role="group" aria-label="按状态筛选">
           {STATUS_FILTERS.map((f) => (
             <button
@@ -266,16 +296,16 @@ function TasksTab() {
         </div>
       </div>
 
-      {loading && total === 0 ? (
+      {error ? null : loading && total === 0 ? (
         <div className="loading">载入中…</div>
       ) : items.length === 0 ? (
         <div className="empty">
-          {status ? '这个状态下还没有任务' : '还没有任务，上面提交一条试试'}
+          {status ? '这个状态下还没有任务' : '还没有任务，点击「新建任务」添加第一条。'}
         </div>
       ) : (
         <ul className="task-list">
           {items.map((task) => (
-            <li key={task.id} className="task-item">
+            <li key={task.id} className="task-item site-glass-card">
               <div className="task-head">
                 <span className="task-title">{summaryOf(task)}</span>
                 <span className={`badge badge--${task.status}`}>
@@ -289,7 +319,7 @@ function TasksTab() {
                 <span>·</span>
                 <span>来自{task.origin === 'phone' ? '手机' : '电脑'}</span>
               </div>
-              {task.result ? <p className="note-item-excerpt">{task.result}</p> : null}
+              <RecordText text={task.result} />
               {task.status === 'attention' ? (
                 <div className="task-actions">
                   <Link className="btn-primary" to={`/tasks/${encodeURIComponent(task.id)}/confirm`}>
@@ -357,7 +387,7 @@ function ConfirmTab() {
 
       {error ? <p className="error-bar">{error}</p> : null}
 
-      {loading && total === 0 ? (
+      {error ? null : loading && total === 0 ? (
         <div className="loading">载入中…</div>
       ) : items.length === 0 ? (
         <div className="empty">
@@ -371,13 +401,13 @@ function ConfirmTab() {
               badge: 'badge--todo',
             }
             return (
-              <li key={item.id} className="task-item">
+              <li key={item.id} className="task-item site-glass-card">
                 <div className="task-head">
                   <span className="task-title">{ACTION_LABELS[item.action] ?? item.action}</span>
                   <span className={`badge ${meta.badge}`}>{meta.label}</span>
                 </div>
 
-                <p className="confirm-line">{item.summary}</p>
+                <RecordText text={item.summary} />
 
                 <div className="note-item-meta">
                   <span>请求于 {fmtTime(item.requestedAt, true)}</span>
@@ -404,6 +434,7 @@ function ConfirmTab() {
 
 export default function LogPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [formOpen, setFormOpen] = useState(false)
   const tab = searchParams.get('tab') === 'confirm' ? 'confirm' : 'tasks'
 
   function setTab(next) {
@@ -414,9 +445,9 @@ export default function LogPage() {
   }
 
   return (
-    <section className="card">
-      <div className="log-head">
-        <h2>日志</h2>
+    <section className="log-page">
+      <header className="log-head site-glass-card">
+        <h1>日志</h1>
         <div className="view-switch" role="group" aria-label="日志页签">
           {TABS.map((t) => (
             <button
@@ -430,9 +461,11 @@ export default function LogPage() {
             </button>
           ))}
         </div>
-      </div>
+        {tab === 'tasks' && <button type="button" className="btn-primary" aria-expanded={formOpen}
+          onClick={() => setFormOpen((value) => !value)}>＋ 新建任务</button>}
+      </header>
 
-      {tab === 'tasks' ? <TasksTab /> : <ConfirmTab />}
+      {tab === 'tasks' ? <TasksTab formOpen={formOpen} setFormOpen={setFormOpen} /> : <ConfirmTab />}
     </section>
   )
 }

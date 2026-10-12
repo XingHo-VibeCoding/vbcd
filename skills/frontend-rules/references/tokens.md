@@ -1,4 +1,4 @@
-# Token 表（buddy v0.1.0）
+# Token 表（buddy v0.2.0）
 
 真值：`web/DESIGN.md` + `web/src/styles.css` 顶部 `@theme`。
 新增 token 必须先更新 `web/DESIGN.md`，再更新本文件。
@@ -10,7 +10,7 @@
 | 页面底色 | `bg-slate-50` / `dark:bg-slate-950` | `#f8fafc` | `#020618` |
 | 正文 | `text-slate-900` / `dark:text-slate-100` | `#0f172b` | `#f1f5f9` |
 | 次级 | `text-slate-500` / `dark:text-slate-400` | `#62748e` | `#90a1b9` |
-| 玻璃卡底 | `bg-white/50` / `dark:bg-slate-800/50` | rgba(255,255,255,.5) | rgba(29,41,61,.5) |
+| 玻璃卡底 | `site-glass-card` | rgba(255,255,255,.25) | rgba(29,41,61,.5) |
 | 玻璃描边 | `border-white/40` / `dark:border-white/10` | — | — |
 | 实心描边 | `border-slate-200` / `dark:border-slate-700` | `#e2e8f0` | `#314158` |
 | 导航玻璃底 | `bg-white/40` / `dark:bg-slate-900/50` | — | — |
@@ -51,9 +51,13 @@
 | 胶囊/徽章 | `rounded-full` | — |
 | 禁止 | `rounded-none` | — |
 
-阴影：`shadow-lg` 主卡 / `shadow-xl` 悬停 / `shadow-brand-glow` 主按钮光晕。
-模糊：`backdrop-blur-xl` 默认（12px）；兜底 `will-change: backdrop-filter` 已在 styles.css。
+阴影：`--shadow-card` 主卡 / `--shadow-card-hover` 悬停 / `shadow-brand-glow` 主按钮光晕。
+模糊：`--blur-glass: 24px`；兜底 `will-change: backdrop-filter` 已在 styles.css。
 
 ## 5. z 轴白名单
 
 `-9 -8 -7 -1 0 10 20 30 40 50 60 65 70`（L0 背景 / L1 内容 / L3 悬浮 50 / L4 遮罩 65 / L5 模态 70）
+
+主页基线：主卡统一 `site-glass-card`（24px 圆角）；内层 rounded-xl（12px）。浅色背景使用图片轮播，深色保留图轮播。完整间距、字体及布局尺度见 `web/DESIGN.md` §11。
+
+浅色修订以 DESIGN §13 为准：主站卡片浅白 25% / 模糊 12px，深色 50% / 24px，使用 --site-glass-blur。

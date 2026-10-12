@@ -34,7 +34,7 @@ function fmtDate(ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-export default function ImaPanel() {
+export default function ImaPanel({ toolbarHeader }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const kbId = searchParams.get('kb') || ''
@@ -217,10 +217,10 @@ export default function ImaPanel() {
   // ---------- 未配置：说明性空态（不是报错条） ----------
   if (!configured) {
     return (
-      <div className="empty">
-        ima 未配置：请在 <code>server/.env</code> 填 <code>IMA_OPENAPI_CLIENTID</code> 与{' '}
-        <code>IMA_OPENAPI_APIKEY</code>（到 ima.qq.com/agent-interface 自建），重启后端后回来。
-      </div>
+      <>
+        <header className="site-glass-card archive-tools">{toolbarHeader}</header>
+        <div className="empty">云端资料尚未配置，可先切换到本地查看资料。</div>
+      </>
     )
   }
 
@@ -230,6 +230,7 @@ export default function ImaPanel() {
     const nstate = notesError ? 'error' : notes === null ? 'loading' : notes.length === 0 ? 'empty' : 'ok'
     return (
       <div>
+        <header className="site-glass-card archive-tools">{toolbarHeader}</header>
         <nav className="meta" aria-label="云端视图位置">
           <button type="button" className="btn-ghost" onClick={() => setSearchParams({ src: 'ima' })}>
             ← 云端
@@ -305,6 +306,8 @@ export default function ImaPanel() {
 
   return (
     <div>
+      <header className="site-glass-card archive-tools">
+      {toolbarHeader}
       <div className="toolbar">
         <select value={kbId} onChange={(e) => onKbChange(e.target.value)} aria-label="选择知识库">
           <option value="">全部知识库</option>
@@ -318,11 +321,14 @@ export default function ImaPanel() {
         <input
           className="search-input"
           type="search"
+          aria-label="搜索云端资料"
           value={qDraft}
           onChange={(e) => onSearchInput(e.target.value)}
           placeholder={kbId ? '在当前知识库内搜索…' : '跨全部知识库搜索…'}
         />
       </div>
+
+      </header>
 
       {/* 形态②的面包屑：current_path 根项 = 库根目录，点它清掉 folder */}
       {inBrowse && groups?.[0]?.currentPath?.length ? (

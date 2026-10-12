@@ -18,6 +18,10 @@ function fmtTime(iso) {
   return new Date(iso).toLocaleString('zh-CN', { hour12: false })
 }
 
+function ReadingTable({ node, children, ...props }) {
+  return <div className="reading-table" tabIndex={0} role="region" aria-label="表格，可横向滚动"><table {...props}>{children}</table></div>
+}
+
 export default function NoteDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -151,10 +155,11 @@ export default function NoteDetailPage() {
 
   const meta = note.meta
   return (
-    <article className="card">
+    <article className="site-glass-card reading-card">
+      <header className="reading-header">
       {/* 层级只有「档案」这一层，但末项写标题而不是「详情」——反正都要占一行，写标题更有用 */}
       <Breadcrumb items={[{ label: '档案', to: '/notes' }, { label: meta.title }]} />
-      <h2 className="detail-title">{meta.title}</h2>
+      <h1 className="detail-title">{meta.title}</h1>
 
       <div className="note-item-meta">
         <span className="badge">{CATEGORY_LABELS[meta.category] || meta.category}</span>
@@ -166,17 +171,12 @@ export default function NoteDetailPage() {
         ))}
       </div>
 
-      <dl className="detail-meta">
-        {meta.source_url ? (
-          <>
-            <dt>来源</dt>
-            <dd>
-              <a href={meta.source_url} target="_blank" rel="noreferrer">
-                {meta.source_url}
-              </a>
-            </dd>
-          </>
-        ) : null}
+      {meta.source_url ? (
+        <p className="reading-source">来源：<a href={meta.source_url} target="_blank" rel="noreferrer">{meta.source_url}</a></p>
+      ) : null}
+      <details className="reading-info">
+        <summary>资料信息</summary>
+        <dl className="detail-meta">
         <dt>创建</dt>
         <dd>{fmtTime(meta.created_at)}</dd>
         <dt>更新</dt>
@@ -188,12 +188,15 @@ export default function NoteDetailPage() {
             {copyState === 'ok' ? '已复制 ✓' : copyState === 'failed' ? '复制失败' : '复制路径'}
           </button>
         </dd>
-      </dl>
+        </dl>
+      </details>
+      </header>
 
       <div className="detail-content">
-        <MarkdownContent content={note.content} />
+        <MarkdownContent content={note.content} components={{ table: ReadingTable }} />
       </div>
 
+      <footer className="reading-footer">
       <div className="danger-zone">
         <button type="button" className="btn-danger" disabled={deleting} onClick={handleDelete}>
           {deleting ? '正在发起…' : '删除这条资料'}
@@ -205,6 +208,8 @@ export default function NoteDetailPage() {
       <p className="detail-back">
         <BackLink fallback="/notes" fallbackLabel="返回档案列表" />
       </p>
+
+      </footer>
 
       <Toast text={toast?.text} tone={toast?.tone} />
     </article>

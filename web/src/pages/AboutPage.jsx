@@ -10,27 +10,6 @@ import { getGithubActivity } from '../api/github.js'
 const WEEKDAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', '']
 const TIMELINE_COUNT = 8
 
-// F11 占位文案：正式使用前把这段换成使用者自己的介绍（改这一个常量即可）
-const INTRO_SECTIONS = [
-  {
-    heading: '个人简介',
-    paras: ['你好，我是 buddy 的建设者。', '这里是「关于」页的占位介绍，等真文案到位后只改这一个常量。'],
-  },
-  {
-    heading: '这个项目',
-    paras: ['buddy 是一期「会成长的个人助手」：个人数据库 + 手机端联动。'],
-    bullets: [
-      '资料录入：网页端新建 Markdown，落到 data/ 目录',
-      '列表检索与知识库问答（RAG）',
-      '手机端发起任务，风险动作经确认页后执行',
-    ],
-  },
-  {
-    heading: '',
-    paras: ['欢迎各位朋友联系交流~'],
-  },
-]
-
 /** GitHub 资料卡（自我介绍页签内嵌）：头像走 github.com/<login>.png 公开端点，无需 token。
     login 为空（profile.md 未配 github 字段）时整块不渲染。 */
 function GitHubCard({ login }) {
@@ -53,7 +32,7 @@ function GitHubCard({ login }) {
       )}
       <span className="gh-card-body">
         <span className="gh-card-login">@{login}</span>
-        <span className="gh-card-desc">在 GitHub 上关注我</span>
+        <span className="gh-card-desc">查看公开代码与项目动态</span>
       </span>
       <span className="gh-card-arrow" aria-hidden="true">→</span>
     </a>
@@ -188,6 +167,7 @@ export default function AboutPage() {
   const [gh, setGh] = useState(null) // null = 加载中；{configured:false} 或 {profile,calendar,events}
   const [ghError, setGhError] = useState('')
   const [avatarBroken, setAvatarBroken] = useState(false)
+  const [brokenCover, setBrokenCover] = useState('')
 
   // 页签状态写进地址栏（?tab=activity），与 ?cal=month / ?view=dir 同一套约定
   const [searchParams, setSearchParams] = useSearchParams()
@@ -238,6 +218,8 @@ export default function AboutPage() {
   const nickname = profile.nickname || 'buddy'
   const initial = nickname.slice(0, 1).toUpperCase()
   const en = englishName(nickname)
+  const bio = typeof profile.bio === 'string' ? profile.bio.trim() : ''
+  const cover = me.site?.cover?.default || '/images/bg-l1.jpg'
 
   const items = notes || []
   // GitHub 日历 → Map<date,count>（calendar 为 null 时传空 map，等价于只有资料）
@@ -269,8 +251,12 @@ export default function AboutPage() {
 
   return (
     <div className="about">
-      <div className="about-banner" aria-hidden="true" />
-      <div className="card about-card">
+      <div className="about-banner" aria-hidden="true">
+        {brokenCover !== cover ? (
+          <img className="about-banner-image" src={cover} alt="" onError={() => setBrokenCover(cover)} />
+        ) : null}
+      </div>
+      <div className="site-glass-card about-card">
         <div className="about-head">
           {profile.avatar && !avatarBroken ? (
             <img
@@ -285,8 +271,9 @@ export default function AboutPage() {
             </div>
           )}
           <div className="about-title">
-            <h2 className="about-name">关于我</h2>
-            <p className="about-sub">HELLO WORLD, I'M {en}</p>
+            <p className="about-kicker">PERSONAL PROFILE</p>
+            <h1 className="about-name">{nickname}</h1>
+            <p className="about-sub">{en}</p>
           </div>
           <div className="view-switch about-tabs" role="group" aria-label="关于页内容">
             <button
@@ -367,23 +354,18 @@ export default function AboutPage() {
             </>
           )
         ) : (
-          <section className="about-intro">
-            {INTRO_SECTIONS.map((s, i) => (
-              <div className="intro-sec" key={i}>
-                {s.heading ? <h3>{s.heading}</h3> : null}
-                {(s.paras || []).map((p, j) => (
-                  <p key={j}>{p}</p>
-                ))}
-                {s.bullets ? (
-                  <ul>
-                    {s.bullets.map((b, j) => (
-                      <li key={j}>{b}</li>
-                    ))}
-                  </ul>
-                ) : null}
-                {i === 0 && profile.github ? <GitHubCard login={profile.github} /> : null}
-              </div>
-            ))}
+          <section className={`about-intro ${profile.github ? 'has-github' : ''}`}>
+            <div className="about-bio-panel">
+              <span className="about-section-label">ABOUT ME</span>
+              <h2>你好，我是 {nickname}</h2>
+              {bio ? <p>{bio}</p> : <p className="about-bio-empty">还没有填写个人简介。</p>}
+            </div>
+            {profile.github ? (
+              <aside className="about-links">
+                <span className="about-section-label">FIND ME</span>
+                <GitHubCard login={profile.github} />
+              </aside>
+            ) : null}
           </section>
         )}
       </div>

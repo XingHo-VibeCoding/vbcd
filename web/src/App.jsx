@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import HomePage from './pages/HomePage.jsx'
 import NoteListPage from './pages/NoteListPage.jsx'
 import LogPage from './pages/LogPage.jsx'
@@ -165,6 +165,8 @@ function MobileTabBar() {
 }
 
 export default function App() {
+  const { pathname } = useLocation()
+  const isAdmin = /^\/admin(?:\/|$)/.test(pathname)
   // 隐私模块默认关闭：读 /api/health 的 auth_enabled，决定是否显示「退出」与登录页
   const [authEnabled, setAuthEnabled] = useState(false)
   // L0 背景 + 站点视觉配置（site.json）
@@ -196,7 +198,7 @@ export default function App() {
       <MobileTabBar />
 
       {/* 内容区：桌面顶出导航高(16*4=64px→pt-20 留余量)，移动底出 tab bar(16*4=64→pb-20) */}
-      <main className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-20 pt-20 sm:px-6 md:pb-12 md:pt-24 lg:px-10">
+      <main className={`${isAdmin ? '' : 'site-main '}relative z-10 mx-auto w-full max-w-6xl px-4 pb-20 pt-20 sm:px-6 md:pb-12 md:pt-24 lg:px-10`}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/notes" element={<NoteListPage />} />
