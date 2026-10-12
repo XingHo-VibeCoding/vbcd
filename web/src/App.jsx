@@ -17,7 +17,16 @@ import { lazy, Suspense } from 'react'
 // 后台控制台：lazy 加载，AntD/Refine 大依赖只在进 /admin 时才下载，不拖累主站首屏
 const AdminApp = lazy(() => import('./admin/AdminApp.jsx'))
 
-function LogoutButton() {
+// 主导航项（桌面顶栏 + 移动 tab bar 共用同一份，保证两处一致）
+const NAV_ITEMS = [
+  { to: '/', label: '主页', icon: '🏠', end: true },
+  { to: '/notes', label: '档案', icon: '📁' },
+  { to: '/log', label: '日志', icon: '📋' },
+  { to: '/agent', label: 'agent', icon: '✨' },
+  { to: '/about', label: '关于', icon: '👤' },
+]
+
+function LogoutButton({ className = '' }) {
   const navigate = useNavigate()
   async function onLogout() {
     try {
@@ -28,43 +37,166 @@ function LogoutButton() {
     navigate('/login', { replace: true })
   }
   return (
-    <button type="button" className="logout" onClick={onLogout}>
+    <button type="button" className={className} onClick={onLogout}>
       退出
     </button>
+  )
+}
+
+// L0 背景层：读 site.json 的 background——
+//   type='image'    → 多图淡入淡出轮播（images[] 数组；也兼容单 src）
+//   type='gradient' → 渐变兜底（或未配图时）
+// 上面永远压一层淡色 veil，保证卡片可读性（玻璃透的是 veil+图，不是裸图）。
+// interval 默认 6000ms，可在 site.json 的 background.interval 调。
+function BackgroundLayer({ site, theme }) {
+  const conf = site?.background || {}
+  const bg = conf[theme]
+  // 兼容两种配置：images[]（轮播）或 src（单图）
+  const images = Array.isArray(bg?.images) && bg.images.length
+    ? bg.images
+    : (bg?.src ? [bg.src] : [])
+  const isImage = bg?.type === 'image' && images.length > 0
+  const interval = conf.interval || 6000
+  const [idx, setIdx] = useState(0)
+
+  // 主题或图集变化时归零重播
+  useEffect(() => { setIdx(0) }, [theme, images.length])
+  // 自动轮播：淡入淡出
+  useEffect(() => {
+    if (!isImage || images.length < 2) return undefined
+    const t = setInterval(() => setIdx((i) => (i + 1) % images.length), interval)
+    return () => clearInterval(t)
+  }, [isImage, images.length, interval])
+
+  return (
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-9 overflow-hidden">
+      {isImage ? (
+        images.map((src, i) => (
+          <img
+            key={src}
+            src={src}
+            alt=""
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out
+                        ${i === idx ? 'opacity-100' : 'opacity-0'}`}
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+          />
+        ))
+      ) : (
+        <div className="h-full w-full bg-gradient-to-br from-pink-50 via-rose-50 to-indigo-50
+                        dark:from-slate-950 dark:via-slate-900 dark:to-fuchsia-950" />
+      )}
+      {/* veil：浅色压白、深色压黑，让卡片文字可读、玻璃仍可透 */}
+      <div className="absolute inset-0 bg-white/25 dark:bg-slate-950/50" />
+    </div>
+  )
+}
+
+// 桌面顶部玻璃导航（>=768px）：fixed top-0，半透明 + backdrop-blur
+function DesktopNav({ authEnabled }) {
+  return (
+    <header
+      className="fixed inset-x-0 top-0 z-50 hidden md:block
+                 border-b border-white/20 bg-white/40 shadow-sm backdrop-blur-xl
+                 dark:border-white/5 dark:bg-slate-900/50"
+    >
+      <div className="mx-auto flex h-16 w-[90%] max-w-6xl items-center justify-between px-4">
+        <NavLink to="/" className="flex items-center gap-2.5 text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 text-sm text-white">
+            b
+          </span>
+          buddy
+        </NavLink>
+        <nav className="flex items-center gap-1" aria-label="主导航">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+                  isActive
+                    ? 'bg-brand text-white shadow-lg shadow-brand-glow'
+                    : 'text-slate-500 hover:bg-brand/10 hover:text-brand dark:text-slate-400 dark:hover:text-brand-dark-text'
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+          {authEnabled ? (
+            <LogoutButton className="ml-1 rounded-full px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:text-danger dark:text-slate-400 dark:hover:text-danger" />
+          ) : null}
+        </nav>
+      </div>
+    </header>
+  )
+}
+
+// 移动底部玻璃 tab bar（<768px）：fixed bottom-0，图标+文字
+function MobileTabBar() {
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-50 flex h-16 items-stretch justify-around
+                 border-t border-white/20 bg-white/55 backdrop-blur-xl
+                 dark:border-white/5 dark:bg-slate-900/55 md:hidden"
+      aria-label="主导航"
+    >
+      {NAV_ITEMS.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          className={({ isActive }) =>
+            `flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-bold transition-colors ${
+              isActive
+                ? 'text-brand dark:text-brand-dark-text'
+                : 'text-slate-500 dark:text-slate-400'
+            }`
+          }
+        >
+          <span className="text-lg leading-none" aria-hidden="true">
+            {item.icon}
+          </span>
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
   )
 }
 
 export default function App() {
   // 隐私模块默认关闭：读 /api/health 的 auth_enabled，决定是否显示「退出」与登录页
   const [authEnabled, setAuthEnabled] = useState(false)
+  // L0 背景 + 站点视觉配置（site.json）
+  const [site, setSite] = useState(null)
+  const [theme, setTheme] = useState('light')
 
   useEffect(() => {
     request('/api/health')
       .then((data) => setAuthEnabled(Boolean(data?.auth_enabled)))
-      .catch(() => setAuthEnabled(false)) // 后端连不上按公开处理，页面会自行报错
+      .catch(() => setAuthEnabled(false))
+    // site.json（含 background/social/hotspots/projects）；失败不阻塞
+    request('/api/me')
+      .then((d) => setSite(d?.site ?? null))
+      .catch(() => setSite(null))
+    // 背景图跟随当前主题：直接读 <html> 的 data-theme（首屏脚本已写）
+    setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
+    // 监听主题切换：切换时换背景图
+    const observer = new MutationObserver(() => {
+      setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
   }, [])
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>buddy</h1>
-        <p className="subtitle">会成长的个人助手 · 第一版骨架</p>
-        {/* Day 13：链接换成 NavLink —— 当前项自动获得 aria-current="page"（无障碍导航标签）。
-            「主页」要加 end，否则 /notes、/about 等所有路径都会把它也算成当前项。
-            视觉上不加当前项标记（使用者未要求，不擅自加）。 */}
-        <nav className="nav">
-          <NavLink to="/" end>
-            主页
-          </NavLink>
-          <NavLink to="/notes">档案</NavLink>
-          <NavLink to="/log">日志</NavLink>
-          <NavLink to="/agent">agent</NavLink>
-          <NavLink to="/about">关于</NavLink>
-          {authEnabled ? <LogoutButton /> : null}
-        </nav>
-      </header>
+    <div className="app font-serif text-slate-900 dark:text-slate-100">
+      <BackgroundLayer site={site} theme={theme} />
+      <DesktopNav authEnabled={authEnabled} />
+      <MobileTabBar />
 
-      <main className="app-main">
+      {/* 内容区：桌面顶出导航高(16*4=64px→pt-20 留余量)，移动底出 tab bar(16*4=64→pb-20) */}
+      <main className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-20 pt-20 sm:px-6 md:pb-12 md:pt-24 lg:px-10">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/notes" element={<NoteListPage />} />
@@ -95,10 +227,6 @@ export default function App() {
           />
         </Routes>
       </main>
-
-      <footer className="app-footer">
-        Day 8 联调 · 数据存于本项目 data/ 目录
-      </footer>
     </div>
   )
 }

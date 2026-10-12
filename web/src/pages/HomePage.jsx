@@ -1,53 +1,47 @@
-// 个人主页（替换原 / 首页）：左个人卡（头像/昵称/简介）+ 右日历卡（当月月历 + 近期日程）。
-// 数据来自 GET /api/me → data/profile.md + data/schedule.md；文件缺失时各项有默认值，不报错。
-import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+// 个人主页（设计改版 · 定稿 2026-10-11）：
+//   布局：第一行 左宽(个人卡)右窄(热点轮播) / 第二行 左窄(日历日程卡)右宽(任务卡) —— 宽度错落、同排同高对齐
+//   底部：项目大卡(介绍轮播+项目列表联动) + 独立主题小卡
+// 数据：GET /api/me → { profile, schedule, site }；GET /api/tasks → 待办。
+//   site.json 提供 stats/social/hotspots/projects；缺省项各有降级。
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { getMe } from '../api/me.js'
 import { listTasks } from '../api/tasks.js'
 import { getTheme, toggleTheme, watchOtherTabs, watchSystemTheme } from '../theme.js'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
+const STATUS_LABEL = { todo: '待办', doing: '进行中', done: '已完成', failed: '失败', attention: '需确认' }
+const TASK_ICON = { note: '📝', remind: '⏰', organize: '🔗', transcribe_url: '🎬', delete_note: '🗑️' }
 
-// 与任务页同一套状态文案与徽标色（badge--* 已在全局样式里定义）
-const STATUS_LABEL = {
-  todo: '待办',
-  doing: '进行中',
-  done: '已完成',
-  failed: '失败',
-  attention: '需确认',
-}
-
-/** 任务摘要（与任务页 summaryOf 同一口径，payload 保留服务端 snake_case） */
 function taskSummary(task) {
-  const payload = task.payload ?? {}
-  if (task.type === 'note') return payload.title || '(无标题)'
-  if (task.type === 'remind') return payload.text || '(空提醒)'
-  if (task.type === 'organize') return payload.url || '(空链接)'
-  if (task.type === 'delete_note') return `删除资料 ${payload.note_id ?? ''}`
+  const p = task.payload ?? {}
+  if (task.type === 'note') return p.title || '(无标题)'
+  if (task.type === 'remind') return p.text || '(空提醒)'
+  if (task.type === 'organize' || task.type === 'transcribe_url') return p.url || '(空链接)'
+  if (task.type === 'delete_note') return `删除资料 ${p.note_id ?? ''}`
   return task.type
 }
 
-/** 本地时区的 YYYY-MM-DD（不用 toISOString，避免时区把今天推到昨天） */
-function dateStr(d) {
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${m}-${day}`
+function StatusBadge({ status }) {
+  const map = {
+    todo: 'bg-info/15 text-info',
+    doing: 'bg-warning/15 text-amber-600 dark:text-amber-400',
+    done: 'bg-success/15 text-emerald-600 dark:text-emerald-400',
+    failed: 'bg-danger/15 text-danger',
+    attention: 'bg-danger/15 text-danger',
+  }
+  return (
+    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black tracking-widest ${map[status] || 'bg-slate-500/15 text-slate-500'}`}>
+      {STATUS_LABEL[status] || status}
+    </span>
+  )
 }
 
-/** 当月月历格子：周一开头的一维数组，null 为月外占位 */
-function monthCells(year, month) {
-  const first = new Date(year, month, 1)
-  const offset = (first.getDay() + 6) % 7 // 周日 getDay()=0 → 排第 7 格
-  const days = new Date(year, month + 1, 0).getDate()
-  const cells = Array.from({ length: offset }, () => null)
-  for (let d = 1; d <= days; d++) cells.push(d)
-  while (cells.length % 7) cells.push(null) // 补齐整周
-  return cells
-}
+const dateStr = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-/** 本周 7 天（周一开头）：返回 Date 数组 */
 function weekDates(base) {
-  const offset = (base.getDay() + 6) % 7 // 周一 = 0
+  const offset = (base.getDay() + 6) % 7
   const monday = new Date(base)
   monday.setDate(base.getDate() - offset)
   return Array.from({ length: 7 }, (_, i) => {
@@ -57,57 +51,83 @@ function weekDates(base) {
   })
 }
 
-/** 方格的图标：纯线条、无装饰底，颜色继承 .tile-icon 的 currentColor */
-function NightIcon() {
-  return (
-    <svg className="tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
-      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" fill="currentColor" />
-      <path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" fill="currentColor" />
-    </svg>
-  )
-}
+// 玻璃卡通用类（所有大卡共用）
+const GLASS =
+  'rounded-3xl border border-white/40 bg-white/40 shadow-lg backdrop-blur-xl ' +
+  'transition-all duration-300 hover:shadow-xl dark:border-white/10 dark:bg-slate-800/50'
 
-/** 归档方格的图标：归档盒 + 向下箭头（“存进去”），线条风格与主题方格一致 */
-function ArchiveIcon() {
-  return (
-    <svg className="tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
-      <path
-        d="M4 8.2h16v10.3a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M4 8.2l1.9-3.4h12.2L20 8.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12 11.4v4.4m0 0l-2-2m2 2l2-2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
+/**
+ * 轮播卡：热点与项目共用。
+ * items: [{tag,title,subtitle|desc,image,url}]
+ * height: Tailwind 高度类
+ */
+function Carousel({ items, height = 'h-44', gradient = 'from-brand via-purple-500 to-pink-500' }) {
+  const [idx, setIdx] = useState(0)
+  const timer = useRef(null)
+  const n = items.length
 
-function DayIcon() {
-  return (
-    <svg className="tile-icon" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
-      <circle cx="12" cy="12" r="4.2" fill="currentColor" />
-      <path
-        d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
+  const go = (i) => setIdx(((i % n) + n) % n)
+  // 自动轮播（4.5s）；手动切换后重置计时
+  useEffect(() => {
+    if (n <= 1) return undefined
+    timer.current = setInterval(() => go(idx + 1), 4500)
+    return () => clearInterval(timer.current)
+  }, [idx, n])
+
+  if (!items.length) return null
+  const item = items[idx] || items[0]
+
+  const content = (
+    <div className={`relative overflow-hidden rounded-2xl ${height} bg-gradient-to-br ${gradient}`}>
+      {/* 背景图（site.json image 有值时覆盖渐变） */}
+      {item.image ? (
+        <img src={item.image} alt="" className="absolute inset-0 h-full w-full object-cover" aria-hidden="true" />
+      ) : null}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" aria-hidden="true" />
+      <div className="absolute inset-0 flex flex-col justify-end p-5 text-white">
+        {item.tag ? (
+          <span className="mb-2 self-start rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-black tracking-widest backdrop-blur-sm">
+            {item.tag}
+          </span>
+        ) : null}
+        <div className="text-lg font-black leading-snug drop-shadow">{item.title}</div>
+        {item.subtitle || item.desc ? (
+          <div className="mt-1 text-xs opacity-85">{item.subtitle || item.desc}</div>
+        ) : null}
+      </div>
+      {n > 1 && (
+        <>
+          <div className="absolute right-3 top-3 flex gap-1.5">
+            {['‹', '›'].map((s, i) => (
+              <button
+                key={s}
+                type="button"
+                aria-label={i === 0 ? '上一张' : '下一张'}
+                onClick={(e) => { e.stopPropagation(); go(idx + (i === 0 ? -1 : 1)) }}
+                className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-sm text-white backdrop-blur-sm transition-colors hover:bg-white/35"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="absolute bottom-3.5 right-4 flex gap-1">
+            {items.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-label={`第 ${i + 1} 张`}
+                onClick={(e) => { e.stopPropagation(); go(i) }}
+                className={`h-1 rounded-full transition-all ${i === idx ? 'w-5 bg-white' : 'w-3.5 bg-white/40'}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   )
+  return item.url ? (
+    <a href={item.url} target="_blank" rel="noreferrer" className="block">{content}</a>
+  ) : content
 }
 
 export default function HomePage() {
@@ -115,215 +135,299 @@ export default function HomePage() {
   const [data, setData] = useState(null)
   const [tasks, setTasks] = useState([])
   const [error, setError] = useState('')
-  const [avatarBroken, setAvatarBroken] = useState(false) // 头像加载失败 → 降级首字母色块
-  // 主题（F10）：初值取首屏脚本已写好的 <html data-theme>
+  const [avatarBroken, setAvatarBroken] = useState(false)
   const [theme, setTheme] = useState(getTheme)
-
-  // 日历视图：缺省为周视图（7 列），?cal=month 才是月视图 —— 与 /notes?view=dir 同一套做法：
-  // 写进地址栏而不是 state，刷新、前进后退、把链接发到手机都能保持同一个视图。
-  const [searchParams, setSearchParams] = useSearchParams()
-  const isMonthView = searchParams.get('cal') === 'month'
-
-  function setCal(view) {
-    const next = new URLSearchParams(searchParams)
-    if (view === 'week') next.delete('cal') // 默认视图不写参数，地址栏保持干净
-    else next.set('cal', view)
-    setSearchParams(next)
-  }
+  const [projIdx, setProjIdx] = useState(0)
 
   useEffect(() => {
-    let alive = true
-    getMe()
-      .then((d) => {
-        if (alive) setData(d)
-      })
-      .catch((err) => {
-        if (!alive) return
-        if (err.code === 'AUTH_REQUIRED') navigate('/login?from=/', { replace: true })
-        else setError(err.message || '加载失败')
-      })
-    // 任务列表独立加载：主页核心是资料/日程，任务拉取失败不应拖垮整页
-    listTasks()
-      .then((d) => {
-        if (alive) setTasks(d.items || [])
-      })
-      .catch(() => {}) // 任务接口失败时主页照常显示，列表区给出空状态
-    return () => {
-      alive = false
-    }
-  }, [navigate])
-
-  // 主题同步：未保存过选择时跟随系统；其他标签页切换后本页也跟随（见 theme.js）
-  useEffect(() => {
-    const stopWatchingSystem = watchSystemTheme(setTheme)
-    const stopWatchingTabs = watchOtherTabs(setTheme)
-    return () => {
-      stopWatchingSystem()
-      stopWatchingTabs()
-    }
+    let cancelled = false
+    getMe().then((d) => !cancelled && setData(d)).catch((e) => !cancelled && setError(e.message || '加载失败'))
+    listTasks().then((d) => !cancelled && setTasks(d.items || [])).catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
-  if (error) return <div className="error-bar">{error}</div>
-  if (!data) return <div className="loading">载入中…</div>
+  useEffect(() => {
+    const s1 = watchSystemTheme(setTheme)
+    const s2 = watchOtherTabs(setTheme)
+    return () => { s1(); s2() }
+  }, [])
 
-  const profile = data.profile || {}
-  const schedule = data.schedule || []
+  const profile = data?.profile ?? {}
+  const site = data?.site ?? {}
+  const schedule = data?.schedule ?? []
   const nickname = profile.nickname || 'buddy'
-  const initial = nickname.slice(0, 1).toUpperCase()
+  const initial = nickname.trim().charAt(0).toUpperCase() || 'B'
+  const isDark = theme === 'dark'
 
   const today = new Date()
   const todayStr = dateStr(today)
-  const cells = monthCells(today.getFullYear(), today.getMonth())
   const eventDays = new Set(schedule.map((s) => s.date))
   const week = weekDates(today)
 
-  // 标题两种视图统一为「YYYY 年 M 月」（2026-10-03 使用者裁定）：周视图跨月时
-  // 「9 月 28 日 – 10 月 4 日」的双月写法太抢眼，具体日期格子本身已经把范围表达清楚了。
-  const rangeLabel = `${today.getFullYear()} 年 ${today.getMonth() + 1} 月`
+  const pendingTasks = tasks.filter((t) => t.status !== 'done' && t.status !== 'failed').slice(0, 5)
 
-  const isDark = theme === 'dark'
+  // site.json 数据降级
+  const stats = [
+    ['资料', site?.stats?.notes ?? '—'],
+    ['任务', site?.stats?.tasks ?? pendingTasks.length],
+    ['连续天', site?.stats?.days ?? '—'],
+  ]
+  const social = site?.social ?? []
+  const hotspots = site?.hotspots ?? []
+  const projects = site?.projects ?? []
+  const curProject = projects[projIdx] || projects[0]
 
-  // 主页任务列表只显示「还要做的事」：已完成的在 /tasks 里翻
-  const pendingTasks = tasks
-    .filter((t) => t.status !== 'done' && t.status !== 'failed')
-    .slice(0, 5)
+  if (error) {
+    return <div className="rounded-2xl border border-danger/30 bg-danger/10 p-6 text-sm text-danger">{error}</div>
+  }
 
   return (
-    <div className="home-grid">
-      {/* 个人卡整块可点：点进去就是「关于」页（F11） */}
-      <Link className="card profile-card" to="/about" aria-label="查看关于页">
-        {profile.avatar && !avatarBroken ? (
-          <img
-            className="profile-avatar"
-            src={profile.avatar}
-            alt={`${nickname} 的头像`}
-            onError={() => setAvatarBroken(true)}
-          />
-        ) : (
-          <div className="profile-avatar profile-avatar-fallback" aria-hidden="true">
-            {initial}
-          </div>
-        )}
-        <div className="profile-text">
-          <h2 className="profile-name">{nickname}</h2>
-          {profile.bio ? <p className="profile-bio">{profile.bio}</p> : null}
-        </div>
-        <span className="profile-card-cta" aria-hidden="true">
-          关于 →
-        </span>
-      </Link>
-
-      <section className="card cal-card">
-        <div className="cal-head">
-          <h2 className="cal-title">{rangeLabel}</h2>
-          <div className="view-switch" role="group" aria-label="日历视图">
-            <button
-              type="button"
-              className={isMonthView ? 'tab' : 'tab active'}
-              aria-pressed={!isMonthView}
-              onClick={() => setCal('week')}
-            >
-              周
-            </button>
-            <button
-              type="button"
-              className={isMonthView ? 'tab active' : 'tab'}
-              aria-pressed={isMonthView}
-              onClick={() => setCal('month')}
-            >
-              月
-            </button>
-          </div>
-        </div>
-
-        {/* 两个视图共用同一套格子：月视图 item=日期数字/null，周视图 item=Date。
-            日历只做查看（日期 + 「有安排」小圆点），信息统一由下方列表承载。 */}
-        <div className="cal-grid">
-          {WEEKDAYS.map((w) => (
-            <div key={w} className="cal-weekday">
-              {w}
-            </div>
-          ))}
-
-          {(isMonthView ? cells : week).map((item, i) => {
-            if (item === null) return <div key={`blank-${i}`} className="cal-cell" />
-            const ds = isMonthView
-              ? dateStr(new Date(today.getFullYear(), today.getMonth(), item))
-              : dateStr(item)
-            const cls = [
-              'cal-cell',
-              ds === todayStr ? 'cal-cell--today' : '',
-              eventDays.has(ds) ? 'cal-cell--has-event' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')
-            return (
-              <div key={ds} className={cls}>
-                {isMonthView ? item : item.getDate()}
+    <div className="flex flex-col gap-4">
+      {/* ===== 第一行：左宽(个人卡) 右窄(热点轮播) ===== */}
+      <div className="grid items-stretch gap-4 md:grid-cols-[1.25fr_.75fr]">
+        {/* 个人卡 */}
+        <Link to="/about" className={`group flex flex-col gap-3 p-4 ${GLASS}`}>
+          <div className="flex items-center gap-4">
+            {profile.avatar && !avatarBroken ? (
+              <img
+                className="h-[54px] w-[54px] rounded-2xl border-2 border-white/60 object-cover shadow-lg dark:border-white/10"
+                src={profile.avatar}
+                alt={`${nickname} 的头像`}
+                onError={() => setAvatarBroken(true)}
+              />
+            ) : (
+              <div className="flex h-[54px] w-[54px] items-center justify-center rounded-2xl border-2 border-white/60 bg-gradient-to-br from-indigo-300 to-pink-300 text-2xl font-black text-indigo-800 shadow-lg dark:border-white/10 dark:from-brand dark:to-fuchsia-600 dark:text-white">
+                {initial}
               </div>
-            )
-          })}
-        </div>
-
-        {schedule.length ? (
-          <ul className="agenda">
-            {schedule.map((s, i) => (
-              <li key={`${s.date}-${s.time}-${i}`} className={s.date < todayStr ? 'agenda-item agenda-item--past' : 'agenda-item'}>
-                <span className="agenda-date">
-                  {s.date.slice(5)} {s.time || '全天'}
-                </span>
-                <span>{s.title}</span>
-              </li>
+            )}
+            <div className="min-w-0">
+              <h2 className="truncate text-xl font-black tracking-tight text-slate-900 dark:text-slate-100">{nickname}</h2>
+              <p className="mt-0.5 text-[11px] font-bold text-brand dark:text-brand-dark-text">
+                {profile.github ? `@${profile.github}` : '个人主页'} · {site?.site?.subtitle || '会成长的个人助手'}
+              </p>
+            </div>
+            <span className="ml-auto text-xs font-bold text-slate-400 transition-transform group-hover:translate-x-1">关于 →</span>
+          </div>
+          {profile.bio ? <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{profile.bio}</p> : null}
+          <div className="flex gap-2.5">
+            {stats.map(([label, val]) => (
+              <div key={label} className="flex-1 rounded-xl border border-white/50 bg-white/40 px-3 py-2 text-center dark:border-white/10 dark:bg-white/5">
+                <b className="block text-lg font-black text-slate-900 dark:text-slate-100">{val}</b>
+                <span className="text-[10.5px] tracking-wider text-slate-500 dark:text-slate-400">{label}</span>
+              </div>
             ))}
-          </ul>
-        ) : (
-          <p className="agenda-empty">暂无日程，去 data/schedule.md 里记一条吧</p>
-        )}
-
-        <h3 className="home-task-title">任务</h3>
-        {pendingTasks.length ? (
-          <ul className="agenda">
-            {pendingTasks.map((t) => (
-              <li key={t.id} className="task-row">
-                <span className={`badge badge--${t.status}`}>{STATUS_LABEL[t.status] || t.status}</span>
-                <span className="task-row-summary">{taskSummary(t)}</span>
-                {t.status === 'attention' ? (
-                  <Link className="task-row-act" to={`/tasks/${t.id}/confirm`}>
-                    去处理
-                  </Link>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="agenda-empty">暂无待办任务，去「日志」页记一条吧</p>
-        )}
-        <p className="agenda-more">
-          <Link to="/log">全部任务 →</Link>
-        </p>
-      </section>
-
-      {/* 左列第二行：归档方格（跳转入口）+ 主题方格，两块并排（窄屏堆叠） */}
-      <div className="tile-row">
-        <Link className="tile" to="/archive">
-          <ArchiveIcon />
-          <span className="tile-text">
-            <span className="tile-title">归档</span>
-            <span className="tile-sub">写一条资料存进 data/</span>
-          </span>
+          </div>
+          {social.length ? (
+            <div className="flex gap-2">
+              {social.map((s) =>
+                s.url ? (
+                  <a
+                    key={s.label}
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    title={s.label}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-brand/10 bg-brand/10 text-sm transition-all hover:-translate-y-0.5 hover:bg-brand"
+                  >
+                    {s.icon || '🔗'}
+                  </a>
+                ) : (
+                  <span
+                    key={s.label}
+                    title={`${s.label}（未配置）`}
+                    className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl border border-slate-300/40 bg-slate-100/50 text-sm opacity-50 dark:border-white/10 dark:bg-white/5"
+                  >
+                    {s.icon || '🔗'}
+                  </span>
+                )
+              )}
+            </div>
+          ) : null}
         </Link>
 
-        {/* 主题方格（F10）：文案写的是「点下去会变成什么」，不是当前状态 */}
+        {/* 热点轮播（窄） */}
+        <section className={`flex flex-col p-3 ${GLASS}`}>
+          <h2 className="mb-2.5 flex items-center gap-1.5 px-1 text-sm font-black text-slate-900 dark:text-slate-100">
+            🔥 热点 <span className="ml-auto font-sans text-[10px] font-semibold tracking-widest text-brand">HOT</span>
+          </h2>
+          {hotspots.length ? (
+            <Carousel items={hotspots} height="h-full min-h-[150px]" />
+          ) : (
+            <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-brand/30 text-xs text-slate-400">
+              site.json 配 hotspots 后展示
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* ===== 第二行：左窄(日历日程卡) 右宽(任务卡) ===== */}
+      <div className="grid items-stretch gap-4 md:grid-cols-[.75fr_1.25fr]">
+        {/* 日历日程合并卡（窄） */}
+        <section className={`flex flex-col p-4 ${GLASS}`}>
+          <h2 className="mb-3 flex items-center gap-1.5 text-sm font-black text-slate-900 dark:text-slate-100">
+            📅 本周
+            <span className="ml-auto font-sans text-[10px] font-semibold tracking-widest text-brand">
+              {today.getFullYear()} · {today.getMonth() + 1}月
+            </span>
+          </h2>
+          <div className="mb-3 grid grid-cols-7 gap-1">
+            {week.map((d) => {
+              const ds = dateStr(d)
+              const isToday = ds === todayStr
+              const hasEvent = eventDays.has(ds)
+              return (
+                <div
+                  key={ds}
+                  className={`flex flex-col items-center gap-0.5 rounded-lg py-1.5 ${
+                    isToday ? 'bg-brand' : 'bg-white/40 dark:bg-white/5'
+                  }`}
+                >
+                  <span className={`text-[9px] font-black ${isToday ? 'text-white' : 'text-slate-400'}`}>
+                    {WEEKDAYS[(d.getDay() + 6) % 7]}
+                  </span>
+                  <span className={`text-sm font-black ${isToday ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {d.getDate()}
+                  </span>
+                  {hasEvent && <span className={`h-1 w-1 rounded-full ${isToday ? 'bg-white' : 'bg-brand'}`} />}
+                </div>
+              )
+            })}
+          </div>
+          <div className="mb-3 h-px bg-brand/10" />
+          <div className="flex flex-col gap-1.5">
+            {schedule.length ? (
+              schedule.slice(0, 4).map((s, i) => (
+                <div
+                  key={`${s.date}-${s.time}-${i}`}
+                  className={`flex items-center gap-2.5 rounded-lg bg-white/35 px-2.5 py-1.5 dark:bg-white/5 ${
+                    s.date < todayStr ? 'opacity-45' : ''
+                  }`}
+                >
+                  <span className="min-w-[52px] whitespace-nowrap font-mono text-[10px] font-bold text-brand">
+                    {s.date.slice(5)}{s.time ? ` ${s.time}` : ''}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-800 dark:text-slate-200">{s.title}</span>
+                </div>
+              ))
+            ) : (
+              <p className="py-2 text-center text-xs text-slate-400">暂无日程</p>
+            )}
+          </div>
+        </section>
+
+        {/* 任务卡（宽） */}
+        <section className={`flex flex-col p-4 ${GLASS}`}>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-sm font-black text-slate-900 dark:text-slate-100">
+              ✅ 任务
+              {pendingTasks.length > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1.5 text-[11px] font-bold text-white">
+                  {pendingTasks.length}
+                </span>
+              )}
+            </h2>
+            <Link to="/log" className="text-xs font-bold text-brand hover:text-brand-hover dark:text-brand-dark-text">全部 →</Link>
+          </div>
+          {pendingTasks.length ? (
+            <ul className="flex flex-col gap-2">
+              {pendingTasks.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(t.status === 'attention' ? `/tasks/${t.id}/confirm` : '/log')}
+                    className="flex w-full items-center gap-3 rounded-xl border border-white/50 bg-white/35 px-3.5 py-2.5 text-left transition-all hover:bg-white/80 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-sm">
+                      {TASK_ICON[t.type] || '📌'}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900 dark:text-slate-100">{taskSummary(t)}</span>
+                    <StatusBadge status={t.status} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="py-4 text-center text-sm text-slate-400">
+              暂无待办任务 · <Link to="/log" className="font-bold text-brand dark:text-brand-dark-text">去日志页记一条</Link>
+            </p>
+          )}
+        </section>
+      </div>
+
+      {/* ===== 底部：项目大卡(轮播+列表) + 主题小卡 ===== */}
+      <div className="grid items-stretch gap-4 md:grid-cols-[1.5fr_.5fr]">
+        {/* 项目大卡 */}
+        <section className={`flex flex-col p-3 ${GLASS}`}>
+          <h2 className="mb-3 flex items-center gap-1.5 px-1 text-sm font-black text-slate-900 dark:text-slate-100">
+            🧩 项目 <span className="ml-auto font-sans text-[10px] font-semibold tracking-widest text-brand">PROJECTS</span>
+          </h2>
+          {projects.length ? (
+            <div className="grid flex-1 gap-4 md:grid-cols-[1.3fr_.7fr]">
+              {/* 左：项目轮播（跟随 projIdx） */}
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-brand">
+                {curProject.image ? (
+                  <img src={curProject.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                ) : null}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
+                <div className="absolute inset-0 flex flex-col justify-end p-5 text-white">
+                  {curProject.tag ? (
+                    <span className="mb-2 self-start rounded-full bg-white/20 px-2.5 py-1 text-[10px] font-black tracking-widest">
+                      {curProject.tag}
+                    </span>
+                  ) : null}
+                  <div className="text-lg font-black">{curProject.name} · {curProject.desc}</div>
+                </div>
+                {projects.length > 1 && (
+                  <div className="absolute right-3 top-3 flex gap-1">
+                    {projects.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        aria-label={`项目 ${i + 1}`}
+                        onClick={() => setProjIdx(i)}
+                        className={`h-1.5 rounded-full transition-all ${i === projIdx ? 'w-3.5 bg-white' : 'w-1.5 bg-white/40'}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* 右：项目列表（联动轮播） */}
+              <div className="flex flex-col gap-1.5">
+                {projects.map((p, i) => (
+                  <button
+                    key={p.name}
+                    type="button"
+                    onClick={() => setProjIdx(i)}
+                    className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-sm font-bold transition-all ${
+                      i === projIdx
+                        ? 'border-brand/20 bg-brand/10 text-brand dark:text-brand-dark-text'
+                        : 'border-transparent text-slate-500 hover:bg-brand/5 dark:text-slate-400'
+                    }`}
+                  >
+                    <span className="text-base">{p.icon}</span>
+                    <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-brand/30 py-10 text-xs text-slate-400">
+              site.json 配 projects 后展示
+            </div>
+          )}
+        </section>
+
+        {/* 主题小卡 */}
         <button
           type="button"
-          className="tile"
-          aria-label={isDark ? '切换到日间模式' : '切换到夜间模式'}
           onClick={() => setTheme(toggleTheme())}
+          aria-label={isDark ? '切换到日间模式' : '切换到夜间模式'}
+          className={`flex flex-col items-center justify-center gap-2.5 p-4 ${GLASS} active:scale-95`}
         >
-          {isDark ? <DayIcon /> : <NightIcon />}
-          <span className="tile-text">
-            <span className="tile-title">{isDark ? '日间模式' : '夜间模式'}</span>
-            <span className="tile-sub">{isDark ? '阳光洒满的窗台' : '流萤飞舞的深空'}</span>
+          <span className="text-3xl" aria-hidden="true">{isDark ? '☀️' : '🌙'}</span>
+          <span className="text-[10.5px] font-black tracking-wider text-slate-500 dark:text-slate-400">
+            {isDark ? '日间模式' : '夜间模式'}
           </span>
         </button>
       </div>

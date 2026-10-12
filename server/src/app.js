@@ -1,6 +1,8 @@
 import express from 'express'
 import cookieParser from 'cookie-parser'
 import { requestLog } from './middleware/request-log.js'
+import { DATA_DIR } from './storage/files.js'
+import path from 'node:path'
 import { notFound, errorHandler } from './middleware/errors.js'
 import { requireAuth } from './middleware/auth.js'
 import healthRouter from './routes/health.js'
@@ -42,6 +44,9 @@ export function createApp() {
   app.use('/api/github', requireAuth, githubRouter)
   // 后台运维聚合：同样要求登录态（公开模式下 requireAuth 直通，见 §2 D4 取舍）
   app.use('/api/admin', requireAuth, adminRouter)
+
+  // 站点图片资产：data/images/ → /images/*（背景/轮播/封面/头像等；公开只读，不进 git）
+  app.use('/images', express.static(path.join(DATA_DIR, 'images'), { maxAge: '1h' }))
 
   // 兜底：找不到的路由返回统一的 404
   app.use(notFound)

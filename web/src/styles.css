@@ -198,9 +198,9 @@ body {
 }
 
 .app {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: var(--sp-5) var(--sp-4) var(--sp-7);
+  /* 设计改版：旧版定宽 760px 已废弃——新布局为全宽 + 内部 main 自控（w-[97%]）。
+     保留类名仅作字体/背景继承容器，不再限宽。 */
+  min-height: 100vh;
 }
 
 .app-header h1 {

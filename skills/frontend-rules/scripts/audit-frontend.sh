@@ -158,7 +158,17 @@ detail "$a2_out"
 
 # ---------------------------------------------------------------- 基线检查
 # B: 亮色专用类缺暗色配对
-b_out="$(grep_lines 'bg-white/|bg-slate-50([^0-9]|$)|text-slate-900|border-white/|bg-brand-soft([^0-9a-z-]|$)' "${ALLOWED[@]}" | grep -v 'dark:' || true)"
+# 多行 className 场景：亮色类与 dark: 可能不在同一行——按「文件块」判定而非按行。
+# 找出含亮色类的文件；若该文件整体没有任何 dark: 类，才算缺配对（仍逐行报出供定位）。
+b_out=""
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+  if ! grep -qE 'dark:' "$f"; then
+    lines="$(grep_lines 'bg-white/|bg-slate-50([^0-9]|$)|text-slate-900|border-white/|bg-brand-soft([^0-9a-z-]|$)' "$f")"
+    [[ -n "$lines" ]] && b_out+="$lines"$'\n'
+  fi
+done < <(printf '%s\n' "${ALLOWED[@]}" | sort -u)
+b_out="${b_out%$'\n'}"
 b_n=$(count_lines "$b_out")
 b_base=$(base_of MISSING_DARK)
 if (( b_n > b_base )); then row B "亮色类缺 dark: 配对" FAIL "$b_n" "$b_base" "补 dark:bg-slate-800/50 / dark:text-slate-100"
