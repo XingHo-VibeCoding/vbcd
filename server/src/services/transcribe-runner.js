@@ -33,6 +33,7 @@ async function finishWithArchive(task, result, { partial = false } = {}) {
   try {
     const archived = await archiveTranscript(task, result, { partial })
     task.status = 'done'
+    task.note_id = archived.id
     task.result = archived.reused
       ? `已归档过 ${archived.path}${partial ? '（部分转写）' : ''}`
       : `已归档到 ${archived.path}${partial ? '（部分转写）' : ''}`

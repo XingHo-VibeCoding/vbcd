@@ -15,6 +15,7 @@ const PORT = Number(process.env.ASR_PORT || 8099)
 const TOKEN = process.env.FAKE_TOKEN || 'fake-token'
 
 const jobs = new Map()
+const requestCounts = { transcribe: 0, subtitles: 0 }
 const submitCounts = new Map()  // source → 提交次数（retry 场景用）
 const STAGE_AFTER_POLLS = 2
 
@@ -31,12 +32,12 @@ function envelope(id, status, extra = {}) {
   }
 }
 
-function resultFor(source) {
+function resultFor(source, part = null) {
   return {
     source: {
       kind: 'page_url', input: source, platform: 'bilibili', id: 'BV-FAKE',
       title: '假转写视频标题', uploader: 'up主', duration_sec: 95,
-      webpage_url: source, thumbnail: '', part: null,
+      webpage_url: source, thumbnail: '', part,
     },
     language: 'zh',
     text: '第一句内容。第二句内容。第三句内容。',
@@ -73,27 +74,35 @@ const server = createServer((req, res) => {
     return send(401, { error: { code: 'AUTH_FAILED', message: '缺少或错误的 Bearer Token', retryable: false, hint: null } })
   }
 
+  if (url.pathname === '/__test/counts') return send(200, requestCounts)
+
   if (req.method === 'POST' && url.pathname === '/v1/transcribe') {
+    requestCounts.transcribe += 1
     let body = ''
     req.on('data', (c) => (body += c))
     req.on('end', () => {
-      const source = String(JSON.parse(body || '{}').source ?? '')
+      const parsed = JSON.parse(body || '{}')
+      const source = String(parsed.source ?? '')
+      const part = parsed.part ?? null
       if (!/^https?:\/\//.test(source)) {
         return send(400, { error: { code: 'INVALID_SOURCE', message: 'source 必须是 http/https', retryable: false, hint: null } })
       }
       const id = randomBytes(8).toString('hex')
       submitCounts.set(source, (submitCounts.get(source) || 0) + 1)
-      jobs.set(id, { source, polls: 0, attempt: submitCounts.get(source) })
+      jobs.set(id, { source, part, polls: 0, attempt: submitCounts.get(source) })
       return send(202, envelope(id, 'queued', { progress: { stage: 'download', done: 0, total: 0, percent: 0 } }))
     })
     return
   }
 
   if (req.method === 'POST' && url.pathname === '/v1/subtitles') {
+    requestCounts.subtitles += 1
     let body = ''
     req.on('data', (c) => (body += c))
     req.on('end', () => {
-      const source = String(JSON.parse(body || '{}').source ?? '')
+      const parsed = JSON.parse(body || '{}')
+      const source = String(parsed.source ?? '')
+      const part = parsed.part ?? null
       if (source.includes('subok')) {
         return send(200, {
           found: true,
@@ -141,7 +150,7 @@ const server = createServer((req, res) => {
           code: 'ASR_FAILED', message: '第 2 片持续失败', retryable: false, hint: null,
           details: { partial: partialFor() },
         },
-        result: { source: resultFor(src).source },
+        result: { source: resultFor(src, job.part).source },
       }))
     }
     if (src.includes('fail')) {
@@ -149,7 +158,7 @@ const server = createServer((req, res) => {
         error: { code: 'ASR_FAILED', message: '上游拒绝请求', retryable: false, hint: null },
       }))
     }
-    return send(200, envelope(m[1], 'succeeded', { result: resultFor(src) }))
+    return send(200, envelope(m[1], 'succeeded', { result: resultFor(src, job.part) }))
   }
 
   if (m && req.method === 'DELETE') {
@@ -163,4 +172,4 @@ const server = createServer((req, res) => {
   send(404, { error: { code: 'JOB_NOT_FOUND', message: 'not found', retryable: false, hint: null } })
 })
 
-server.listen(PORT, () => console.log(`fake-asr 听于 http://127.0.0.1:${PORT}（token=${TOKEN}）`))
+server.listen(PORT, '127.0.0.1', () => console.log(`fake-asr 听于 http://127.0.0.1:${server.address().port}`))

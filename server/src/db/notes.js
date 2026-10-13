@@ -37,7 +37,7 @@ export async function listDbNotes({ limit, offset = 0, q = '', category = '' } =
   const [{ count }] = await query(`SELECT count(*)::int AS count FROM notes ${whereSql}`, values)
   const rows = await query(
     `SELECT id, title, category, to_char(date, 'YYYY-MM-DD') AS date,
-            tags, source_url, hash, created_at, updated_at,
+            tags, source_url, source_part, hash, created_at, updated_at,
             -- 与文件版同口径：正文空白压缩后截 ${EXCERPT_LEN} 字，超限补省略号
             CASE WHEN length(regexp_replace(body, '\\s+', ' ', 'g')) > ${EXCERPT_LEN}
                  THEN left(regexp_replace(body, '\\s+', ' ', 'g'), ${EXCERPT_LEN}) || '…'
@@ -62,7 +62,7 @@ export async function listDbNotes({ limit, offset = 0, q = '', category = '' } =
 export async function getDbNote(id) {
   const rows = await query(
     `SELECT id, title, category, to_char(date, 'YYYY-MM-DD') AS date,
-            tags, source_url, hash, body, created_at, updated_at,
+            tags, source_url, source_part, hash, body, created_at, updated_at,
             category || '/' || id || '.md' AS path
        FROM notes
       WHERE id = $1`,
@@ -72,6 +72,42 @@ export async function getDbNote(id) {
   if (!r) return null
   const { body, ...meta } = r
   return { meta, content: body }
+}
+
+/** 需要正文的统一读取入口：供文件同形检索、agent 与知识库索引使用。 */
+export async function listAllDbNotes() {
+  const rows = await query(
+    `SELECT id, title, category, to_char(date, 'YYYY-MM-DD') AS date,
+            tags, source_url, source_part, hash, created_at, updated_at, body
+       FROM notes`,
+  )
+  return rows.map(({ body, ...meta }) => {
+    const flat = body.replace(/\s+/g, ' ').trim()
+    return {
+      ...meta,
+      path: `${meta.category}/${meta.id}.md`,
+      excerpt: flat.length > EXCERPT_LEN ? `${flat.slice(0, EXCERPT_LEN)}…` : flat,
+      content: body,
+      text: [meta.title, meta.tags.join(' '), body].join(' ').toLowerCase(),
+    }
+  })
+}
+
+export async function updateDbNote(note) {
+  const rows = await query(
+    `UPDATE notes SET title = $2, category = $3, tags = $4, body = $5,
+                      hash = $6, updated_at = $7
+      WHERE id = $1 RETURNING id, category, hash`,
+    [note.id, note.title, note.category, note.tags, note.content, note.hash, note.updated_at],
+  )
+  const row = rows[0]
+  return row ? { id: row.id, path: `${row.category}/${row.id}.md`, hash: row.hash } : null
+}
+
+export async function removeDbNote(id) {
+  const rows = await query('DELETE FROM notes WHERE id = $1 RETURNING id, category', [id])
+  const row = rows[0]
+  return row ? { id: row.id, path: `${row.category}/${row.id}.md` } : null
 }
 
 /**
@@ -109,11 +145,11 @@ export async function insertDbNote(note) {
     try {
       await execute(
         `INSERT INTO notes (id, title, category, date, tags, source_url,
-                            created_at, updated_at, hash, schema_version, body)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                            created_at, updated_at, hash, schema_version, body, source_part)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [id, note.title, note.category, note.date, note.tags,
          note.source_url || null, note.created_at, note.updated_at,
-         note.hash, note.schema_version, note.content],
+         note.hash, note.schema_version, note.content, note.source_part ?? null],
       )
       // 落库成功留一行日志：排障时能直接对上「哪个请求写了哪行」，不用翻 pg
       console.log(`[db] notes 写入成功 id=${id} category=${note.category} hash=${note.hash.slice(0, 12)}`)
@@ -130,4 +166,15 @@ export async function insertDbNote(note) {
   }
   console.error(`[db] id 撞车重试 ${MAX_ID_RETRIES} 次仍失败：${lastError?.message}`)
   throw fail('DB_UNAVAILABLE', '生成资料编号失败，请稍后再试', 503)
+}
+
+/** 精确来源查询：未知分 P（null）不匹配任何明确分 P。 */
+export async function findDbNoteBySource(url, part = null) {
+  const rows = await query(
+    `SELECT id, title, category, source_url, source_part,
+            category || '/' || id || '.md' AS path
+       FROM notes WHERE source_url = $1 AND source_part IS NOT DISTINCT FROM $2::integer
+       ORDER BY created_at, id LIMIT 1`, [url, part],
+  )
+  return rows[0] ?? null
 }
