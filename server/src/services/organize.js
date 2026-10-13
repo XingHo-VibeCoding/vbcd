@@ -75,7 +75,8 @@ async function mark(task, stage) {
   await touch(task)
 }
 
-async function finishDone(task, result) {
+async function finishDone(task, result, noteId) {
+  task.note_id = noteId ?? null
   task.status = 'done'
   task.result = result
   if (task.organize) task.organize.last_error = ''
@@ -105,7 +106,7 @@ export async function runOrganizeTask(taskOrId) {
       // ① 提交 URL 先查一次重：已在资料库里就不再抓取（「不重复处理」铁律 + 省请求）
       const url = String(task.payload?.url ?? '')
       const pre = await findNoteBySourceUrl(url)
-      if (pre) return await finishDone(task, `已归档过 ${pre.path}`)
+      if (pre) return await finishDone(task, `已归档过 ${pre.path}`, pre.id)
 
       // ② 抓取（含 SSRF 闸门与逐跳重定向）＋正文提取
       await mark(task, 'fetch')
@@ -114,7 +115,7 @@ export async function runOrganizeTask(taskOrId) {
       await mark(task, 'parse')
       // 最终地址再查一次：短链/规范化/跳转到已归档的同一页
       const post = await findNoteBySourceUrl(fetched.url)
-      if (post) return await finishDone(task, `已归档过 ${post.path}`)
+      if (post) return await finishDone(task, `已归档过 ${post.path}`, post.id)
 
       // ③ LLM 整理摘要/要点；失败走回退模板，不落 failed（与转写链路同口径）
       await mark(task, 'organize')
@@ -130,11 +131,13 @@ export async function runOrganizeTask(taskOrId) {
       await mark(task, 'archive')
       try {
         const note = buildLinkNote(task, { fetched, article }, { llmResult, llmError })
+        const latest = await findNoteBySourceUrl(url) ?? await findNoteBySourceUrl(fetched.url)
+        if (latest) return await finishDone(task, `已归档过 ${latest.path}`, latest.id)
         const created = await createNote(note)
-        return await finishDone(task, `已归档到 ${created.path}`)
+        return await finishDone(task, `已归档到 ${created.path}`, created.id)
       } catch (err) {
-        if (err.code === 'DUPLICATE') {
-          return await finishDone(task, `已归档过：${err.message}`)
+        if (err.code === 'DUPLICATE' && err.note) {
+          return await finishDone(task, `已归档过 ${err.note.path}`, err.note.id)
         }
         return await finishFail(task, `归档失败：${err.message || '未知原因'}`, err.code || 'STORAGE_FAILED')
       }

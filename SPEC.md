@@ -141,7 +141,8 @@ vbcd/
 | `category` | string | ✅ | 分类目录名（`learning` / `life` / `work`） |
 | `date` | date | ✅ | 资料归属日期（可与创建时间不同） |
 | `tags` | string[] | ⬜ | 标签，检索用 |
-| `source_url` | string | ⬜ | 来源链接（F8 会用） |
+| `source_url` | string | ⬜ | 保留提交时的原始来源链接 |
+| `source_part` | integer / null | ⬜ | 明确请求的分 P 序号（≥1）；未指定及旧档案为 null，不推断回填 |
 | `created_at` / `updated_at` | datetime | ✅ | 创建 / 更新时间 |
 | `hash` | string | ✅ | 正文哈希（查重） |
 | `schema_version` | int | ✅ | 当前 1 |
@@ -166,6 +167,7 @@ vbcd/
 | `organize` | object | 可选；仅 `organize` 存在：`{stage, attempts, started_at, last_error}`，`stage ∈ fetch\|parse\|organize\|archive`（不存正文，避免运行时文件膨胀） |
 | `status` | enum | `todo` / `doing` / `done` / `failed` / `attention`（见 5.4） |
 | `result` | string | 执行结果摘要（成功或失败原因） |
+| `note_id` | string / null | 可选；网页/视频成功归档或复用的实际档案 id，日志提供详情链接；旧任务不回填 |
 | `origin` | enum | `phone` / `desktop` |
 | `created_at` / `updated_at` | datetime | — |
 
@@ -208,7 +210,7 @@ vbcd/
 |---|---|---|---|---|---|
 | 1 | `POST /api/login` | 口令登录（隐私模块，默认关闭） | `password` | `200` + `Set-Cookie: sid=…` | `AUTH_FAILED` |
 | 2 | `POST /api/logout` | 退出（隐私模块，默认关闭） | — | `204` | `AUTH_REQUIRED` |
-| 3 | `POST /api/notes` | 新建资料（F1） | `title, category, content, tags?, source_url?` | `201 {id, path, hash}` | `VALIDATION_FAILED`、`DUPLICATE` |
+| 3 | `POST /api/notes` | 新建资料（F1） | `title, category, content, tags?, source_url?, source_part?` | `201 {id, path, hash}` | `VALIDATION_FAILED`、`DUPLICATE` |
 | 4 | `GET /api/notes` | 列表与检索（F2/F3） | `q?, category?, from?, to?, sort?, limit?, offset?` | `200 {total, items[], rebuilt_in_ms}` | `INTERNAL` |
 | 5 | `GET /api/notes/:id` | 读原文（F2） | — | `200 {meta, content}` | `NOT_FOUND` |
 | 6 | `POST /api/tasks` | 建任务（F4） | `type, payload, origin?` | `201 {task}` | `VALIDATION_FAILED`、`NOT_FOUND`（delete_note 指向的资料不存在） |
@@ -277,17 +279,20 @@ vbcd/
 
 **入口**：`POST /api/tasks` 带 `type=transcribe_url` + `payload={url, category?, tags?, language?, part?, prefer_subtitles?, formats?}`——**不新增对外接口**（F15 之前为 13 个）。归档是 F1 同级写操作，不设确认闸门；高风险外部动作规则不变。
 
-**payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work`；`part` 为 B 站分 P 序号（≥1 整数）；`tags` ≤10 个；`prefer_subtitles` 为布尔（显式 `true` 才启用「先字幕」，默认 `false` 纯转写）；`formats` 为 `text|segments|srt` 子集（含 `srt` 时资料正文附带 srt 代码块）。
+**payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work|essay`；`part` 为 B 站分 P 序号（≥1 整数）；`tags` ≤10 个；`prefer_subtitles` 为布尔（显式 `true` 才启用「先字幕」，默认 `false` 纯转写）；`formats` 为 `text|segments|srt` 子集（含 `srt` 时资料正文附带 srt 代码块）。
+
+**来源查询**：通过 `storage/note-store.js` 与主站共用权威资料源。精确比较原始 `source_url` 与显式 `source_part`；null 只匹配 null，不视为 P1。字幕/ASR 之前先查，命中直接 `done` 并返回 `note_id`；归档前再次查询，保留已有档案。配库但查询失败时写明失败，不回退文件、不当作不存在继续处理。字幕抓取失败可回落转写，字幕归档失败则终止。原始 URL 不做别名归一，不推断历史分 P；当前复查不保证跨进程并发唯一。
 
 **时序**：
-1. **（可选）先字幕**：`prefer_subtitles=true` 且本轮未试过（`task.asr.subtitles_tried` 未置位）→ 先 `POST {ASR_SERVICE_URL}/v1/subtitles`；命中（`found:true`）→ 直接 `createNote()` 归档（正文措辞「字幕」、附带 `## 字幕（srt）` 代码块）并 `done`，不再转写；抓不到（`found:false`）或服务出错 → 记 `last_error` 回落转写（不判死）；
-2. **提交**：校验 → `POST {ASR_SERVICE_URL}/v1/transcribe`（`wait_seconds=0`，Bearer `ASR_SERVICE_TOKEN`）→ 任务 `status=doing`、`result="已提交转写，等待结果"`、`task.asr.job_id` 落盘；服务不可达 / 未配 `ASR_SERVICE_URL` / 4xx → **不返回 5xx**，落 `failed` 任务写中文原因（与 `note` 执行器同口径，F5 进度可见）；
-3. **轮询**：`services/transcribe-runner.js` 每 `ASR_POLL_INTERVAL_MS`（默认 5000）扫 `type=transcribe_url` 且 `status in (todo,doing)` 的任务，单进程单飞、一轮只推进一个：`GET /v1/jobs/{id}` 刷新 `task.asr` 与 `result`（如「转写中：正在转写（3/5，46%）」）；
-4. **归档**：`succeeded` → `createNote()` → `done`，`result="已归档到 <path>"` → 立即 `DELETE /v1/jobs/{id}`（best-effort）；同 URL 已归档过则 `done` + `result="已归档过 <path>"`，不写第二份（不重复处理）；
-5. **失败**：job `failed` 且 `error.details.partial` 带非空文本 → 仍归档（正文顶部加「部分转写」告警块）并 `done`；否则 `failed` 写原因。job 404 或超 `ASR_JOB_MAX_WAIT_MINUTES`（默认 60）→ `failed`，`result` 提示「可把任务退回待办重试」；
-6. **重试**：`PATCH` 退回 `todo` 时清空 `task.asr`，轮询器下一轮重新提交（复用既有 `failed→todo` 合法迁移，无新接口）。
+1. **提前查重**：字幕/ASR 前按原始 URL + 明确分 P 查询权威资料源；命中则 `done`、返回实际 `note_id` 与档案路径，跳过后续网络处理。查询故障则明确 `failed`，绝不回退文件存储或假装未命中；
+2. **（可选）先字幕**：`prefer_subtitles=true` 且本轮未试过（`task.asr.subtitles_tried` 未置位）→ 先 `POST {ASR_SERVICE_URL}/v1/subtitles`；命中（`found:true`）→ 最终复查后 `createNote()` 归档（正文措辞「字幕」、附带 `## 字幕（srt）` 代码块）并 `done`，不再转写；字幕抓取失败/无字幕 → 记 `last_error` 后回落转写；字幕已命中但资料查询/归档失败 → 明确 `failed`，不回落转写；
+3. **提交**：校验 → `POST {ASR_SERVICE_URL}/v1/transcribe`（`wait_seconds=0`，Bearer `ASR_SERVICE_TOKEN`）→ 任务 `status=doing`、`result="已提交转写，等待结果"`、`task.asr.job_id` 落盘；服务不可达 / 未配 `ASR_SERVICE_URL` / 4xx → **不返回 5xx**，落 `failed` 任务写中文原因（与 `note` 执行器同口径，F5 进度可见）；
+4. **轮询**：`services/transcribe-runner.js` 每 `ASR_POLL_INTERVAL_MS`（默认 5000）扫 `type=transcribe_url` 且 `status in (todo,doing)` 的任务，单进程单飞、一轮只推进一个：`GET /v1/jobs/{id}` 刷新 `task.asr` 与 `result`（如「转写中：正在转写（3/5，46%）」）；
+5. **归档**：`succeeded` → 最终复查来源、`createNote()` → `done`，写入实际 `note_id`，`result="已归档到 <path>"` → 立即 `DELETE /v1/jobs/{id}`（best-effort）；同来源 URL 与明确分 P 已归档过则复用其 `note_id`，不写第二份；
+6. **失败**：job `failed` 且 `error.details.partial` 带非空文本 → 仍归档（正文顶部加「部分转写」告警块）并 `done`；否则 `failed` 写原因。job 404 或超 `ASR_JOB_MAX_WAIT_MINUTES`（默认 60）→ `failed`，`result` 提示「可把任务退回待办重试」；
+7. **重试**：`PATCH` 退回 `todo` 时清空 `task.asr`，轮询器下一轮重新提交（复用既有 `failed→todo` 合法迁移，无新接口）。
 
-**资料格式**（全文始终来自转写或字幕，不由 LLM 生成）：标题取 `source.title`（空则 `<platform>-<id>`，≤80 字）；frontmatter `source_url` = 原链接；正文 = 来源行（URL/平台/时长/「转写」或「字幕」日期）→ `## 摘要`（3–5 句）→ `## 要点`（3–7 条）→ `## 全文（带时间戳）`（相邻 segment 间隔 <2s 合并成段，`[mm:ss]` 或 ≥1h 的 `[h:mm:ss]`）→（请求 `srt` 时）`## 字幕（srt）` 代码块。LLM 未配置/失败 → 去掉摘要/要点两节，改一行「⚠️ 本次未做模型整理（原因：…）」并 `done`。
+**资料格式**（全文始终来自转写或字幕，不由 LLM 生成）：标题取 `source.title`（空则 `<platform>-<id>`，≤80 字）；frontmatter `source_url` = 原链接、`source_part` = 请求的明确分 P 或 null；正文 = 来源行（URL/平台/时长/「转写」或「字幕」日期）→ `## 摘要`（3–5 句）→ `## 要点`（3–7 条）→ `## 全文（带时间戳）`（相邻 segment 间隔 <2s 合并成段，`[mm:ss]` 或 ≥1h 的 `[h:mm:ss]`）→（请求 `srt` 时）`## 字幕（srt）` 代码块。LLM 未配置/失败 → 去掉摘要/要点两节，改一行「⚠️ 本次未做模型整理（原因：…）」并 `done`。
 
 **LLM 整理**：复用 `services/llm.js` 的 `getChatModel(timeoutMs)`（独立实例，超时 `NOTE_LLM_TIMEOUT_MS` 默认 120s）；输入截断 `LLM_TRANSCRIPT_MAX_CHARS`（默认 12000 = 头 2/3 + 尾 1/3），截断时在资料里注明。
 
@@ -297,9 +302,11 @@ vbcd/
 
 ### 3.5 链接收敛链路（F14 / `organize`）
 
+**来源查询**：网页按原始 URL 与 `source_part=null` 查询统一资料源，抓取前、重定向后及最终归档前复查；命中记录实际 `note_id`。数据库不可用如实失败；不覆盖已有档案、不回退文件查询。
+
 **入口**：归档页「收敛」或 `POST /api/tasks` 带 `type=organize` + `payload={url, category?, tags?}`——**不新增对外接口**（F15 之前为 13 个）。归档是 F1 同级写操作，不设确认闸门（读取外部网页不算对外动作）。
 
-**payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work`；`tags` ≤10 个。
+**payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work|essay`；`tags` ≤10 个。
 
 **时序**：
 1. **提交即执行**：`createTask` → `services/organize.js:startOrganizeTask()` 校验 → 置 `doing`、`result="已提交，正在抓取链接"`、`task.organize={stage:'fetch',attempts:1,started_at}` 落盘并**即时返回 201**（异步触发，不阻塞请求）；
