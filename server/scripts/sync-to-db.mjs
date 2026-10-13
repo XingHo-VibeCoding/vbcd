@@ -1,7 +1,7 @@
 // Day 17 板块②：把 data/ 里的真实 Markdown 资料同步进 PostgreSQL 的 notes 表。
 //   用法：DATABASE_URL='postgres://…' node scripts/sync-to-db.mjs [--dry-run]
 // 设计口径：
-//   - 幂等：ON CONFLICT (id) DO UPDATE，仅在 hash 或来源元数据变化时才更新；重复执行无副作用。
+//   - 幂等：ON CONFLICT (id) DO UPDATE，仅在 hash 变化时才更新；重复执行无副作用。
 //   - 文件仍是一等数据源（SPEC §7.3 迁移期）：本脚本只做「文件 → 库」单向同步，不回写文件。
 //   - 解析失败、缺必填字段（title/date/category）的行逐条警告并跳过，不让一条坏数据卡住整批。
 //   - hash 口径与文件版一致：sha256(title.trim() + "\n" + content.trim())（services/notes.js:hashOf），
@@ -61,10 +61,7 @@ function parseNoteFile(rawText, id) {
     if (at === -1) continue
     fields[trimmed.slice(0, at).trim()] = parseValue(trimmed.slice(at + 1), trimmed.slice(0, at).trim())
   }
-  const sourcePart = fields.source_part == null ? null : Number(fields.source_part)
-  if (sourcePart !== null && (!Number.isInteger(sourcePart) || sourcePart < 1)) throw new Error('source_part 必须为正整数或 null')
   return {
-    source_part: sourcePart,
     title: String(fields.title ?? ''),
     category: String(fields.category ?? ''),
     date: String(fields.date ?? ''),
@@ -112,7 +109,6 @@ async function collectRows() {
           date: parsed.date,
           tags: parsed.tags,
           source_url: parsed.source_url,
-          source_part: parsed.source_part,
           created_at: parsed.created_at || `${parsed.date}T00:00:00+08:00`,
           updated_at: parsed.updated_at || `${parsed.date}T00:00:00+08:00`,
           hash: hashOf(title, parsed.body),
@@ -151,25 +147,22 @@ try {
   for (const r of rows) {
     const res = await pool.query(
       `INSERT INTO notes (id, title, category, date, tags, source_url,
-                          created_at, updated_at, hash, schema_version, body, source_part)
-       VALUES ($1,$2,$3,$4::date,$5,$6,$7::timestamptz,$8::timestamptz,$9,$10,$11,$12)
+                          created_at, updated_at, hash, schema_version, body)
+       VALUES ($1,$2,$3,$4::date,$5,$6,$7::timestamptz,$8::timestamptz,$9,$10,$11)
        ON CONFLICT (id) DO UPDATE SET
          title = EXCLUDED.title,
          category = EXCLUDED.category,
          date = EXCLUDED.date,
          tags = EXCLUDED.tags,
          source_url = EXCLUDED.source_url,
-         source_part = EXCLUDED.source_part,
          updated_at = now(),
          hash = EXCLUDED.hash,
          schema_version = EXCLUDED.schema_version,
          body = EXCLUDED.body
        WHERE notes.hash IS DISTINCT FROM EXCLUDED.hash
-          OR notes.source_url IS DISTINCT FROM EXCLUDED.source_url
-          OR notes.source_part IS DISTINCT FROM EXCLUDED.source_part
        RETURNING (xmax = 0) AS inserted_new`,
       [r.id, r.title, r.category, r.date, r.tags, r.source_url,
-       r.created_at, r.updated_at, r.hash, r.schema_version, r.body, r.source_part],
+       r.created_at, r.updated_at, r.hash, r.schema_version, r.body],
     )
     if (res.rowCount === 0) unchanged += 1
     else if (res.rows[0].inserted_new) inserted += 1

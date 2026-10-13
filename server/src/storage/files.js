@@ -21,7 +21,6 @@ const FM_ORDER = [
   'date',
   'tags',
   'source_url',
-  'source_part',
   'created_at',
   'updated_at',
   'hash',
@@ -83,9 +82,6 @@ export function parseNote(rawText, id) {
     fields[trimmed.slice(0, at).trim()] = parseValue(trimmed.slice(at + 1), trimmed.slice(0, at).trim())
   }
 
-  const sourcePart = fields.source_part == null ? null : Number(fields.source_part)
-  if (sourcePart !== null && (!Number.isInteger(sourcePart) || sourcePart < 1)) return null
-
   // frontmatter 里的 id 与文件名不一致时，以文件名（传入的 id）为准，并留下告警
   const declared = fields.id === undefined ? '' : String(fields.id)
   if (declared && declared !== id) {
@@ -100,7 +96,6 @@ export function parseNote(rawText, id) {
       date: String(fields.date ?? ''),
       tags: Array.isArray(fields.tags) ? fields.tags.map(String) : [],
       source_url: String(fields.source_url ?? ''),
-      source_part: sourcePart,
       created_at: String(fields.created_at ?? ''),
       updated_at: String(fields.updated_at ?? ''),
       hash: String(fields.hash ?? ''),
@@ -116,7 +111,6 @@ export function serializeNote(meta, content) {
   const lines = ['---']
   for (const key of FM_ORDER) {
     if (key === 'schema_version') lines.push(`${key}: ${Number(meta[key]) || 1}`)
-    else if (key === 'source_part') lines.push(`${key}: ${meta.source_part ?? 'null'}`)
     else if (key === 'tags') lines.push(`${key}: ${JSON.stringify(Array.isArray(meta.tags) ? meta.tags : [])}`)
     else lines.push(`${key}: ${JSON.stringify(String(meta[key] ?? ''))}`)
   }

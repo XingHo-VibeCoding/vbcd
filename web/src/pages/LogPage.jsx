@@ -117,12 +117,6 @@ function RecordText({ text }) {
   </div>
 }
 
-export function ArchiveNoteLink({ task }) {
-  return task.status === 'done' && task.noteId
-    ? <Link className="btn-secondary" to={`/notes/${encodeURIComponent(task.noteId)}`}>查看归档资料</Link>
-    : null
-}
-
 /** 任务页签：提交表单 + 任务列表（原 /tasks 页全部行为） */
 function TasksTab({ formOpen, setFormOpen }) {
   const navigate = useNavigate()
@@ -326,7 +320,6 @@ function TasksTab({ formOpen, setFormOpen }) {
                 <span>来自{task.origin === 'phone' ? '手机' : '电脑'}</span>
               </div>
               <RecordText text={task.result} />
-              <ArchiveNoteLink task={task} />
               {task.status === 'attention' ? (
                 <div className="task-actions">
                   <Link className="btn-primary" to={`/tasks/${encodeURIComponent(task.id)}/confirm`}>

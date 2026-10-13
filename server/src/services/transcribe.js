@@ -1,6 +1,6 @@
 // transcribe_url 任务类型：payload 校验 + 提交 ASR + 把转写包组装成 Markdown 资料。
 // 归档走与 F1 相同的 createNote()（同级写操作，故不设确认闸门——高风险外部动作规则不变）。
-import * as storage from '../storage/note-store.js'
+import * as storage from '../storage/files.js'
 import { asrConfigured, fetchSubtitles, submitTranscribe } from './asr.js'
 import { fail } from './errors.js'
 import { getChatModel } from './llm.js'
@@ -61,42 +61,23 @@ export async function submitTranscribeTask(task) {
   }
   task.payload = { ...task.payload, ...parsed }
 
-  // 先查权威资料源；查询或归档失败不能被当成「无字幕」继续外部处理。
-  try {
-    const existing = await findNoteBySourceUrl(parsed.url, parsed.part)
-    if (existing) {
-      task.status = 'done'
-      task.note_id = existing.id
-      task.result = `已归档过 ${existing.path}`
-      return taskStore.put(task)
-    }
-  } catch (err) {
-    task.status = 'failed'
-    task.result = `查询已有资料失败：${err.message}`
-    return taskStore.put(task)
-  }
-
+  // 先字幕策略：抓平台字幕，命中直接归档 done；抓不到/服务出错回落转写（不判死）
   if (parsed.preferSubtitles && !task.asr?.subtitles_tried) {
     task.asr = { ...(task.asr || {}), subtitles_tried: true }
-    let sub
     try {
-      sub = await fetchSubtitles({ url: parsed.url, part: parsed.part })
-    } catch (err) {
-      task.asr.last_error = err?.message || '字幕抓取失败'
-    }
-    if (sub?.found) {
-      try {
+      const sub = await fetchSubtitles({ url: parsed.url, part: parsed.part })
+      if (sub?.found) {
         const archived = await archiveTranscript(task, sub, { subtitle: true })
         task.status = 'done'
-        task.note_id = archived.id
-        task.result = `${archived.reused ? '已归档过' : '已归档到'} ${archived.path}（字幕）`
-        task.asr.last_error = ''
-      } catch (err) {
-        task.status = 'failed'
-        task.result = `字幕归档失败：${err.message}`
-        task.asr.last_error = err.code || err.message
+        task.result = archived.reused
+          ? `已归档过 ${archived.path}（字幕）`
+          : `已归档到 ${archived.path}（字幕）`
+        task.asr = { ...(task.asr || {}), last_error: '' }
+        return taskStore.put(task)
       }
-      return taskStore.put(task)
+    } catch (err) {
+      // 字幕抓取失败：回落转写，记 last_error 不判死
+      task.asr = { ...(task.asr || {}), last_error: err?.message || '字幕抓取失败' }
     }
   }
 
@@ -137,9 +118,10 @@ export function progressText(progress = {}) {
   return `转写中：${stage}（${progress.done}/${progress.total}，${progress.percent ?? 0}%）`
 }
 
-/** 查重：使用权威资料源精确比较原始 URL 与明确分 P。 */
-export async function findNoteBySourceUrl(url, part = null) {
-  return storage.findBySource(url, part)
+/** 查重：按 source_url 找已归档的资料（对应 AC4「同一 URL 不写第二份文件」） */
+export async function findNoteBySourceUrl(url) {
+  const { items } = await storage.list()
+  return items.find((item) => item.source_url && item.source_url === url) ?? null
 }
 
 function fmtDuration(sec) {
@@ -244,7 +226,7 @@ export function buildNote(task, result, { partial = false, llmResult = null, llm
   const head = [
     `# ${title}`,
     '',
-    `> 来源：${payload.url}${payload.part != null ? `｜分 P：${payload.part}` : ''}｜平台：${src.platform || '未知'}｜时长：${fmtDuration(src.duration_sec)}｜${kind}：${date}`,
+    `> 来源：${payload.url}｜平台：${src.platform || '未知'}｜时长：${fmtDuration(src.duration_sec)}｜${kind}：${date}`,
   ]
   if (partial) {
     head.push('> ⚠️ 部分转写：ASR 报告有片段失败，以下仅含已成功片段的内容。')
@@ -280,19 +262,17 @@ export function buildNote(task, result, { partial = false, llmResult = null, llm
     category: payload.category || 'learning',
     tags: Array.isArray(payload.tags) ? payload.tags : [],
     source_url: payload.url,
-    source_part: payload.part ?? null,
   }
 }
 
 /**
  * 终态归档入口（轮询器调用）：查重 → LLM 整理（失败回退原文模板）→ createNote。
- * 返回 { id, path, reused }；reused=true 表示已有档案，不重复写入。
+ * 返回 { path, reused }；reused=true 表示同 URL 已归档过，没有再写文件。
  */
 export async function archiveTranscript(task, result, { partial = false, subtitle = false } = {}) {
   const url = String(task.payload?.url ?? '')
-  const part = task.payload?.part ?? null
-  const existing = await findNoteBySourceUrl(url, part)
-  if (existing) return { id: existing.id, path: existing.path, reused: true }
+  const existing = await findNoteBySourceUrl(url)
+  if (existing) return { path: existing.path, reused: true }
 
   let llmResult = null
   let llmError = ''
@@ -304,16 +284,13 @@ export async function archiveTranscript(task, result, { partial = false, subtitl
   }
 
   const note = buildNote(task, result, { partial, llmResult, llmError, subtitle })
-  const latest = await findNoteBySourceUrl(url, part)
-  if (latest) return { id: latest.id, path: latest.path, reused: true }
   try {
     const created = await createNote(note)
-    return { id: created.id, path: created.path, reused: false }
+    return { path: created.path, reused: false }
   } catch (err) {
     if (err.code === 'DUPLICATE') {
       // 与查重并发的极端情况：哈希撞车视为已归档（内容一致），不再写第二份
-      if (err.note) return { ...err.note, reused: true, message: err.message }
-      throw err
+      return { path: url, reused: true, message: err.message }
     }
     throw err
   }
