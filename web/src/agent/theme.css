@@ -1,130 +1,94 @@
-/* ── F12 agent 对话页（assistant-ui 版，/agent-v2）──
-   风格参考 Claude + Anything-LLM：
-   - user 消息：右对齐圆角气泡（右下角小缺角），轻量灰底不是重色块
-   - assistant：通栏无气泡，正文阅读宽
-   - 工具调用：左侧竖线 + 折叠行（独立卡片感）
-   - 确认审批：居中卡片橙边，视觉焦点
-   - 输入框：底部固定，圆角大输入
-*/
-
+/* Agent 双卡工作区。主卡复用 site-glass-card，规则仅限 Agent 页面。 */
 .aui-page {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 160px);
-  min-height: 400px;
+  --aui-brand: var(--color-brand);
+  --aui-muted: var(--color-slate-500);
+  --aui-text: var(--color-slate-900);
+  --aui-inner: rgb(255 255 255 / .4);
+  --aui-user: var(--color-brand-soft);
+  height: calc(100dvh - 144px);
+  min-height: 320px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  color: var(--aui-text);
 }
-
-.aui-root {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+:root[data-theme='dark'] .aui-page {
+  --aui-brand: var(--color-brand-dark-text);
+  --aui-muted: var(--color-slate-400);
+  --aui-text: var(--color-slate-100);
+  --aui-inner: rgb(255 255 255 / .05);
+  --aui-user: var(--color-slate-800);
 }
-
-/* 消息流滚动区 */
-.aui-viewport {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--sp-4) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-}
-
-.aui-empty {
-  color: var(--muted);
-  padding: var(--sp-8, 48px) var(--sp-4);
-  text-align: center;
-  font-size: var(--fs-3, 15px);
-  line-height: 1.7;
-}
-
-/* 消息行：user 右对齐，assistant 通栏 */
-.aui-row {
-  display: flex;
-  width: 100%;
-}
+.aui-page.sidebar-closed { grid-template-columns: minmax(0, 1fr); }
+.aui-page button { font-family: inherit; cursor: pointer; }
+.aui-page button:disabled { cursor: not-allowed; opacity: .45; }
+.aui-page :is(button, summary):focus-visible { outline: 2px solid var(--aui-brand); outline-offset: 3px; }
+.aui-page svg { flex-shrink: 0; }
+.aui-sidebar { min-height: 0; display: flex; flex-direction: column; padding: 20px 16px 16px; }
+.sidebar-closed .aui-sidebar { display: none; }
+.aui-sidebar-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.aui-sidebar-heading h2 { font-size: 20px; font-weight: 900; margin: 0 8px; }
+.aui-icon-button { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 12px; background: transparent; color: var(--aui-muted); }
+.aui-icon-button:hover { background: var(--aui-inner); color: var(--aui-text); }
+.aui-new-conversation { min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--site-glass-border); border-radius: 14px; background: var(--aui-inner); color: var(--aui-text); font-size: 14px; }
+.aui-new-conversation:hover:not(:disabled) { color: var(--aui-brand); border-color: var(--aui-brand); }
+.aui-conversation-list { flex: 1; min-height: 0; overflow-y: auto; padding-top: 20px; }
+.aui-conversation-list h3 { margin: 0 10px 10px; font-size: 12px; font-weight: 400; color: var(--aui-muted); }
+.aui-current-conversation { display: flex; align-items: center; gap: 10px; min-height: 44px; background: var(--aui-user); border-radius: 12px; padding: 12px; font-size: 14px; }
+.aui-current-conversation > svg { color: var(--aui-brand); }
+.aui-current-conversation > span { display: flex; flex-direction: column; gap: 4px; }
+.aui-current-conversation small { font-size: 11px; color: var(--aui-muted); }
+.aui-session-hint { font-size: 12px; line-height: 1.75; color: var(--aui-muted); padding: 0 10px; }
+.aui-sidebar-footer { display: flex; align-items: center; gap: 10px; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--site-glass-border); color: var(--aui-muted); }
+.aui-owner-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--aui-user); color: var(--aui-brand); display: grid; place-items: center; font-family: var(--font-sans); }
+.aui-sidebar-footer > div { display: flex; flex: 1; flex-direction: column; gap: 4px; }
+.aui-sidebar-footer strong { font-size: 12px; color: var(--aui-text); }
+.aui-sidebar-footer div > span { font-size: 11px; }
+.aui-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.aui-workspace-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--site-glass-border); }
+.aui-header-title { display: flex; align-items: center; gap: 10px; }
+.aui-header-title h1 { margin: 0; font-family: var(--font-sans); font-size: 20px; font-weight: 700; }
+.aui-header-title p { font-size: 12px; color: var(--aui-muted); margin: 4px 0 0; }
+.aui-runtime-status { display: flex; align-items: center; gap: 6px; font-family: var(--font-sans); font-size: 12px; color: var(--aui-muted); white-space: nowrap; }
+.aui-runtime-status > span { width: 6px; height: 6px; background: var(--color-success); border-radius: 50%; }
+.aui-runtime-status.running > span { background: var(--aui-brand); }
+.aui-viewport { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px; scrollbar-gutter: stable; }
+.aui-messages { width: 100%; max-width: 820px; margin-inline: auto; }
+.aui-row { display: flex; width: 100%; gap: 10px; align-items: flex-start; margin-bottom: 20px; }
 .aui-row.user { justify-content: flex-end; }
-.aui-row.assistant { justify-content: flex-start; }
-
-/* 双气泡式（ChatGPT 风格）：
-   - user 右对齐蓝色气泡
-   - assistant 左对齐浅灰气泡
-   - 圆角统一 12px（不要瘦高缺角形态），padding 紧凑（8/12 比 12/16 更贴文字）
-*/
-.aui-bubble {
-  padding: 6px 12px;          /* 上下更紧凑，单行短消息不显得气泡比字大 */
-  border-radius: 12px;
-  line-height: 1.55;          /* 略收紧行高 */
-  font-size: var(--fs-3, 15px);
-  max-width: 78%;
-  word-break: break-word;
-}
-.aui-bubble p { margin: 0; }   /* MessagePrimitive 的 <p> 默认 margin 会让气泡撑高 */
-.aui-bubble.assistant p { margin: 0 0 var(--sp-2); }
-.aui-bubble.assistant p:last-child { margin-bottom: 0; }
-.aui-bubble.user {
-  background: var(--accent);
-  color: #fff;
-}
-.aui-bubble.assistant {
-  background: var(--bg-soft, #f6f7f9);
-  border: 1px solid var(--border);
-  color: var(--text);
-}
-
-/* assistant 内 markdown 列表缩进 */
-.aui-bubble.assistant ul, .aui-bubble.assistant ol { margin: var(--sp-1) 0 var(--sp-2); }
-
-/* 输入区：底部固定，圆角胶囊大输入 */
-.aui-composer {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--sp-2);
-  padding: var(--sp-3) 0 0;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-}
-.aui-input {
-  flex: 1;
-  min-height: 44px;
-  max-height: 200px;
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: 22px;
-  font-size: var(--fs-3, 15px);
-  font-family: inherit;
-  background: var(--bg-soft, #f6f7f9);
-  color: var(--text);
-  resize: none;
-  outline: none;
-  transition: border-color 0.15s;
-}
-.aui-input:focus {
-  border-color: var(--accent);
-  background: var(--bg);
-}
-.aui-input::placeholder { color: var(--muted); }
-
-.aui-send, .aui-cancel {
-  padding: 10px 18px;
-  border-radius: 22px;
-  border: 1px solid transparent;
-  background: var(--accent);
-  color: #fff;
-  font-size: var(--fs-3, 15px);
-  cursor: pointer;
-  transition: opacity 0.15s;
-  min-height: 44px;
-}
-.aui-send:hover:not(:disabled) { opacity: 0.9; }
-.aui-send:disabled { opacity: 0.4; cursor: not-allowed; }
-.aui-cancel {
-  background: var(--bg-soft, #f6f7f9);
-  color: var(--text);
-  border-color: var(--border);
-}
-.aui-cancel:disabled { opacity: 0.4; cursor: not-allowed; }
+.aui-bubble { min-width: 0; font-size: 15px; line-height: 1.75; overflow-wrap: anywhere; }
+.aui-bubble.user { max-width: 78%; padding: 10px 16px; border-radius: 18px 18px 6px 18px; background: var(--aui-user); color: var(--aui-text); white-space: pre-wrap; }
+.aui-bubble.user p { margin: 0; }
+.aui-bubble.assistant { flex: 1; padding: 16px; border-radius: 12px; background: var(--aui-inner); }
+.aui-message-avatar { width: 28px; height: 28px; display: grid; place-items: center; margin-top: 8px; color: var(--aui-brand); background: var(--aui-user); border-radius: 9px; flex-shrink: 0; }
+.aui-bubble.assistant .markdown-body { font-size: 15px; line-height: 1.8; color: var(--aui-text); }
+.aui-bubble.assistant .markdown-body p { margin: 0 0 14px; }
+.aui-bubble.assistant .markdown-body p:last-child { margin-bottom: 0; }
+.aui-bubble.assistant .markdown-body :is(ul, ol) { margin: 12px 0; padding-left: 22px; }
+.aui-bubble.assistant .markdown-body :is(pre, table) { max-width: 100%; overflow-x: auto; }
+.aui-bubble.assistant:has(> .aui-tool:only-child) { padding: 0; background: transparent; }
+.aui-welcome { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px 0; text-align: center; }
+.aui-welcome-icon { display: grid; place-items: center; width: 64px; height: 64px; background: var(--aui-user); color: var(--aui-brand); border-radius: 22px; margin-bottom: 20px; }
+.aui-eyebrow { font-size: 12px; color: var(--aui-brand); }
+.aui-welcome h2 { margin: 12px 0; font-size: clamp(22px, 2.5vw, 28px); font-weight: 900; letter-spacing: -.02em; }
+.aui-welcome > p { margin: 0; font-size: 14px; color: var(--aui-muted); line-height: 1.8; }
+.aui-suggestions { width: 100%; max-width: 720px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 28px; }
+.aui-suggestion { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 16px; min-height: 120px; padding: 16px; border: 1px solid var(--site-glass-border); border-radius: 12px; background: var(--aui-inner); color: var(--aui-text); font-size: 14px; }
+.aui-suggestion svg { color: var(--aui-brand); }
+.aui-suggestion > span:last-child { align-self: flex-end; color: var(--aui-muted); }
+.aui-suggestion:hover { border-color: var(--aui-brand); }
+.aui-composer-area { flex-shrink: 0; padding: 16px 24px; border-top: 1px solid var(--site-glass-border); }
+.aui-composer-panel { max-width: 820px; margin-inline: auto; border-radius: 12px; }
+.aui-composer-panel:focus-within { outline: 2px solid var(--aui-brand); outline-offset: 4px; }
+.aui-input { display: block; width: 100%; min-height: 44px; max-height: 160px; resize: none; border: 0; padding: 4px 0 12px; outline: none; background: transparent; color: var(--aui-text); font-family: inherit; font-size: 16px; line-height: 1.7; }
+.aui-page .aui-input:focus-visible { outline: none; box-shadow: none; }
+.aui-input::placeholder { color: var(--aui-muted); }
+.aui-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.aui-composer-actions > span { display: flex; align-items: center; gap: 6px; color: var(--aui-muted); font-size: 12px; }
+.aui-send { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 12px; background: var(--color-brand); color: white; }
+.aui-send:hover:not(:disabled) { background: var(--color-brand-hover); }
+.aui-input-hint { max-width: 820px; display: flex; justify-content: space-between; margin: 10px auto 0; font-size: 11px; color: var(--aui-muted); }
 
 /* 工具调用卡（ToolFallback）：左竖线 + 折叠行 */
 .aui-tool {
@@ -210,11 +174,32 @@
 }
 
 
-/* 页头（标题 + 新会话按钮） */
-.agent-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding-bottom: var(--sp-2);
+
+/* 现有工具与确认组件沿用真实行为，内层面板只用轻背景。 */
+.aui-page .aui-tool-result { background: var(--aui-inner); border-radius: 12px; }
+.aui-page .aui-tool.confirm { width: 100%; max-width: none; border-color: var(--warn-line); border-radius: 12px; background: var(--warn-bg); }
+.aui-page .aui-tool-confirm-title { color: var(--warn-text); }
+.aui-page .aui-tool-confirm-body { min-width: 0; }
+.aui-page .aui-tool-args { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .aui-page { height: calc(100dvh - 160px); grid-template-columns: minmax(0, 1fr); min-height: 300px; }
+  .aui-sidebar { position: fixed; inset: 12px auto 76px 12px; width: min(300px, calc(100vw - 36px)); z-index: 70; }
+  .aui-sidebar-scrim { position: fixed; inset: 0; z-index: 65; border: 0; background: rgb(15 23 42 / .35); }
+  .aui-workspace-header { padding: 12px; gap: 8px; }
+  .aui-header-title { gap: 6px; }
+  .aui-header-title h1 { font-size: 18px; }
+  .aui-header-title p, .aui-runtime-status { font-size: 11px; }
+  .aui-viewport { padding: 16px 12px; scrollbar-gutter: auto; }
+  .aui-row { gap: 8px; }
+  .aui-message-avatar { width: 24px; height: 24px; }
+  .aui-bubble.user { max-width: 86%; padding: 8px 12px; }
+  .aui-bubble.assistant { padding: 12px; }
+  .aui-composer-area { padding: 12px; }
+  .aui-composer-actions > span { font-size: 11px; }
+  .aui-input-hint > span { display: none; }
+  .aui-suggestions { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 20px; }
+  .aui-suggestion { min-height: 44px; flex-direction: row; align-items: center; gap: 12px; padding: 12px; }
+  .aui-suggestion > span:last-child { margin-left: auto; align-self: auto; }
+  .aui-welcome-icon { width: 48px; height: 48px; margin-bottom: 16px; }
 }
+@media (prefers-reduced-motion: reduce) { .aui-page * { transition: none !important; } }
