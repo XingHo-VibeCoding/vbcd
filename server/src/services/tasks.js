@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import * as taskStore from '../storage/tasks.js'
 import * as confirmationStore from '../storage/confirmations.js'
-import * as storage from '../storage/files.js'
+import * as noteStore from '../storage/note-store.js'
 import { createNote, nowShanghai } from './notes.js'
 import { fail } from './errors.js'
 import { submitTranscribeTask } from './transcribe.js'
@@ -74,7 +74,7 @@ async function requestDeleteTask(task) {
   const noteId = String(task.payload?.note_id ?? '').trim()
   if (!noteId) throw fail('VALIDATION_FAILED', 'delete_note 任务需要 payload.note_id')
 
-  const note = await storage.get(noteId)
+  const note = await noteStore.get(noteId)
   if (!note) throw fail('NOT_FOUND', '这条资料不存在，无法删除', 404)
 
   const { iso } = nowShanghai()
@@ -107,7 +107,7 @@ async function pendingConfirmationOf(taskId) {
 async function executeApproved(task, confirmation, iso) {
   try {
     if (confirmation.action === 'delete_note') {
-      const removed = await storage.remove(String(task.payload?.note_id ?? ''))
+      const removed = await noteStore.remove(String(task.payload?.note_id ?? ''))
       task.status = removed ? 'done' : 'failed'
       task.result = removed
         ? `已删除 ${removed.path}（确认时间 ${iso}）`

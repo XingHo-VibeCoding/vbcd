@@ -10,6 +10,8 @@ import ArchivePage from './pages/ArchivePage.jsx'
 import AgentPageV2 from './pages/AgentPageV2.jsx'
 import AboutPage from './pages/AboutPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import PlanningDraftConfirmPage from './pages/PlanningDraftConfirmPage.jsx'
+import PlanningPage from './pages/PlanningPage.jsx'
 import { logout } from './api/auth.js'
 import { request } from './api/client.js'
 import { lazy, Suspense } from 'react'
@@ -21,6 +23,7 @@ const AdminApp = lazy(() => import('./admin/AdminApp.jsx'))
 const NAV_ITEMS = [
   { to: '/', label: '主页', icon: '🏠', end: true },
   { to: '/notes', label: '档案', icon: '📁' },
+  { to: '/planning', label: '规划', icon: '🧭' },
   { to: '/log', label: '日志', icon: '📋' },
   { to: '/agent', label: 'agent', icon: '✨' },
   { to: '/about', label: '关于', icon: '👤' },
@@ -157,8 +160,8 @@ function DesktopNav({ authEnabled }) {
                  border-b border-white/20 bg-white/40 shadow-sm backdrop-blur-xl
                  dark:border-white/5 dark:bg-slate-900/50"
     >
-      <div className="mx-auto flex h-16 w-[90%] max-w-6xl items-center justify-between px-4">
-        <NavLink to="/" className="flex items-center gap-2.5 text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
+      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
+        <NavLink to="/" className="flex items-center gap-2 text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
           <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 text-sm text-white">
             b
           </span>
@@ -171,7 +174,7 @@ function DesktopNav({ authEnabled }) {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+                `inline-flex h-11 shrink-0 items-center rounded-xl px-3 font-sans text-sm font-semibold transition-all duration-200 ${
                   isActive
                     ? 'bg-brand text-white shadow-lg shadow-brand-glow'
                     : 'text-slate-500 hover:bg-brand/10 hover:text-brand dark:text-slate-400 dark:hover:text-brand-dark-text'
@@ -182,7 +185,7 @@ function DesktopNav({ authEnabled }) {
             </NavLink>
           ))}
           {authEnabled ? (
-            <LogoutButton className="ml-1 rounded-full px-3 py-2 text-sm font-semibold text-slate-500 transition-colors hover:text-danger dark:text-slate-400 dark:hover:text-danger" />
+            <LogoutButton className="ml-1 inline-flex h-11 shrink-0 items-center rounded-xl px-3 font-sans text-sm font-semibold text-slate-500 transition-colors hover:text-danger dark:text-slate-400 dark:hover:text-danger" />
           ) : null}
         </nav>
       </div>
@@ -205,7 +208,7 @@ function MobileTabBar() {
           to={item.to}
           end={item.end}
           className={({ isActive }) =>
-            `flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[10px] font-bold transition-colors ${
+            `flex flex-1 flex-col items-center justify-center gap-0.5 py-1 font-sans text-xs font-bold transition-colors ${
               isActive
                 ? 'text-brand dark:text-brand-dark-text'
                 : 'text-slate-500 dark:text-slate-400'
@@ -263,6 +266,8 @@ export default function App() {
           <Route path="/notes" element={<NoteListPage />} />
           <Route path="/log" element={<LogPage />} />
           <Route path="/tasks/:id/confirm" element={<TaskConfirmPage />} />
+          <Route path="/planning/drafts/:id/confirm" element={<PlanningDraftConfirmPage />} />
+          <Route path="/planning" element={<PlanningPage />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
           {/* F15b · ima 笔记详情（只读）：静态段 ima 优先于动态段 :id（/notes/ima 落到重定向而非 id="ima" 的资料查询） */}
           <Route path="/notes/ima" element={<Navigate to="/notes?src=ima&panel=notes" replace />} />

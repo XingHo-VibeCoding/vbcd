@@ -9,6 +9,7 @@ const CATEGORY_META = {
   learning: { label: '学习', order: 0 },
   life: { label: '生活', order: 1 },
   work: { label: '事务', order: 2 },
+  essay: { label: '随笔', order: 3 },
 }
 
 /** path 形如 "learning/2026-09-22-text.md"；取首段做目录名，脏数据兜底到 category 或「未分组」 */
@@ -22,7 +23,7 @@ function fileNameOf(item) {
   return parts[parts.length - 1] || `${item.id}.md`
 }
 
-/** 按目录分组：组序 = 学习 → 生活 → 事务 → 其余按目录名字母序；组内按文件名升序 */
+/** 按目录分组：学习 → 生活 → 事务 → 随笔 → 其余；组内按文件名升序 */
 function groupByDir(items) {
   const groups = new Map()
   for (const item of items) {

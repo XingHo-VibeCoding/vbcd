@@ -9,8 +9,24 @@ import { searchNotesTool } from './tools/search-notes.js'
 import { getNoteTool } from './tools/get-note.js'
 import { askKbTool } from './tools/ask-kb.js'
 import { archiveNoteTool } from './tools/archive-note.js'
+import { getPlanningTool } from './tools/get-planning.js'
+import { proposePlanningTool } from './tools/propose-planning.js'
 
 export const TOOL_MANIFEST = [
+  {
+    name: 'get_planning',
+    description: '查询计划、日程及完成/取消历史，定位已有记录并检查安排',
+    risk: 'readonly',
+    authFields: [],
+    build: getPlanningTool,
+  },
+  {
+    name: 'propose_planning',
+    description: '生成新增、修改、完成或取消规划的草案，确认后才生效',
+    risk: 'needs-confirm',
+    authFields: [],
+    build: proposePlanningTool,
+  },
   {
     name: 'search_notes',
     description: '在个人资料库中按关键词检索资料条目，返回标题/分类/日期/标签/摘要列表',

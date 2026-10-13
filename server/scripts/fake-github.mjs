@@ -7,7 +7,7 @@
 import { createServer } from 'node:http'
 
 const PORT = Number(process.env.GH_PORT || 8096)
-const counts = { profile: 0, events: 0, graphql: 0 }
+const counts = { profile: 0, events: 0, graphql: 0, repos: 0 }
 
 function weeks() {
   // 53 周 × 7 格；count 取 (col+row)%4，level 同档——够前端四档色阶渲染
@@ -39,7 +39,7 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/counts') return send(counts)
   if (url.pathname === '/counts/reset') {
-    counts.profile = 0; counts.events = 0; counts.graphql = 0
+    counts.profile = 0; counts.events = 0; counts.graphql = 0; counts.repos = 0
     return send({ ok: true })
   }
 
@@ -58,6 +58,16 @@ const server = createServer(async (req, res) => {
       { type: 'WatchEvent', repo: { name: 'bird-z/vbcd' }, payload: {}, created_at: '2026-10-09T09:00:00Z' },
       { type: 'IssuesEvent', repo: { name: 'bird-z/vbcd' }, payload: { action: 'opened', issue: { title: '假 issue', html_url: 'https://example.com/i/1' } }, created_at: '2026-10-08T08:00:00Z' },
     ])
+  }
+  const repoPath = /^\/users\/([^/]+)\/repos$/.exec(url.pathname)
+  if (repoPath) {
+    counts.repos += 1
+    const login = repoPath[1]
+    const makeRepo = (id, overrides = {}) => ({ id, name: `repo-${id}`, full_name: `${login}/repo-${id}`, description: 'fake repository', language: 'JavaScript', topics: [], archived: false, fork: false, private: false, updated_at: '2026-10-12T10:00:00Z', pushed_at: '2026-10-12T10:00:00Z', html_url: `https://github.com/${login}/repo-${id}`, ...overrides })
+    const page = Number(url.searchParams.get('page') || 1)
+    return send(page === 1
+      ? Array.from({ length: 100 }, (_, index) => makeRepo(index + 1, index === 0 ? { fork: true, topics: ['focus'] } : index === 1 ? { private: true } : {}))
+      : [makeRepo(101, { name: 'focus-repo', full_name: `${login}/focus-repo`, topics: ['focus'], archived: true })])
   }
   if (url.pathname === '/graphql' && req.method === 'POST') {
     counts.graphql += 1

@@ -2,13 +2,45 @@
 // 布局照参考图：纯色横幅 + 压在横幅下沿的圆形头像 + 大标题/英文副标题 + 右侧页签。
 // 研究动态 = 贡献热力图（按资料 date 聚合的真实数据）+ 资料时间线（最新 8 条）。
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getMe } from '../api/me.js'
 import { listNotes } from '../api/notes.js'
-import { getGithubActivity } from '../api/github.js'
+import { getGithubActivity, getGithubProjects } from '../api/github.js'
 
 const WEEKDAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', '']
 const TIMELINE_COUNT = 8
+
+/** 项目与贡献日历分开加载：仓库列表无需贡献日历成功，也不从静态配置补位。 */
+function GitHubProjects() {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
+  useEffect(() => {
+    let alive = true
+    setError('')
+    getGithubProjects().then(value => { if (alive) setData(value) }).catch(err => { if (alive) setError(err.message || 'GitHub 项目暂不可用') })
+    return () => { alive = false }
+  }, [retry])
+  const format = iso => iso ? new Date(iso).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '暂无记录'
+  return (
+    <section id="projects" className="mt-6 border-t border-brand/15 pt-5">
+      <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">GitHub 项目</h2><button type="button" className="min-h-11 rounded-lg px-3 text-xs text-brand" onClick={() => setRetry(value => value + 1)}>重新检查</button></div>
+      <p className="mt-1 text-xs text-slate-500">公开、非 Fork 仓库 · 按最近推送时间排序</p>
+      {error ? <p role="alert" className="error-bar">{error} · 已有列表如仍显示，则是上次读取的数据。</p> : null}
+      {!data && !error ? <p className="loading">项目载入中…</p> : null}
+      {data?.state === 'unconfigured' ? <p className="activity-empty">GitHub 项目来源尚未配置</p> : null}
+      {data?.state === 'unavailable' ? <p role="alert" className="activity-empty">项目暂不可用，没有可用缓存。</p> : null}
+      {data?.state === 'stale' ? <p role="status" className="activity-empty">刷新失败，正在显示上次成功数据，可能已过期。</p> : null}
+      {data?.synced_at ? <p className="mt-2 text-[11px] text-slate-400">来源：GitHub · 最后同步于 {format(data.synced_at)}（北京时间）</p> : null}
+      {data && !['unconfigured', 'unavailable'].includes(data.state) && !data.items.length ? <p className="activity-empty">没有符合条件的公开项目</p> : null}
+      {data ? [false, true].map(archived => {
+        const repos = data.items.filter(repo => repo.archived === archived)
+        if (!repos.length) return null
+        return <div className="mt-4" key={String(archived)}><h3 className="mb-2 text-sm font-bold">{archived ? '已归档项目' : '公开项目'}</h3><div className="grid gap-3 sm:grid-cols-2">{repos.map(repo => <a key={repo.id} className="min-w-0 rounded-xl border border-brand/15 bg-white/30 p-4 transition hover:bg-brand/5 dark:bg-white/5" href={repo.htmlUrl} target="_blank" rel="noreferrer"><div className="flex items-start justify-between gap-2"><strong className="break-all text-sm">{repo.fullName}</strong>{repo.topics.includes('focus') ? <span className="shrink-0 rounded-full bg-brand/10 px-2 py-1 text-[10px] text-brand">焦点</span> : null}</div><p className="mt-2 text-xs leading-relaxed text-slate-500">{repo.description || '仓库未填写简介'}</p><p className="mt-2 text-[11px] text-slate-400">{repo.language || '未标注语言'} · 最近推送 {format(repo.pushedAt)}</p></a>)}</div></div>
+      }) : null}
+    </section>
+  )
+}
 
 /** GitHub 资料卡（自我介绍页签内嵌）：头像走 github.com/<login>.png 公开端点，无需 token。
     login 为空（profile.md 未配 github 字段）时整块不渲染。 */
@@ -160,6 +192,7 @@ function ContribGraph({ cells, title, legendUnit }) {
 
 export default function AboutPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [me, setMe] = useState(null)
   const [meError, setMeError] = useState('')
   const [notes, setNotes] = useState(null) // null = 加载中
@@ -210,6 +243,11 @@ export default function AboutPage() {
       alive = false
     }
   }, [navigate])
+
+  useEffect(() => {
+    if (!me || isActivity || location.hash !== '#projects') return
+    document.getElementById('projects')?.scrollIntoView({ block: 'start' })
+  }, [me, isActivity, location.hash])
 
   if (meError) return <div className="error-bar">{meError}</div>
   if (!me) return <div className="loading">载入中…</div>
@@ -354,6 +392,7 @@ export default function AboutPage() {
             </>
           )
         ) : (
+          <>
           <section className={`about-intro ${profile.github ? 'has-github' : ''}`}>
             <div className="about-bio-panel">
               <span className="about-section-label">ABOUT ME</span>
@@ -367,6 +406,8 @@ export default function AboutPage() {
               </aside>
             ) : null}
           </section>
+          <GitHubProjects />
+          </>
         )}
       </div>
     </div>

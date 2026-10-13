@@ -3,7 +3,7 @@
 //   未配 GITHUB_USERNAME → { configured:false }
 //   已配用户名、抓 profile/events 成功但 calendar 失败（如未配 token）→ configured:true + calendar 为 null
 //   整体抓不到（用户名错/网络断）→ 抛 GITHUB_UPSTREAM 502，由前端按 notesError 同款灰条处理
-import { fetchProfile, fetchCalendar, fetchEvents } from './github/client.js'
+import { fetchProfile, fetchCalendar, fetchEvents, fetchRepositories } from './github/client.js'
 
 function env(name, fallback = '') {
   return String(process.env[name] ?? fallback).trim()
@@ -49,4 +49,35 @@ export async function getGithubActivity() {
       inflight = null
     })
   return inflight
+}
+
+// 项目缓存与动态缓存分开：无贡献日历不影响项目列表，失败时保留最后成功数据。
+let projectCache = null
+let projectInflight = null
+
+export async function getGithubProjects() {
+  const login = env('GITHUB_USERNAME')
+  if (!login) return { configured: false, state: 'unconfigured', items: [], synced_at: null }
+  const now = Date.now()
+  const rawTtl = env('GITHUB_CACHE_TTL_MS')
+  const configuredTtl = rawTtl ? Number(rawTtl) : 30 * 60 * 1000
+  const ttl = Number.isFinite(configuredTtl) && configuredTtl >= 0 ? configuredTtl : 30 * 60 * 1000
+  if (projectCache?.login === login && ttl > 0 && now - projectCache.at < ttl) {
+    return { configured: true, state: 'cached', items: projectCache.items, synced_at: new Date(projectCache.at).toISOString() }
+  }
+  if (projectInflight) return projectInflight
+  projectInflight = fetchRepositories(login, env('GITHUB_TOKEN'))
+    .then(items => {
+      projectCache = { login, at: Date.now(), items }
+      return { configured: true, state: 'fresh', items, synced_at: new Date(projectCache.at).toISOString() }
+    })
+    .catch(() => ({
+      configured: true,
+      state: projectCache?.login === login ? 'stale' : 'unavailable',
+      items: projectCache?.login === login ? projectCache.items : [],
+      synced_at: projectCache?.login === login ? new Date(projectCache.at).toISOString() : null,
+      error: { code: 'GITHUB_UPSTREAM', message: 'GitHub 项目刷新失败，请稍后重试' },
+    }))
+    .finally(() => { projectInflight = null })
+  return projectInflight
 }

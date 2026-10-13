@@ -21,14 +21,14 @@ function authSatisfied(entry) {
 }
 
 /** 构建当前可用工具集：返回 { tools: Map<name, langchainTool>, meta: Map<name, manifestEntry> } */
-export function buildRegistry() {
+export function buildRegistry(context = {}) {
   const wl = whitelist()
   const tools = new Map()
   const meta = new Map()
   for (const entry of TOOL_MANIFEST) {
     if (wl && !wl.has(entry.name)) continue
     if (!authSatisfied(entry)) continue
-    tools.set(entry.name, entry.build())
+    tools.set(entry.name, entry.build(context))
     meta.set(entry.name, entry)
   }
   return { tools, meta }

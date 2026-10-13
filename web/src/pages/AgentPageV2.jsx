@@ -1,5 +1,5 @@
 // Agent 双卡工作区：左侧当前会话，右侧消息与输入共享主卡。
-// 历史列表与对话内审批在后续板块接入，当前继续使用原有真实 runtime。
+// 对话内展示完整草案并确认，历史仍通过真实会话接口恢复。
 import { useEffect, useRef, useState } from 'react'
 import {
   AssistantRuntimeProvider,
@@ -9,7 +9,7 @@ import {
 } from '@assistant-ui/react'
 import MarkdownContent from '../components/MarkdownContent.jsx'
 import ToolFallback from '../agent/ToolFallback.jsx'
-import { useBuddyAgentRuntime } from '../agent/runtime.js'
+import { useBuddyAgentRuntime, AgentConfirmationContext } from '../agent/runtime.js'
 import '../agent/theme.css'
 
 function AgentIcon({ name, size = 20 }) {
@@ -29,7 +29,7 @@ function AgentIcon({ name, size = 20 }) {
 }
 
 export default function AgentPageV2() {
-  const { runtime, sessionId, reset, busy } = useBuddyAgentRuntime()
+  const { runtime, sessionId, reset, busy, confirming, pendingConfirmation, confirmationActions } = useBuddyAgentRuntime()
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768)
   const [mobile, setMobile] = useState(() => window.innerWidth < 768)
   const menuRef = useRef(null)
@@ -54,7 +54,7 @@ export default function AgentPageV2() {
   }
 
   function newConversation() {
-    if (busy) return
+    if (busy || confirming) return
     reset()
     if (mobile) closeSidebar()
   }
@@ -82,7 +82,7 @@ export default function AgentPageV2() {
           <h2>对话</h2>
           <button type="button" className="aui-icon-button" aria-label="收回会话列表" onClick={closeSidebar}><AgentIcon name="close" /></button>
         </div>
-        <button type="button" className="aui-new-conversation" disabled={busy} onClick={newConversation}>
+        <button type="button" className="aui-new-conversation" disabled={busy || confirming} onClick={newConversation}>
           <AgentIcon name="plus" size={18} />新建对话
         </button>
         <div className="aui-conversation-list">
@@ -100,6 +100,7 @@ export default function AgentPageV2() {
         </div>
       </aside>
 
+      <AgentConfirmationContext.Provider value={confirmationActions}>
       <AssistantRuntimeProvider runtime={runtime}>
         <ThreadPrimitive.Root className="aui-workspace site-glass-card" inert={mobile && sidebarOpen}>
           <header className="aui-workspace-header">
@@ -107,7 +108,7 @@ export default function AgentPageV2() {
               <button ref={menuRef} type="button" className="aui-icon-button" aria-label={sidebarOpen ? '收回会话列表' : '打开会话列表'} aria-expanded={sidebarOpen} aria-controls="agent-conversations" onClick={() => sidebarOpen ? closeSidebar() : setSidebarOpen(true)}><AgentIcon name="menu" /></button>
               <div><h1>Agent</h1><p>你的资料，随时接着聊</p></div>
             </div>
-            <span className={`aui-runtime-status ${busy ? 'running' : ''}`} role="status"><span />{busy ? '正在生成' : '准备就绪'}</span>
+            <span className={`aui-runtime-status ${busy ? 'running' : ''}`} role="status"><span />{busy ? '正在生成' : confirming ? '正在确认' : pendingConfirmation ? '草案待确认' : '准备就绪'}</span>
           </header>
           <ThreadPrimitive.Viewport className="aui-viewport">
             <ThreadPrimitive.Empty>
@@ -133,16 +134,17 @@ export default function AgentPageV2() {
           </ThreadPrimitive.Viewport>
           <footer className="aui-composer-area">
             <ComposerPrimitive.Root className="aui-composer-panel">
-              <ComposerPrimitive.Input className="aui-input" placeholder="问问你的资料，或说说你的想法…" aria-label="发送给 buddy 的消息" disabled={busy} />
+              <ComposerPrimitive.Input className="aui-input" placeholder="问问你的资料，或说说你的想法…" aria-label="发送给 buddy 的消息" disabled={busy || confirming || Boolean(pendingConfirmation)} />
               <div className="aui-composer-actions">
                 <span><AgentIcon name="shield" size={15} />写入资料前会征求你的确认</span>
-                {busy ? <ComposerPrimitive.Cancel className="aui-send" aria-label="停止生成"><AgentIcon name="stop" /></ComposerPrimitive.Cancel> : <ComposerPrimitive.Send className="aui-send" aria-label="发送消息"><AgentIcon name="arrow" /></ComposerPrimitive.Send>}
+                {busy ? <ComposerPrimitive.Cancel className="aui-send" aria-label="停止生成"><AgentIcon name="stop" /></ComposerPrimitive.Cancel> : <ComposerPrimitive.Send className="aui-send" aria-label="发送消息" disabled={confirming || Boolean(pendingConfirmation)}><AgentIcon name="arrow" /></ComposerPrimitive.Send>}
               </div>
             </ComposerPrimitive.Root>
-            <p className="aui-input-hint">{busy ? '生成期间，请先停止再新建对话。' : 'Enter 发送 · Shift + Enter 换行'}<span>buddy</span></p>
+            <p className="aui-input-hint">{busy ? '生成期间，请先停止再新建对话。' : confirming ? '正在记录你的决定…' : pendingConfirmation ? '草案尚未保存，请先使用对话内的确认或拒绝按钮。' : 'Enter 发送 · Shift + Enter 换行'}<span>buddy</span></p>
           </footer>
         </ThreadPrimitive.Root>
       </AssistantRuntimeProvider>
+      </AgentConfirmationContext.Provider>
     </section>
   )
 }

@@ -111,3 +111,24 @@ export async function fetchEvents(login, token, limit = 10) {
   }
   return out
 }
+
+/** 公开、非 Fork 仓库；逐页读完后再筛选，避免漏掉后续页的 focus 项目。 */
+export async function fetchRepositories(login, token) {
+  const repositories = new Map()
+  for (let page = 1; ; page += 1) {
+    const rows = await getJson(`${REST_BASE}/users/${encodeURIComponent(login)}/repos?type=owner&sort=full_name&per_page=100&page=${page}`, token)
+    if (!Array.isArray(rows)) throw fail('GITHUB_UPSTREAM', 'GitHub 仓库列表返回结构异常', 502)
+    for (const repo of rows) {
+      if (repo.private || repo.fork) continue
+      repositories.set(String(repo.id), {
+        id: String(repo.id), name: repo.name, fullName: repo.full_name,
+        description: repo.description || '', language: repo.language || null,
+        topics: Array.isArray(repo.topics) ? repo.topics : [],
+        archived: Boolean(repo.archived), updatedAt: repo.updated_at || null,
+        pushedAt: repo.pushed_at || null, htmlUrl: repo.html_url,
+      })
+    }
+    if (rows.length < 100) break
+  }
+  return [...repositories.values()].sort((a, b) => (b.pushedAt || '').localeCompare(a.pushedAt || '') || a.fullName.localeCompare(b.fullName))
+}

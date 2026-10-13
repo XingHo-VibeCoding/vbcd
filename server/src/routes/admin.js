@@ -4,7 +4,7 @@
 import { Router } from 'express'
 import { listTasks } from '../services/tasks.js'
 import { dbConfigured, query as dbQuery } from '../db/pool.js'
-import * as storage from '../storage/files.js'
+import * as noteStore from '../storage/note-store.js'
 import { listEnv } from '../services/env.js'
 import { getSettings, patchSettings } from '../services/settings.js'
 
@@ -55,7 +55,7 @@ async function probeChroma() {
   return { configured: true, status: res.status }
 }
 
-// 计数：notes 数（文件索引 list）、任务数（含按状态细分）
+// 计数：当前资料权威来源、任务数（含按状态细分）
 async function buildCounts() {
   const counts = {}
   try {
@@ -67,7 +67,7 @@ async function buildCounts() {
     counts.tasks = { error: err?.message }
   }
   try {
-    const { items } = await storage.list()
+    const { items } = await noteStore.list()
     counts.notes = { total: items.length }
   } catch (err) {
     counts.notes = { error: err?.message }

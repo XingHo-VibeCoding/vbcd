@@ -7,7 +7,7 @@ import Toast from '../components/Toast.jsx'
 import Breadcrumb from '../components/Breadcrumb.jsx'
 import BackLink from '../components/BackLink.jsx'
 
-const CATEGORY_LABELS = { learning: '学习', life: '生活', work: '事务' }
+const CATEGORY_LABELS = { learning: '学习', life: '生活', work: '事务', essay: '随笔' }
 
 // 反馈时长（SPEC 5.3.1）：提示条成功 3 秒 / 失败 5 秒，按钮文字一律 3 秒后复原
 const TOAST_OK_MS = 3000

@@ -4,3 +4,7 @@ import { request } from './client.js'
 export async function getGithubActivity() {
   return request('/api/github/activity')
 }
+
+export function getGithubProjects() {
+  return request('/api/github/projects')
+}

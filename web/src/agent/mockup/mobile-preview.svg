@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844" viewBox="0 0 390 844" role="img" aria-labelledby="title desc">
+  <title id="title">buddy Agent 合并对话输入卡 · 手机</title>
+  <desc id="desc">会话卡通过抽屉打开，对话与输入区位于同一张主卡，输入区固定在卡片底部，沿用现有底部全站导航。静态设计稿。</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1">
+      <stop stop-color="#fdf2f8" />
+      <stop offset=".5" stop-color="#fff1f2" />
+      <stop offset="1" stop-color="#eef2ff" />
+    </linearGradient>
+    <linearGradient id="logo" x2="1" y2="1">
+      <stop stop-color="#615fff" />
+      <stop offset="1" stop-color="#a855f7" />
+    </linearGradient>
+    <filter id="shadow" x="-.15" y="-.15" width="1.3" height="1.35">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#232340" flood-opacity=".10" />
+    </filter>
+  </defs>
+  <rect width="390" height="844" fill="url(#bg)" />
+  <rect width="390" height="844" fill="white" fill-opacity=".85" />
+  <rect x="0" y="0" width="390" height="74" rx="0" fill="#fff" fill-opacity=".85" />
+  <text x="12" y="23" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="12" font-weight="700" fill="#615fff">● 布局验收样板</text>
+  <text x="140" y="23" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="400" fill="#738096">样例数据 · 不连接后端</text>
+  <text x="12" y="56" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="400" fill="#738096">状态  待确认 ▾    桌面预览    桌面稿  手机稿</text>
+  <rect x="12" y="86" width="366" height="682" rx="24" fill="#fff" fill-opacity=".25" stroke="white" stroke-opacity=".4" filter="url(#shadow)" />
+  <path d="M12 587h366" stroke="white" stroke-opacity=".4" />
+  <text x="26" y="118" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="18" font-weight="400" fill="#738096">☰</text>
+  <text x="63" y="113" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="16" font-weight="700" fill="#243047">Agent</text>
+  <text x="63" y="132" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="400" fill="#738096">你的资料，随时接着聊</text>
+  <text x="286" y="120" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="400" fill="#a36708">● 待确认</text>
+  <text x="350" y="120" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="18" font-weight="400" fill="#738096">☾</text>
+  <path d="M12 148H378" stroke="white" />
+  <rect x="53" y="164" width="306" height="54" rx="17" fill="#eef2ff" />
+  <text x="68" y="197" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="13" font-weight="400" fill="#243047">把整理方法归档到学习资料。</text>
+  <rect x="25" y="235" width="24" height="24" rx="8" fill="#eef2ff" />
+  <text x="29" y="251" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="16" font-weight="400" fill="#615fff">✧</text>
+  <text x="57" y="247" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="12" font-weight="400" fill="#243047">我整理了一份归档草案，</text>
+  <text x="57" y="265" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="12" font-weight="400" fill="#243047">请先查看内容，再决定是否保存。</text>
+  <text x="59" y="299" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="11" font-weight="400" fill="#738096">✓ 已查询资料库  ›</text>
+  <rect x="57" y="317" width="301" height="237" rx="16" fill="#fffaf0" stroke="#f1ddb5" />
+  <text x="72" y="346" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="13" font-weight="700" fill="#243047">♧ 请确认这次归档</text>
+  <text x="72" y="367" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="400" fill="#738096">确认后保存到你的学习资料。</text>
+  <text x="72" y="403" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="14" font-weight="700" fill="#243047">个人知识库整理方法</text>
+  <text x="72" y="424" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="400" fill="#738096">学习资料 · Markdown</text>
+  <path d="M72 440H343" stroke="#f1ddb5" />
+  <text x="72" y="466" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="11" font-weight="400" fill="#a36708">› 查看完整草案</text>
+  <rect x="72" y="493" width="130" height="37" rx="11" fill="#615fff" />
+  <text x="89" y="517" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="11" font-weight="400" fill="white">✓ 确认归档</text>
+  <rect x="211" y="493" width="67" height="37" rx="11" fill="#fff" fill-opacity=".4" stroke="#e9e9f2" />
+  <text x="230" y="517" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="11" font-weight="400" fill="#243047">拒绝</text>
+  <text x="25" y="615" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="400" fill="#a36708">♧ 请先处理上面的归档草案</text>
+  <text x="25" y="654" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="14" font-weight="400" fill="#738096">处理归档草案后，继续聊…</text>
+  <text x="25" y="703" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="9" font-weight="400" fill="#738096">♧ 写入资料前会征求你的确认</text>
+  <rect x="327" y="678" width="35" height="35" rx="12" fill="#615fff" fill-opacity=".45" />
+  <text x="337" y="703" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="20" font-weight="400" fill="white">↑</text>
+  <text x="25" y="744" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="400" fill="#738096">Enter 发送 · Shift + Enter 换行</text>
+  <rect x="0" y="780" width="390" height="64" rx="0" fill="#fff" fill-opacity=".55" stroke="white" stroke-opacity=".2" />
+  <text x="39" y="807" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="18" font-weight="400" fill="#243047" text-anchor="middle">🏠</text>
+  <text x="39" y="829" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="700" fill="#64748b" text-anchor="middle">主页</text>
+  <text x="117" y="807" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="18" font-weight="400" fill="#243047" text-anchor="middle">📁</text>
+  <text x="117" y="829" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="700" fill="#64748b" text-anchor="middle">档案</text>
+  <text x="195" y="807" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="18" font-weight="400" fill="#243047" text-anchor="middle">📋</text>
+  <text x="195" y="829" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="700" fill="#64748b" text-anchor="middle">日志</text>
+  <text x="273" y="807" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="18" font-weight="400" fill="#243047" text-anchor="middle">✨</text>
+  <text x="273" y="829" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="700" fill="#615fff" text-anchor="middle">agent</text>
+  <text x="351" y="807" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="18" font-weight="400" fill="#243047" text-anchor="middle">👤</text>
+  <text x="351" y="829" font-family="Noto Serif SC, Source Han Serif SC, serif" font-size="10" font-weight="700" fill="#64748b" text-anchor="middle">关于</text>
+</svg>

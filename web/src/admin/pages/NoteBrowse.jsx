@@ -7,9 +7,9 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { request } from '../../api/client.js'
 
-const CATEGORY_COLOR = { learning: 'blue', life: 'green', work: 'orange' }
-const CATEGORIES = ['learning', 'life', 'work']
-const CATEGORY_LABEL = { learning: '学习', life: '生活', work: '工作' }
+const CATEGORY_COLOR = { learning: 'blue', life: 'green', work: 'orange', essay: 'purple' }
+const CATEGORIES = ['learning', 'life', 'work', 'essay']
+const CATEGORY_LABEL = { learning: '学习', life: '生活', work: '工作', essay: '随笔' }
 
 export default function NoteBrowse() {
   const [q, setQ] = useState('')
@@ -78,7 +78,7 @@ export default function NoteBrowse() {
         method: 'PATCH',
         body: { title: v.title, category: v.category, tags, content: v.content },
       })
-      msg.success('已保存（文件已覆盖，Obsidian 端同步刷新后生效）')
+      msg.success('已保存')
       setEditing(false)
       setDetail(null)
       await load()

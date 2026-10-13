@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import { tool } from '@langchain/core/tools'
 import { randomBytes } from 'node:crypto'
-import { nowShanghai } from '../../notes.js'
+import { nowShanghai, CATEGORIES } from '../../notes.js'
 import * as taskStore from '../../../storage/tasks.js'
 import * as confirmationStore from '../../../storage/confirmations.js'
 
@@ -53,8 +53,8 @@ export function archiveNoteTool() {
         pending_confirmation: true,
         confirmation_id: confirmation.id,
         task_id: task.id,
-        draft: { title, category, tags: tagList, source_url, content_length: [...content].length },
-        message: '已生成归档草案，等待你在确认页同意/拒绝。',
+        draft: { title, category, tags: tagList, source_url, content, content_length: [...content].length },
+        message: '已生成归档草案，尚未保存；请在对话中确认或拒绝。',
       })
     },
     {
@@ -63,7 +63,7 @@ export function archiveNoteTool() {
         '把一段内容归档为个人资料。需提供标题、分类、正文；可选标签与来源链接。这是写操作：调用后只生成草案并等待用户确认，不会直接写入。',
       schema: z.object({
         title: z.string().min(1).max(80).describe('资料标题（≤80 字）'),
-        category: z.enum(['learning', 'life', 'work']).describe('分类'),
+        category: z.enum(CATEGORIES).describe('分类：learning 学习 / life 生活 / work 事务 / essay 随笔（个人写作与思考）'),
         content: z.string().min(1).describe('Markdown 正文'),
         tags: z.array(z.string().max(30)).max(10).optional().describe('标签'),
         source_url: z.string().url().optional().describe('来源链接（须 http/https）'),

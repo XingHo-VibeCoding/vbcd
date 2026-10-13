@@ -17,6 +17,8 @@ import dbRouter from './routes/db.js'
 import agentRouter from './routes/agent.js'
 import githubRouter from './routes/github.js'
 import adminRouter from './routes/admin.js'
+import planningRouter from './routes/planning.js'
+import homeRouter from './routes/home.js'
 
 export function createApp() {
   const app = express()
@@ -44,6 +46,8 @@ export function createApp() {
   app.use('/api/github', requireAuth, githubRouter)
   // 后台运维聚合：同样要求登录态（公开模式下 requireAuth 直通，见 §2 D4 取舍）
   app.use('/api/admin', requireAuth, adminRouter)
+  app.use('/api/planning', requireAuth, planningRouter)
+  app.use('/api/home', requireAuth, homeRouter)
 
   // 站点图片资产：data/images/ → /images/*（背景/轮播/封面/头像等；公开只读，不进 git）
   app.use('/images', express.static(path.join(DATA_DIR, 'images'), { maxAge: '1h' }))

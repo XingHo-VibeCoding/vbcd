@@ -10,6 +10,7 @@ const CATEGORIES = [
   { value: 'learning', label: '学习' },
   { value: 'life', label: '生活' },
   { value: 'work', label: '事务' },
+  { value: 'essay', label: '随笔' },
 ]
 
 export default function NoteArchiveForm() {

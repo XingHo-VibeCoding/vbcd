@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>buddy · Agent 布局验收样板</title>
+    <script>
+      // 样板主题只作用于当前页面，不读写真实站点的本地设置。
+      const mockupTheme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light'
+      document.documentElement.dataset.theme = mockupTheme
+      document.documentElement.classList.toggle('dark', mockupTheme === 'dark')
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/agent/mockup/AgentLayoutMockup.jsx"></script>
+  </body>
+</html>

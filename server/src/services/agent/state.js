@@ -66,6 +66,30 @@ export async function saveSession(session) {
   }
 }
 
+/** 从完整工具响应恢复待确认对象，普通工具摘要仍可截断。 */
+export function pendingConfirmationView(session) {
+  const confirmationId = session.pendingConfirmationId
+  if (!confirmationId) return null
+  for (const message of [...session.messages].reverse()) {
+    if (message.type !== 'tool') continue
+    const data = message.data ?? {}
+    let parsed
+    try { parsed = JSON.parse(contentText(data.content)) } catch { continue }
+    if (!parsed.pending_confirmation || parsed.confirmation_id !== confirmationId) continue
+    const planning = data.name === 'propose_planning' || Boolean(parsed.draft_id)
+    const original = session.messages.flatMap(m => m.type === 'ai' ? m.data?.tool_calls ?? [] : [])
+      .find(call => call.id === data.tool_call_id)
+    // 兼容旧归档草案：旧响应不含正文，但原工具参数中仍保留完整正文。
+    const draft = planning ? parsed.draft : { ...(original?.args ?? {}), ...(parsed.draft ?? {}) }
+    return {
+      confirmation_id: confirmationId, task_id: parsed.task_id,
+      draft_id: parsed.draft_id || parsed.draft?.id, planning, draft,
+      note: planning ? '规划草案尚未保存，请先确认或拒绝。' : '归档草案尚未保存，请先确认或拒绝。',
+    }
+  }
+  return { confirmation_id: confirmationId, note: '仍有一项操作待确认，请重新读取草案。' }
+}
+
 /**
  * 把落盘会话还原成前端可渲染的消息行（GET /api/agent/sessions/:id 用）。
  * 还原规则：
@@ -117,7 +141,7 @@ export function sessionToView(session) {
     rows.push({
       role: 'tool',
       toolName: 'confirmation',
-      confirm: { confirmation_id: session.pendingConfirmationId, note: '等待确认中' },
+      confirm: pendingConfirmationView(session),
       text: '这个动作需要你先确认',
     })
   }

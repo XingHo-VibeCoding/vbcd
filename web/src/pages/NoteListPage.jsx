@@ -10,6 +10,7 @@ const CATEGORIES = [
   { value: 'learning', label: '学习' },
   { value: 'life', label: '生活' },
   { value: 'work', label: '事务' },
+  { value: 'essay', label: '随笔' },
 ]
 
 // 分类菜单使用主站样式；筛选值与原 select 完全一致。
@@ -87,7 +88,6 @@ function fmtTime(iso) {
 export default function NoteListPage() {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
-  const [category, setCategory] = useState('')
   const [result, setResult] = useState({ total: 0, items: [], rebuilt: false, rebuiltAt: '', rebuiltInMs: 0 })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -97,6 +97,17 @@ export default function NoteListPage() {
   // Day 10 · 视图切换：?view=dir 为目录分组视图，其余（含无参数）一律卡片视图。
   // 写进地址栏而不是 state/localStorage——刷新、前进后退、把链接发给手机都能保持视图。
   const [searchParams, setSearchParams] = useSearchParams()
+  // 分类以地址栏为准：首页入口、刷新以及前进/后退都保持同一筛选。
+  const selectedCategory = searchParams.get('category') || ''
+  const category = CATEGORIES.some(item => item.value === selectedCategory) ? selectedCategory : ''
+  function setCategory(value) {
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous)
+      if (value) next.set('category', value)
+      else next.delete('category')
+      return next
+    })
+  }
   const isDirView = searchParams.get('view') === 'dir'
   // F15 · 来源切换：?src=ima 为云端（ima 知识库只读视图），缺省/其他值一律本地。
   const src = searchParams.get('src') === 'ima' ? 'ima' : 'local'

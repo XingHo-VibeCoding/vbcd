@@ -1,5 +1,5 @@
 // 知识库问答（RAG）服务（SPEC「知识库问答」小节）
-// 索引：扫 data/ 下全部 .md → 中文优先切分 → Embedding → Chroma collection "buddy-notes"；
+// 索引：从资料权威来源读取全文 → 中文优先切分 → Embedding → Chroma collection "buddy-notes"；
 //      增量依据本地清单 data/.kb-manifest.json（note_id → {hash, chunk_ids}），hash 不变不重建。
 // 问答：问题向量化 → Top-K 检索 → 严格基于上下文的中文 prompt → 流式/一次性生成 + 来源列表。
 // 向量库直连 chromadb 官方 JS 客户端（不传 embeddingFunction，向量由我们自己算好）；
@@ -11,6 +11,7 @@ import { ChromaClient, ChromaConnectionError } from 'chromadb'
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters'
 import { SystemMessage, HumanMessage } from '@langchain/core/messages'
 import * as storage from '../storage/files.js'
+import * as noteStore from '../storage/note-store.js'
 import { fail } from './errors.js'
 import { getChatModel, getEmbeddings, kbConfigured } from './llm.js'
 
@@ -146,7 +147,7 @@ async function deleteChunks(collection, ids, noteId) {
 export async function reindex() {
   ensureConfigured()
   const collection = await getCollection()
-  const { items, warnings } = await storage.list()
+  const { items, warnings } = await noteStore.list()
   for (const w of warnings) console.warn(`[kb] ${w}`)
 
   const manifest = await readManifest()

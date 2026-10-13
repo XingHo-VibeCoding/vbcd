@@ -44,6 +44,23 @@ export async function execute(text, params = []) {
   return result.rows
 }
 
+/** 在同一条 PostgreSQL 连接中执行原子事务。回调接收原始 query，避免 BEGIN/COMMIT 落到不同连接。 */
+export async function withTransaction(work) {
+  const p = getPool()
+  const client = await p.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await work((text, params = []) => client.query(text, params))
+    await client.query('COMMIT')
+    return result
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
 /**
  * 执行一条参数化 SQL，返回 rows。
  * 连接类错误（pg 无法正常结束的）统一包装成 DB_UNAVAILABLE；
