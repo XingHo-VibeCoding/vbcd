@@ -43,12 +43,67 @@ function LogoutButton({ className = '' }) {
   )
 }
 
+// 氛围动画只负责低负载的光层；背景图片本身不模糊、不参与动画。
+function BackgroundAtmosphere({ theme, enabled }) {
+  const [mobile, setMobile] = useState(false)
+  const [paused, setPaused] = useState(true)
+  const fireflies = [
+    [8, 18, 11, 22], [19, 67, 9, 31], [31, 38, 13, 27], [43, 82, 9, 36],
+    [55, 24, 11, 29], [66, 58, 9, 34], [77, 34, 13, 25], [89, 72, 9, 32],
+    [14, 45, 9, 38], [27, 89, 11, 24], [39, 12, 9, 33], [51, 51, 13, 28],
+    [72, 86, 9, 35], [84, 14, 11, 30], [94, 48, 9, 26], [61, 8, 9, 37],
+  ]
+
+  useEffect(() => {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const smallScreen = window.matchMedia('(max-width: 767px)')
+    const sync = () => setPaused(!enabled || reduceMotion.matches || document.hidden)
+    const syncScreen = () => setMobile(smallScreen.matches)
+    sync()
+    syncScreen()
+    reduceMotion.addEventListener?.('change', sync)
+    smallScreen.addEventListener?.('change', syncScreen)
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      reduceMotion.removeEventListener?.('change', sync)
+      smallScreen.removeEventListener?.('change', syncScreen)
+      document.removeEventListener('visibilitychange', sync)
+    }
+  }, [enabled])
+
+  if (!enabled) return null
+
+  const shownFlies = fireflies.slice(0, mobile ? 6 : 16)
+  return (
+    <div aria-hidden="true" className={`background-atmosphere ${paused ? 'is-paused' : ''}`}>
+      {theme === 'dark' ? (
+        <div className="firefly-field">
+          {shownFlies.map(([left, top, size, duration], index) => (
+            <span key={index} className={`firefly firefly-path-${index % 4}`} style={{
+              left: `${left}%`, top: `${top}%`, width: `${size}px`, height: `${size}px`,
+              '--drift-duration': `${duration}s`,
+              '--drift-delay': `${-index * 1.7}s`,
+              '--breathe-delay': `${-index * 0.43}s`,
+            }} />
+          ))}
+        </div>
+      ) : (
+        <div className="waterlight-field">
+          <span className="waterlight waterlight-one" />
+          <span className="waterlight waterlight-two" />
+          <span className="waterlight waterlight-three" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // L0 背景层：读 site.json 的 background——
 //   type='image'    → 多图淡入淡出轮播（images[] 数组；也兼容单 src）
 //   type='gradient' → 渐变兜底（或未配图时）
-// 上面永远压一层淡色 veil，保证卡片可读性（玻璃透的是 veil+图，不是裸图）。
+// 图片保持清晰；静态 veil 保证文字可读，氛围层位于 veil 之上、内容之下。
 // interval 默认 6000ms，可在 site.json 的 background.interval 调。
-function BackgroundLayer({ site, theme }) {
+function BackgroundLayer({ site, theme, effectsEnabled }) {
   const conf = site?.background || {}
   const bg = conf[theme]
   // 兼容两种配置：images[]（轮播）或 src（单图）
@@ -76,17 +131,20 @@ function BackgroundLayer({ site, theme }) {
             key={src}
             src={src}
             alt=""
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out
+            className={`absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out
                         ${i === idx ? 'opacity-100' : 'opacity-0'}`}
             onError={(e) => { e.currentTarget.style.display = 'none' }}
           />
         ))
       ) : (
-        <div className="h-full w-full bg-gradient-to-br from-pink-50 via-rose-50 to-indigo-50
+        <div className="absolute inset-0 z-0 h-full w-full bg-gradient-to-br from-pink-50 via-rose-50 to-indigo-50
                         dark:from-slate-950 dark:via-slate-900 dark:to-fuchsia-950" />
       )}
-      {/* veil：浅色压白、深色压黑，让卡片文字可读、玻璃仍可透 */}
-      <div className="absolute inset-0 bg-white/85 dark:bg-slate-950/50" />
+      {/* 静态 veil：不做亮度脉冲，避免影响全页阅读对比 */}
+      <div className="absolute inset-0 z-10 bg-white/85 dark:bg-slate-950/50" />
+      <div className="absolute inset-0 z-20">
+        <BackgroundAtmosphere theme={theme} enabled={effectsEnabled} />
+      </div>
     </div>
   )
 }
@@ -167,6 +225,7 @@ function MobileTabBar() {
 export default function App() {
   const { pathname } = useLocation()
   const isAdmin = /^\/admin(?:\/|$)/.test(pathname)
+  const isAgent = /^\/agent(?:\/|$)/.test(pathname)
   // 隐私模块默认关闭：读 /api/health 的 auth_enabled，决定是否显示「退出」与登录页
   const [authEnabled, setAuthEnabled] = useState(false)
   // L0 背景 + 站点视觉配置（site.json）
@@ -193,7 +252,7 @@ export default function App() {
 
   return (
     <div className="app font-serif text-slate-900 dark:text-slate-100">
-      <BackgroundLayer site={site} theme={theme} />
+      <BackgroundLayer site={site} theme={theme} effectsEnabled={!isAdmin && !isAgent} />
       <DesktopNav authEnabled={authEnabled} />
       <MobileTabBar />
 

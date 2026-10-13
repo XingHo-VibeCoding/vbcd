@@ -2268,3 +2268,52 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .about-links .gh-card { transition: none; }
 }
+
+
+/* 低负载背景氛围：固定模糊、只动画 transform/opacity，不覆盖内容或拦截输入。 */
+.background-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.waterlight-field, .firefly-field { position: absolute; inset: 0; overflow: hidden; }
+.waterlight {
+  position: absolute; display: block; width: 70vw; height: 56vw; max-width: 1100px; max-height: 880px;
+  border-radius: 9999px; filter: blur(48px); opacity: .38; will-change: transform, opacity;
+  animation: waterlight-drift 32s ease-in-out infinite alternate;
+}
+.waterlight-one { left: -12%; top: 18%; background: radial-gradient(ellipse, rgb(72 194 210 / .9), transparent 68%); }
+.waterlight-two { right: -10%; top: 4%; background: radial-gradient(ellipse, rgb(247 157 202 / .85), transparent 70%); animation-duration: 38s; animation-delay: -13s; }
+.waterlight-three { left: 34%; bottom: -20%; background: radial-gradient(ellipse, rgb(119 139 255 / .8), transparent 70%); animation-duration: 35s; animation-delay: -21s; }
+@keyframes waterlight-drift {
+  from { transform: translate3d(-2vw, -1vh, 0) scale(.96); opacity: .28; }
+  to { transform: translate3d(3vw, 2vh, 0) scale(1.04); opacity: .48; }
+}
+.firefly {
+  position: absolute; display: block; border-radius: 50%;
+  background: rgb(238 255 194);
+  box-shadow: 0 0 18px 5px rgb(211 255 151 / .82), 0 0 38px 12px rgb(167 255 141 / .48);
+  opacity: .9; will-change: transform, opacity;
+  animation-name: firefly-breathe, firefly-float-1;
+  animation-timing-function: ease-in-out, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  animation-direction: alternate, alternate;
+  animation-duration: 4s, var(--drift-duration, 28s);
+  animation-delay: var(--breathe-delay, 0s), var(--drift-delay, 0s);
+}
+.firefly-path-1 { animation-name: firefly-breathe, firefly-float-2; }
+.firefly-path-2 { animation-name: firefly-breathe, firefly-float-3; }
+.firefly-path-3 { animation-name: firefly-breathe, firefly-float-4; }
+@keyframes firefly-breathe { from { opacity: .38; } to { opacity: 1; } }
+@keyframes firefly-float-1 { from { transform: translate3d(-2vw, 1vh, 0); } to { transform: translate3d(5vw, -5vh, 0); } }
+@keyframes firefly-float-2 { from { transform: translate3d(2vw, -2vh, 0); } to { transform: translate3d(-5vw, 4vh, 0); } }
+@keyframes firefly-float-3 { from { transform: translate3d(-4vw, -3vh, 0); } to { transform: translate3d(3vw, 6vh, 0); } }
+@keyframes firefly-float-4 { from { transform: translate3d(4vw, 2vh, 0); } to { transform: translate3d(-3vw, -6vh, 0); } }
+.background-atmosphere.is-paused :is(.waterlight, .firefly) { animation: none; will-change: auto; }
+.background-atmosphere.is-paused .waterlight { transform: none; opacity: .38; }
+.background-atmosphere.is-paused .firefly { transform: none; opacity: .8; }
+@media (max-width: 767px) {
+  .waterlight { width: 86vw; height: 70vw; filter: blur(36px); }
+  .firefly { box-shadow: 0 0 12px 3px rgb(211 255 151 / .7), 0 0 24px 7px rgb(167 255 141 / .38); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .background-atmosphere :is(.waterlight, .firefly) { animation: none; will-change: auto; }
+  .background-atmosphere .waterlight { transform: none; opacity: .38; }
+  .background-atmosphere .firefly { transform: none; opacity: .8; }
+}

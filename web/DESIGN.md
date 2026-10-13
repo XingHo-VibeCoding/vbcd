@@ -221,3 +221,12 @@
 
 
 主页项目主卡图片测试：项目轮播以整图铺底，叠加左下深、右上透明的斜向渐变，保证标题可读且图像主体保持清晰；测试图取现有 `/images/bg-l1.jpg`，仅配置于 buddy 项目项。
+
+
+## 17. 背景氛围动效（2026-10-12）
+
+在现有背景图片上先叠静态 veil，再叠主题氛围层，均位于页面内容下方：浅色为 3 片青/粉/靛柔光，深色为桌面最多 16、手机最多 6 个萤火点。
+柔光固定模糊半径，只动画 transform/opacity；萤火点固定小面积阴影，只动画 transform/opacity；不模糊背景原图、不使用 Canvas、不新增图片请求。
+页面进入 admin 或 agent 路由不渲染动态氛围；`prefers-reduced-motion` 或标签页隐藏时暂停动画并保留静态低强度效果；图层 `pointer-events:none`，不挡导航与卡片。
+尺寸修订：水光桌面宽 70vw、高 56vw（上限 1100×880px），手机宽 86vw、高 70vw；萤火虫直径 9–13px，并扩大光晕。元素数量与周期不变，大面积模糊可能增加 GPU 开销，需在移动设备实看帧率。
+亮度修订：水光位于 veil 上方，运动透明度 0.28–0.48，静态 0.38；萤火虫呼吸透明度 0.38–1，静态 0.8，内外光晕分别为 18px/38px。调整入口：`web/src/styles.css` 的 `.waterlight*`、`@keyframes waterlight-drift`、`.firefly` 和 `@keyframes firefly-breathe`；底图遮罩位于 `web/src/App.jsx` 的 `BackgroundLayer`，调整遮罩会同时影响底图亮度。
