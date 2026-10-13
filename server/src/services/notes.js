@@ -5,10 +5,9 @@ import { createHash } from 'node:crypto'
 import * as noteStore from '../storage/note-store.js'
 import * as files from '../storage/files.js'
 import { dbConfigured } from '../db/pool.js'
-import { loadIndex, queryEntries } from './index-store.js'
 import { fail } from './errors.js'
 
-export const CATEGORIES = ['learning', 'life', 'work', 'essay']
+export const CATEGORIES = ['learning', 'life', 'work']
 
 const TITLE_MAX = 80
 const TAGS_MAX = 10
@@ -44,10 +43,6 @@ export function validate(input) {
   const content = String(input?.content ?? '').trim()
   const category = String(input?.category ?? '').trim()
   const sourceUrl = String(input?.source_url ?? '').trim()
-  const sourcePart = input?.source_part ?? null
-  if (sourcePart !== null && (!Number.isInteger(sourcePart) || sourcePart < 1 || !sourceUrl)) {
-    throw fail('VALIDATION_FAILED', 'source_part 需要来源链接和 ≥1 的整数')
-  }
   const tags = Array.isArray(input?.tags)
     ? input.tags.map((tag) => String(tag).trim()).filter(Boolean)
     : []
@@ -67,7 +62,7 @@ export function validate(input) {
     throw fail('VALIDATION_FAILED', '来源链接必须以 http:// 或 https:// 开头')
   }
 
-  return { title, content, category, tags, sourceUrl, sourcePart }
+  return { title, content, category, tags, sourceUrl }
 }
 
 /**
@@ -80,16 +75,14 @@ export function validate(input) {
  * 好处：F13 转写、F14 收敛、note 任务这些走本函数的归档链路自动全部入库。
  */
 export async function createNote(input) {
-  const { title, content, category, tags, sourceUrl, sourcePart } = validate(input)
+  const { title, content, category, tags, sourceUrl } = validate(input)
   const hash = hashOf(title, content)
 
   const duplicated = await noteStore.findByHash(hash)
   if (duplicated) {
     // 库行没有 path 字段，用 category/id 派生一个同形的展示值
     const where = duplicated.path ?? `${duplicated.category}/${duplicated.id}.md`
-    const error = fail('DUPLICATE', `这条资料已存在（${where}），未重复写入`, 409)
-    error.note = { id: duplicated.id, path: where }
-    throw error
+    throw fail('DUPLICATE', `这条资料已存在（${where}），未重复写入`, 409)
   }
 
   const { date, iso } = nowShanghai()
@@ -100,7 +93,6 @@ export async function createNote(input) {
     date,
     tags,
     source_url: sourceUrl,
-    source_part: sourcePart,
     created_at: iso,
     updated_at: iso,
     hash,
@@ -150,20 +142,11 @@ export async function getNoteFromDb(id) {
   return await noteStore.getDb(String(id))
 }
 
-/** 主站资料列表：数据库模式读权威表；文件模式保留原有指纹索引与查询契约。 */
-export async function listNotes(params = {}) {
-  if (dbConfigured()) {
-    const { items } = await noteStore.list()
-    return queryEntries(items, params)
-  }
-  const { items, warnings, rebuilt, rebuilt_at, rebuilt_in_ms } = await loadIndex()
-  if (warnings.length) console.warn(`[index] 跳过 ${warnings.length} 个文件：${warnings.join('；')}`)
-  return { ...queryEntries(items, params), rebuilt, rebuilt_at, rebuilt_in_ms }
-}
-
-export async function getNote(id) {
-  return noteStore.get(String(id))
-}
+// ── 板块⑥ 后台资料编辑 / 删除（文件层专属）───────────────────────────────
+// 边界（PLAN-admin §3 D6+D7）：后台可对 note 做编辑与删除，权限高于主站；
+// 冲突策略 A = 网站改动直接覆盖文件，Obsidian 靠远程同步刷新（单人可控，不乐观锁）。
+// 仅文件模式支持：配了 DATABASE_URL 时写侧在 notes 表，编辑/删除走库是另一套，
+// 第一期不做（PLAN §7 遗留）——此处如实抛 NOT_SUPPORTED，不静默退到文件层。
 
 /**
  * 编辑资料：先删旧文件再重 put（put 永不覆盖，故须先 remove）。
@@ -171,20 +154,14 @@ export async function getNote(id) {
  * 字段校验复用 validate()；不存在 → NOT_FOUND。
  */
 export async function updateNote(id, input) {
-  const existing = await noteStore.get(String(id))
+  if (dbConfigured()) {
+    throw fail('NOT_SUPPORTED', '数据库模式下的资料编辑未实现：后台编辑目前只支持文件存储模式', 501)
+  }
+  const existing = await files.get(String(id))
   if (!existing) throw fail('NOT_FOUND', '这条资料不存在', 404)
 
-  const { title, content, category, tags } = validate({ ...existing.meta, ...input, source_url: existing.meta.source_url, source_part: existing.meta.source_part ?? null })
+  const { title, content, category, tags } = validate({ ...existing.meta, ...input, source_url: existing.meta.source_url })
   const { iso } = nowShanghai()
-
-  if (dbConfigured()) {
-    const updated = await noteStore.update({
-      id: String(id), title, category, tags, content,
-      hash: hashOf(title, content), updated_at: iso,
-    })
-    if (!updated) throw fail('NOT_FOUND', '这条资料不存在', 404)
-    return updated
-  }
 
   // 先删后建：put 永不覆盖同名文件；删除失败抛 STORAGE_FAILED。
   const removed = await files.remove(String(id))
@@ -197,7 +174,6 @@ export async function updateNote(id, input) {
     date: existing.meta.date,
     tags,
     source_url: existing.meta.source_url,
-    source_part: existing.meta.source_part ?? null,
     created_at: existing.meta.created_at,
     updated_at: iso,
     hash: hashOf(title, content),
@@ -217,7 +193,10 @@ export async function updateNote(id, input) {
  * 不存在 → NOT_FOUND。返回 { id, path } 供路由回显。
  */
 export async function removeNote(id) {
-  const removed = await noteStore.remove(String(id))
+  if (dbConfigured()) {
+    throw fail('NOT_SUPPORTED', '数据库模式下的资料删除未实现：后台删除目前只支持文件存储模式', 501)
+  }
+  const removed = await files.remove(String(id))
   if (!removed) throw fail('NOT_FOUND', '这条资料不存在', 404)
   return removed
 }

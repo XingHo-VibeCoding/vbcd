@@ -2,7 +2,7 @@
 //
 // 这是「存哪」知识的唯一持有者：配了 DATABASE_URL 走 notes 表（db/notes.js），
 // 没配走 data/ Markdown 文件（storage/files.js）。上层（services/routes）只面对
-// 本文件的读取和写入函数，不再 import db/* 或感知 DATABASE_URL 的存在。
+// 本文件的四个函数，不再 import db/* 或感知 DATABASE_URL 的存在。
 //
 // 设计意图：把「文件 or 库」的判定从 services/notes.js 关进这里——换存储时
 // 业务层一行不改；db/notes.js 与 files.js 都退化为「给条件就查/给对象就存」
@@ -13,23 +13,7 @@
 // 未配库时由 db 层自己抛 DB_NOT_CONFIGURED，不静默退文件。
 import * as files from './files.js'
 import { dbConfigured } from '../db/pool.js'
-import { listDbNotes, listAllDbNotes, getDbNote, findDbNoteByHash, findDbNoteBySource, insertDbNote, updateDbNote, removeDbNote } from '../db/notes.js'
-
-export async function list() {
-  return dbConfigured() ? { items: await listAllDbNotes(), warnings: [] } : files.list()
-}
-
-export async function get(id) {
-  return dbConfigured() ? getDbNote(id) : files.get(id)
-}
-
-export async function update(note) {
-  return dbConfigured() ? updateDbNote(note) : null
-}
-
-export async function remove(id) {
-  return dbConfigured() ? removeDbNote(id) : files.remove(id)
-}
+import { listDbNotes, getDbNote, findDbNoteByHash, insertDbNote } from '../db/notes.js'
 
 /**
  * 按内容哈希查重（服务层防重复提交用）。
@@ -66,13 +50,4 @@ export async function listDb(params) {
 /** 读库详情（/api/db/notes/:id 专用）：{ meta, content } 或 null。同上不走自适应。 */
 export async function getDb(id) {
   return await getDbNote(id)
-}
-
-/** 与主站同源；数据库错误直接上抛，不降级读文件。 */
-export async function findBySource(url, part = null) {
-  if (!url) return null
-  if (dbConfigured()) return findDbNoteBySource(url, part)
-  const { items } = await files.list()
-  return items.filter(item => item.source_url === url && (item.source_part ?? null) === part)
-    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.id.localeCompare(b.id))[0] ?? null
 }

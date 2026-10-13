@@ -2,14 +2,13 @@
 // 与 api/notes.js 同一约定：服务端的 snake_case 字段在这里转成前端习惯的 camelCase，页面只认这一套。
 import { request } from './client.js'
 
-export function toTask(raw) {
+function toTask(raw) {
   return {
     id: raw.id,
     type: raw.type,
     payload: raw.payload ?? {},
     status: raw.status,
     result: raw.result ?? '',
-    noteId: raw.note_id ?? null,
     origin: raw.origin,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,

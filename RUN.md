@@ -364,24 +364,6 @@ ls data/work/                                                # 主页「归档�
 
 ### 8.8 视频转写（F13）
 
-来源查询使用与主站相同的资料存储：配库查数据库，未配库查 Markdown。保留原始 URL，按 URL 与明确 `part` 一起查重；旧档案缺少分 P 时保持 null，不推断成 P1。已有资料会提前结束任务，日志显示「查看归档资料」。查询失败和字幕归档失败会明确标记 failed，只有字幕抓取失败才回落转写。
-
-升级已有数据库须先执行新增字段迁移（不会回填旧档案），再重建 server/web：
-
-```bash
-docker compose exec -T pg sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < db/migrations/003_notes_source_part.sql
-docker compose build server web
-docker compose up -d --no-deps server web
-```
-
-隔离验证（仓库根目录；本机须有 `postgres:18-alpine` 镜像）：
-
-```bash
-node server/scripts/smoke.mjs --source-selftest
-```
-
-测试会自行创建和移除独立 PostgreSQL 容器及临时目录，使用假 ASR；覆盖分 P、提前查重、导入元数据、日志真实链接和数据库故障，不处理真实链接。来源 URL 暂不归一，跨进程并发唯一与历史分 P 补齐尚未实现。
-
 `asr/` 是独立的 fun-asr 转写微服务（FastAPI 单进程，5 个端点）；buddy 侧不新增接口，走 `type=transcribe_url` 任务（支持「先抓字幕 → 抓不到回落转写」+ srt 输出）。
 
 ```bash
@@ -430,7 +412,7 @@ ASR 服务的 5 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返�
 
 ### 8.9 链接收敛（F14）
 
-归档页 `/archive` 默认停在「收敛」：贴一个链接（可选分类）→ 查询已有资料 → 后端抓网页 → 提取正文 → LLM 整理 → 再次查重归档。已有资料直接返回实际档案引用；网页链路不依赖 ASR。等价 curl：
+归档页 `/archive` 默认停在「收敛」：贴一个链接（可选分类）→ 后端抓网页 → 提取正文 → LLM 整理 → 归档成资料。等价 curl（`server/.env` 里同样要配 `ASR_SERVICE_URL` 那套就绪后）：
 
 ```bash
 # ① 提交（返回 201，status=doing，随即异步执行）
@@ -440,8 +422,8 @@ curl -s -X POST http://localhost:3100/api/tasks -H 'Content-Type: application/js
 # ② 看进度（result 会从「正在抓取网页」→「正在让模型整理」→「已归档到 data/…」）
 curl -s 'http://localhost:3100/api/tasks?status=doing'
 
-# ③ 看成果：日志的「查看归档资料」进入详情；也可 GET /api/notes/<note_id>
-# 配 DATABASE_URL 时资料只写数据库；未配时才在 data/learning/ 查看 Markdown
+# ③ 看成果：frontmatter 带 source_url，正文含摘要/要点/原文节选
+ls data/learning/ && sed -n '1,20p' data/learning/<刚生成的>.md
 ```
 
 前置条件：无（未配 `OPENAI_API_KEY` 也能跑，只是资料里会写一行「本次未做模型整理」）。向量索引仍需手工 `POST /api/kb/index`。
