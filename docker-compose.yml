@@ -28,8 +28,9 @@ services:
     environment:
       POSTGRES_DB: buddy
       POSTGRES_USER: buddy
-      # 口令从 server/.env 的 PG_PASSWORD 读（不入库、不截图）；不设置则启动失败，刻意不兜底
-      POSTGRES_PASSWORD: ${PG_PASSWORD:?请在 server/.env 里设置 PG_PASSWORD}
+      # 口令从【项目根 .env】的 PG_PASSWORD 读（不入库、不截图）；不设置或留空即启动失败，刻意不兜底。
+      # ⚠️ 放 server/.env 无效：${VAR} 插值只认根 .env，env_file 不参与编排插值
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?请在项目根 .env 里设置 PG_PASSWORD}
     volumes:
       - pg-data:/var/lib/postgresql
       # 首次起库（数据卷为空）时自动执行：建表幂等，重复启动不会再跑
@@ -81,8 +82,9 @@ services:
       CHROMA_URL: http://chroma:8000
       # 转写服务走内网服务名；token 从 server/.env 的 ASR_SERVICE_TOKEN 读
       ASR_SERVICE_URL: http://asr:8000
-      # Postgres 走内网服务名 pg；口令同样从 server/.env 的 PG_PASSWORD 展开（compose 会插值 env_file）
-      DATABASE_URL: postgres://buddy:${PG_PASSWORD:?请在 server/.env 里设置 PG_PASSWORD}@pg:5432/buddy
+      # Postgres 走内网服务名 pg；口令同样取自项目根 .env 的 PG_PASSWORD
+      # （compose 的 ${VAR} 插值只认项目根 .env，不认 server/.env）
+      DATABASE_URL: postgres://buddy:${PG_PASSWORD:?请在项目根 .env 里设置 PG_PASSWORD}@pg:5432/buddy
       # 本机 vLLM 跑在宿主机 8000：容器里 127.0.0.1 指自己，要走 host.docker.internal
       # （下方 extra_hosts 已配 host-gateway）。想切回云端 LLM 时删这一行 + 改 server/.env。
       OPENAI_BASE_URL: http://host.docker.internal:8000/v1

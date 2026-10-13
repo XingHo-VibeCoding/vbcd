@@ -551,8 +551,10 @@ vbcd/
 | `IMA_BASE_URL` | `https://ima.qq.com` | ima 域名；仅供冒烟桩覆盖（`SMOKE_FAKE_IMA_PORT`） | ⬜ |
 | `IMA_HTTP_TIMEOUT_MS` | `15000` | 单次 ima 调用超时 | ⬜ |
 | `IMA_CACHE_TTL_MS` | `60000` | 上游成功响应的进程内缓存时长；`0`=关闭（不落盘） | ⬜ |
-| `DATABASE_URL` | `postgres://buddy:<口令>@pg:5432/buddy` | Day 17：`/api/db/*` 读库地址；compose 内由 `docker-compose.yml` 从 `PG_PASSWORD` 拼接 | 🟡 |
-| `PG_PASSWORD` | 随机 48 位 | compose 变量：同时作为 `POSTGRES_PASSWORD` 与 `DATABASE_URL` 的口令段（项目根 `.env`，不入库） | 🔴 |
+| `DATABASE_URL` | `postgres://buddy:<口令>@pg:5432/buddy` | Day 17：`/api/db/*` 读库地址；compose 内由 `docker-compose.yml` 从项目根 `.env` 的 `PG_PASSWORD` 拼接 | 🟡 |
+| `PG_PASSWORD` | 随机 48 位（hex） | compose 变量：同时作为 `POSTGRES_PASSWORD` 与 `DATABASE_URL` 的口令段。**放项目根 `.env`**（`${VAR}` 插值不认 `server/.env`）；只用 hex，避免拼 URL 时被转义 | 🔴 |
+| `APT_MIRROR` | `http://mirrors.aliyun.com` | 构建 `asr` 镜像时的 apt 源（compose `build.args`，**项目根 `.env`**）；缺省用官方源 | ⬜ |
+| `PIP_INDEX_URL` | `https://pypi.org/simple` | 构建 `asr` 镜像时的 pip 源（同上，项目根 `.env`）；缺省用官方源 | ⬜ |
 | `AGENT_MAX_STEPS` | `8` | F12：agent 单轮循环的工具调用步数上限（防模型兜圈） | ⬜ |
 | `AGENT_TOOLS` | （空=全量） | F12：逗号分隔的工具白名单，收窄注册表（如 `search_notes,get_note`） | ⬜ |
 | `GITHUB_USERNAME` | `bird-z` | F16：要展示的 GitHub 用户名（不配 → `configured:false`） | ⬜ |
