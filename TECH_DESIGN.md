@@ -263,6 +263,10 @@ flowchart TB
 | 线上 `:80` 镜像可能落后于代码 | Day 13 收尾时未执行 `docker compose up -d --build web` | ✅ **2026-10-14 已闭环**：使用者重建后公网与本地 dist 指纹一致（`index-C2KIWt9L.js` / `index-ByR0cJlr.css`），五页面全 200 |
 | asr 镜像改代码后必须重建 | 容器不会自动同步 `asr/` 源码（2026-09-29 曾出现「整片一段」的假通过） | 改 `asr/` 后一律 `docker compose up -d --build asr` |
 | 来源 URL 归一程度有限 | D10 重复入库已修（`normalizeSourceUrl`：去 fragment + 去尾斜杠，保留 query），但**仅覆盖写法差异**：短链/移动端域名/大小写主机/`http`↔`https` 等**语义相同写法仍视为不同来源**——刻意保守，避免误合不同资源 | 出现真实误判（如短链重复）时，在 `normalizeSourceUrl` 内集中扩展规则，并同步 `db/notes.js` 的 SQL 表达式 + 跑 D10 用例 |
+| `GET /api/db/notes` 的 `?limit` 上限 500、**无游标分页** | 资料量小，先求跑通；`limit=0` 表示不限已够用 | 资料超 500 条、或列表接口出现明显慢查询时，改游标分页（`cursor` + `after_id`） |
+| 后台仪表盘无「最后更新时间」（Day 20 余力加练未做，Day 21 记为 D9） | 加练属余力项，Day 21 验收轮明确「不做新功能」 | 下一轮前端/后台改动顺带补齐：`GET /api/admin/overview` 补时间字段 + `Dashboard.jsx` 显示 |
+
+> D5 / D9 原始判定与证据见 `runs/2026-10-14-day21.md` §1.3；本节只登记债务与偿还触发点，不重复证据。
 
 ### 5.6 AI Native 层（规则与记忆）
 
