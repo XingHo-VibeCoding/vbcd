@@ -27,7 +27,7 @@ export default function LoginPage() {
   }
 
   return (
-    <section className="card login-card">
+    <section className="site-glass-card login-card login-page">
       <h2>登录</h2>
       <p className="hint">buddy 单人使用：口令只有你自己知道，服务端只存它的 bcrypt 哈希。</p>
       <form className="form" onSubmit={handleSubmit}>

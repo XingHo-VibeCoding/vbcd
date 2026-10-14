@@ -76,14 +76,14 @@ export default function PlanningDraftConfirmPage() {
   }
 
   if (!draft && !error) return <div className="loading">正在读取草案…</div>
-  if (!draft) return <section className="card"><p role="alert" className="error-bar">{error}</p><Link to="/agent">返回 agent</Link></section>
+  if (!draft) return <section className="site-glass-card confirm-page"><p role="alert" className="error-bar">{error}</p><Link to="/agent">返回 agent</Link></section>
 
   const pending = draft.status === 'pending'
   const plan = draft.payload?.plan
   const schedules = draft.payload?.schedules ?? []
   const syncPending = draft.source_session_id && draft.agent_sync?.state !== 'synced'
   return (
-    <section className="card">
+    <section className="site-glass-card confirm-page">
       <Breadcrumb items={[{ label: 'agent', to: '/agent' }, { label: '规划草案确认' }]} />
       <h2>规划草案</h2>
       <p className="hint">草案使用北京时间。批准后本组变更才会生效，拒绝则保持现有记录。</p>

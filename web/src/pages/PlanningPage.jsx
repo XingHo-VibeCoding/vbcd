@@ -89,8 +89,8 @@ export default function PlanningPage() {
     : [['','全部状态'],['scheduled','已安排'],['completed','已完成'],['cancelled','已取消']]
   const field = (label,key,type='text') => <label className="flex flex-col gap-1 text-sm">{label}<input className="rounded-lg border border-brand/20 bg-white/50 p-2 dark:bg-white/5" type={type} value={form[key] ?? ''} required={key === 'title' || (tab === 'schedules' && (key === 'start_at' || key === 'end_at'))} onChange={e=>setForm(previous=>({...previous,[key]:e.target.value}))} /></label>
 
-  return <section className="site-glass-card p-4 sm:p-6">
-    <div className="flex items-start justify-between gap-4"><div><h1 className="text-xl font-bold">规划</h1><p className="mt-1 text-xs text-slate-500">长期目标和具体安排 · 北京时间</p></div><Link className="btn-primary" to="/agent">让 agent 安排</Link></div>
+  return <section className="planning-page site-glass-card p-4">
+    <div className="flex items-start justify-between gap-4"><div><h1 className="planning-title">规划</h1><p className="mt-1 text-xs text-slate-500">长期目标和具体安排 · 北京时间</p></div><Link className="btn-primary" to="/agent">让 agent 安排</Link></div>
     <div className="view-switch mt-4" role="group" aria-label="规划视图"><button type="button" className={tab==='plans'?'active':''} onClick={()=>switchTab('plans')}>计划</button><button type="button" className={tab==='schedules'?'active':''} onClick={()=>switchTab('schedules')}>日程</button></div>
     <div className="mt-4 flex flex-wrap items-end gap-3">
       <label className="flex flex-col gap-1 text-xs">关键词<input className="rounded-lg border border-brand/20 bg-transparent p-2" value={q} onChange={e=>setQ(e.target.value)} placeholder="搜索标题或计划说明" /></label>

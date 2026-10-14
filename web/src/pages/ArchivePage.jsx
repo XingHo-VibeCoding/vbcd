@@ -131,7 +131,7 @@ export default function ArchivePage() {
   const mode = params.get('mode') === 'diverge' ? 'diverge' : 'converge'
 
   return (
-    <section className="card">
+    <section className="site-glass-card archive-workflow">
       <h2>归档</h2>
       <p className="hint">收敛：贴链接 → 抓取正文+模型整理 → 归档｜发散：手动写一条资料</p>
       <div className="view-switch" role="group" aria-label="归档方式">

@@ -98,7 +98,7 @@ export default function TaskConfirmPage() {
   const decided = Boolean(confirmation.decision)
 
   return (
-    <section className="card">
+    <section className="site-glass-card confirm-page">
       <Breadcrumb items={[{ label: '日志', to: '/log' }, { label: '确认操作' }]} />
       <h2>确认操作</h2>
       <p className="hint">
