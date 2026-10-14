@@ -214,15 +214,22 @@ curl -i -X POST http://localhost:3000/api/login \
 
 ### 8.4 接口边界
 
+> 全量清单与字段契约见 `SPEC.md` §3（**38 条**：业务 24 + 管理 8 + 运维 6）。本表只做「有 / 没有」的速查。
+
 | 已有 | 没有 |
 |---|---|
-| 登录 / 登出 / 健康检查 | 资料的 Git 提交推送同步（`sync` 占位，第 3 周） |
-| `/api/notes`：新建、列表检索、读原文 | 编辑已有资料 |
-| `/api/tasks`：建任务、进度列表、状态与确认 | `organize` / `remind` 自动执行器 |
-| `/api/confirmations`：确认留痕 | 会话持久化：存内存，重启服务需重新登录 |
-| `/api/me`：个人主页数据 | 直接删除资料的接口（只能经 F6 确认流触发） |
-| `/api/kb/*`：问答三接口（需配 env，见 8.6） | 公网 HTTPS 部署（见 8.7） |
-| 转写：`type=transcribe_url` 任务（需配 env，见 8.8） | 独立的转写对外接口（复用任务链路，共 16 个接口） |
+| 登录 / 登出 / 健康检查（`/api/login`、`/api/logout`、`/api/health`） | 资料的 Git 提交推送同步（`sync` 占位） |
+| `/api/notes`：新建、列表检索、读原文、**编辑（PATCH）**、**删除（DELETE）** | `organize` / `remind` 的独立对外接口（复用任务链路） |
+| `/api/tasks`：建任务、进度列表、状态与确认 | 会话持久化：存内存，重启服务需重新登录 |
+| `/api/confirmations`：确认留痕 | 独立的上传接口（F13 只接受 URL，不收文件） |
+| `/api/me`：个人主页数据 | 多用户 / 权限分级 |
+| `/api/kb/*`：问答三接口（SSE 流式，需配 env，见 8.6） | 云端内容写入本地（F15/F15b 明确只读） |
+| `/api/ima/*`：知识库与笔记只读五接口（F15/F15b） | |
+| `/api/db/*`：Postgres 只读迁移口（Day 17–18） | |
+| `/api/agent/*`：对话（SSE）、审计、会话读回、工具清单（F12） | |
+| `/api/github/*`：动态聚合、仓库列表（F16） | |
+| 转写：`type=transcribe_url` 任务（F13，复用任务链路，需配 env，见 8.8） | |
+| `/api/admin/*`、`/api/planning/*`、`/api/home`：后台与计划模块（非 PRD 验收范围） | |
 
 ### 8.5 目录速查（后端）
 
@@ -494,33 +501,6 @@ node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 
 
 测试（不烧真 Key）：`SMOKE_FAKE_IMA_PORT=8097` + 后端 `IMA_BASE_URL=http://127.0.0.1:8097 IMA_OPENAPI_CLIENTID=fake-cid IMA_OPENAPI_APIKEY=fake-key` → `smoke.mjs` 会自动拉起 `scripts/fake-ima.mjs` 桩并跑 im①–im⑪（知识库 7 条：字段映射/混排/校验/上游错误透传/高亮剥标签+截断/缓存命中/隐私未登录 401；笔记 4 条：列表字段映射/详情 meta+Markdown 且 `<mark>` 已剥/404/隐私未登录 401）。
 
-## 9. 用 Obsidian 查看资料（F1）
-
-资料就是 Markdown 文件，可用 Obsidian 直接打开编辑。把项目 `data/` 软链进 Obsidian 仓库（这一步由你本人执行）：
-
-```bash
-ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
-```
-
-| 在哪 | 看到什么 |
-|---|---|
-| Obsidian 左侧栏 | 多出 `buddy/`，按 `learning / life / work` 分类 |
-| 打开一篇 | frontmatter + 正文正常渲染，`tags` 变成 Obsidian 标签 |
-| 双向联动 | Obsidian 里改正文或新增文件，浏览器刷新列表页即同步（索引重建，F3） |
-
-验收清单：
-
-- [ ] Obsidian 的 `buddy/` 下能看到 4 条示例（atomic-commit / prd-review / proxy-502 / wsl-env）
-- [ ] 浏览器「归档」页录一条 → `buddy/` 下立即出现对应 `.md`
-- [ ] Obsidian 里改一条正文 → 浏览器刷新列表，内容更新
-- [ ] `data/.index.json` 是隐藏文件，Obsidian 默认不显示（别删，删了只是下次重建）
-
-| 现象 | 处理 |
-|---|---|
-| Obsidian 里看不到 `buddy/` | 符号链接可能不被跟随 → 把 `DATA_DIR` 指向真实目录：`DATA_DIR=/home/bird/note/los/buddy npm run dev` |
-| 想换资料目录 | 改 `server/.env` 的 `DATA_DIR` 或启动时传 `DATA_DIR=…`，重启后端 |
-| 列表看不到 Obsidian 里新加的文件 | 确认第一行是 `---`；没有 frontmatter 会被索引跳过并在后端日志告警 |
-
 ### 8.11 agent 对话（F12，2026-10-09 上线；2026-10-10 前端重构）
 
 **接口**：`POST /api/agent/chat`（SSE）/ `GET /api/agent/runs` / `GET /api/agent/tools`（清单）/ `GET /api/agent/sessions/:id`（读回消息流，切页/刷新恢复）。整体挂在 `requireAuth` 后。
@@ -592,3 +572,30 @@ curl -X PATCH http://localhost:3210/api/tasks/<task_id> -d '{"decision":"approve
 
 **冒烟**：`SMOKE_FAKE_GH_PORT=8096` 拉起 `scripts/fake-github.mjs` 桩，断言 gh①–③（聚合结构 / `WatchEvent` 白名单过滤 / TTL 内上游计数不涨）；不设端口时只断言 `configured:false` 降级。
 
+
+## 9. 用 Obsidian 查看资料（F1）
+
+资料就是 Markdown 文件，可用 Obsidian 直接打开编辑。把项目 `data/` 软链进 Obsidian 仓库（这一步由你本人执行）：
+
+```bash
+ln -s /home/bird/work/vbcd/data /home/bird/note/los/buddy
+```
+
+| 在哪 | 看到什么 |
+|---|---|
+| Obsidian 左侧栏 | 多出 `buddy/`，按 `learning / life / work` 分类 |
+| 打开一篇 | frontmatter + 正文正常渲染，`tags` 变成 Obsidian 标签 |
+| 双向联动 | Obsidian 里改正文或新增文件，浏览器刷新列表页即同步（索引重建，F3） |
+
+验收清单：
+
+- [ ] Obsidian 的 `buddy/` 下能看到 4 条示例（atomic-commit / prd-review / proxy-502 / wsl-env）
+- [ ] 浏览器「归档」页录一条 → `buddy/` 下立即出现对应 `.md`
+- [ ] Obsidian 里改一条正文 → 浏览器刷新列表，内容更新
+- [ ] `data/.index.json` 是隐藏文件，Obsidian 默认不显示（别删，删了只是下次重建）
+
+| 现象 | 处理 |
+|---|---|
+| Obsidian 里看不到 `buddy/` | 符号链接可能不被跟随 → 把 `DATA_DIR` 指向真实目录：`DATA_DIR=/home/bird/note/los/buddy npm run dev` |
+| 想换资料目录 | 改 `server/.env` 的 `DATA_DIR` 或启动时传 `DATA_DIR=…`，重启后端 |
+| 列表看不到 Obsidian 里新加的文件 | 确认第一行是 `---`；没有 frontmatter 会被索引跳过并在后端日志告警 |

@@ -1,16 +1,19 @@
 # SPEC.md — buddy 实现规格（MVP · 第 1 期）
 
-> 上游依据：`PRD.md` v1.8（F1–F14 与验收标准）、`TECH_DESIGN.md` v1.4（技术路线、数据流、架构原则、F9/F13/F14 方案）
+> 上游依据：`PRD.md` v1.14（F1–F16 与验收标准）、`TECH_DESIGN.md` v1.8（技术路线、数据流、架构原则、F9/F13/F14/F15/F15b/F16 方案）
 > 本文只写「怎么做」，不重复「为什么」（见 PRD / TECH_DESIGN）。
+>
+> **版本约定**：本文是**活文档**，不单独编号；接口与字段以 `server/src/routes/`、`server/src/services/` 的实际实现为唯一事实源，正文与代码不一致时以代码为准并立即回改本文。
 
 ## 0. 前置事实
 
 | 项 | 事实 |
 |---|---|
-| 服务器 | `47.85.210.76`（海外，无需备案）；22、80 可达，443 未开 |
+| **服务器（当前运行）** | **`139.224.192.94`**（阿里云上海，SSH 别名 `fel`，hostname `iZuf6gv18zntjq0v52ycjyZ`；2 vCPU / 1.8 GiB，Docker 26.1.3）。整套 compose 栈（web/server/pg/chroma/asr）在此运行，**`:80` 对外**，`GET /api/health` → `200`；443 未开、域名尚未解析 |
+| **服务器（历史）** | `47.85.210.76`（海外 ECS）是 2026-09-25 方案原定的目标机；2026-10-14 从本机与 `fel` 两侧探测其 22/80 **均超时**，**从未投入使用**。异地拆分未开始，保留为后续选项 |
 | 代码 / 资料分区 | 代码与文档 → GitHub 公开仓（`origin`: camp 组织仓，本机只推它）；个人资料 → 自建 Gitea 私有仓（待搭建） |
 | 镜像拉取 | Docker Hub 直连不通 → 用镜像站前缀拉取，见 `RUN.md` 8.7 |
-| 域名 | 已有域名，A 记录是否指向服务器 IP 待确认 |
+| 域名 | 已有域名，A 记录是否指向服务器 IP 待确认（当前对外用 IP 直连） |
 
 ## 1. 项目结构（monorepo）
 
@@ -201,10 +204,17 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（24 个）
+## 3. API 列表（全量 38 条）
 
-> 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录。
+> **口径**：本节列出 `server/src/routes/` 实际注册的**全部**端点，是接口的唯一事实源；改动代码必须同步回改本节。核对命令见 §7.5 A8。
+> 分组：**业务接口**（用户/页面直接消费，24 条）｜ **管理接口**（`/api/admin`、`/api/planning`，8 条）｜ **运维与辅助接口**（健康检查、资料扩展读写、工具清单、首页聚合，6 条）。
+>
+> 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录（公开模式下 `requireAuth` 直通）。
 > 删除资料不单独开接口，复用任务链路（`POST /api/tasks` + `type=delete_note`）并强制走 3.3 确认流。
+
+### 3.0.1 业务接口（24 条）
+
+> 与页面功能一一对应的接口，是 PRD 验收标准的主要落点。
 
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
 |---|---|---|---|---|---|
@@ -233,7 +243,37 @@ vbcd/
 | 23 | `GET /api/agent/sessions/:id` | 读回 agent 会话消息流（页面切换/刷新后恢复用） | — | `200 {session_id, rows[], pending_confirmation_id, created_at, updated_at}` | `NOT_FOUND` |
 | 24 | `GET /api/github/activity` | GitHub 动态聚合（F16） | — | `200 {configured, profile?, calendar?, events?}` | `GITHUB_UPSTREAM` |
 
-> **F12 已实现（2026-10-09 起，第 21–23 号接口）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）、`GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/runs.jsonl` 倒序）、`GET /api/agent/sessions/:id`（读回会话消息流，前端切页/刷新恢复用；rows 已把 langchain 消息还原成 user/assistant/tool 行）。另有 `GET /api/agent/tools`（工具清单与可用状态，供前端灰显，未计入接口数）。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
+> **F12 已实现（2026-10-09 起，第 21–23 号接口）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）、`GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/runs.jsonl` 倒序）、`GET /api/agent/sessions/:id`（读回会话消息流，前端切页/刷新恢复用；rows 已把 langchain 消息还原成 user/assistant/tool 行）。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
+
+### 3.0.2 管理接口（8 条 · `/api/admin`、`/api/planning`）
+
+> 后台运维与计划模块。**不属 PRD 功能验收范围**，但代码已注册，故列全。设计意图见 `PLAN-admin.md`。
+
+| # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
+|---|---|---|---|---|---|
+| M1 | `GET /api/admin/overview` | 后台仪表盘总览（服务状态、任务/资料/agent 计数） | — | `200 {...}` | `INTERNAL` |
+| M2 | `GET /api/admin/env` | 环境变量查看（值脱敏） | — | `200 {items[]}` | `INTERNAL` |
+| M3 | `GET /api/admin/settings` | 站点设置读取 | — | `200 {...}` | `INTERNAL` |
+| M4 | `PATCH /api/admin/settings` | 站点设置更新 | 设置项字段 | `200 {...}` | `VALIDATION_FAILED` |
+| M5 | `GET /api/planning` | 计划视图数据（日程/待办聚合） | — | `200 {...}` | `INTERNAL` |
+| M6 | `POST /api/planning/drafts` | 新建计划草稿 | `title, ...` | `201 {draft}` | `VALIDATION_FAILED` |
+| M7 | `GET /api/planning/drafts/:id` | 计划草稿详情 | — | `200 {draft}` | `NOT_FOUND` |
+| M8 | `PATCH /api/planning/drafts/:id` | 更新计划草稿 | 草稿字段 | `200 {draft}` | `VALIDATION_FAILED`、`NOT_FOUND` |
+
+### 3.0.3 运维与辅助接口（6 条）
+
+> 健康检查、资料扩展读写、工具清单、首页聚合。同样是 `server/src/routes/` 实际注册的端点，**不得遗漏**。
+
+| # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
+|---|---|---|---|---|---|
+| S1 | `GET /api/health` | 健康检查（部署探针、`RUN.md` 8.7 用） | — | `200 {ok:true, ...}` | — |
+| S2 | `PATCH /api/notes/:id` | 编辑资料（改标题/分类/标签/正文） | `title?, category?, content?, tags?` | `200 {id, path, hash}` | `VALIDATION_FAILED`、`NOT_FOUND` |
+| S3 | `DELETE /api/notes/:id` | 删除资料（后台直删口；页面入口走任务链路 3.3 确认流） | — | `204` | `NOT_FOUND` |
+| S4 | `GET /api/agent/tools` | agent 工具清单与可用状态（供前端灰显） | — | `200 {items[]}` | `INTERNAL` |
+| S5 | `GET /api/github/projects` | GitHub 仓库列表聚合（关于页项目卡片） | — | `200 {items[]}` | `GITHUB_UPSTREAM` |
+| S6 | `GET /api/home` | 站点首页聚合数据（首页卡片所需） | — | `200 {...}` | `INTERNAL` |
+
+> **计数口径**：`GET /images/*`（`DATA_DIR/images` 静态服务）由 `app.js` 直接挂载、不属 `routes/`，**不计入 38 条**；`POST /api/login`、`POST /api/logout` 在 `AUTH_ENABLED=0`（默认公开）时仍注册，故计在业务接口内。
 
 ### 3.1 知识库问答（F9）
 
@@ -392,8 +432,6 @@ vbcd/
 
 **字段契约对齐文件版**：列表项含 `id/title/category/date/tags/excerpt/path/hash`（`excerpt` 由 SQL 从 `body` 截 120 字、`path` 由 `category + '/' + id + '.md'` 派生）；详情返回 `{meta:{…}, content}` 两层结构——前端 `web/src/api/notes.js` 把 `listNotes`/`getNote` 的 fetch 从 `/api/notes` 换成 `/api/db/notes` 即完成切换，页面一行不用改。
 
-**字段契约对齐文件版**：列表项含 `id/title/category/date/tags/excerpt/path/hash`（`excerpt` 由 SQL 从 `body` 截 120 字、`path` 由 `category + '/' + id + '.md'` 派生）；详情返回 `{meta:{…}, content}` 两层结构——前端 `web/src/api/notes.js` 把 `listNotes`/`getNote` 的 fetch 从 `/api/notes` 换成 `/api/db/notes` 即完成切换，页面一行不用改。
-
 **查询参数**：`q`（标题+正文+标签 `ILIKE` 模糊）、`category`（精确）、`limit`（默认 500，与文件版「不限量」等价；1–500，超范围 400）、`offset`。
 
 **连接池**：`pg.Pool`（懒加载、max 4、空闲 10s 释放、连接超时 5s）；进程收 `SIGTERM/SIGINT` 时 `pool.end()`。
@@ -538,7 +576,7 @@ vbcd/
 | `EMBED_MODEL` | `text-embedding-3-small` | Embedding 模型 | ⬜ |
 | `EMBED_BASE_URL` | （可空） | Embedding 端点；空 = 与 `OPENAI_BASE_URL` 同端点（DeepSeek 无 embeddings，需单独配） | ⬜ |
 | `EMBED_API_KEY` | （可空） | Embedding key；空 = 与 `OPENAI_API_KEY` 相同 | 🔴 |
-| `CHROMA_URL` | `http://47.85.210.76:8000` | Chroma 服务地址（自托管） | ⬜ |
+| `CHROMA_URL` | `http://chroma:8000` | Chroma 服务地址（compose 内网服务名；本机裸跑时为 `http://localhost:8000`） | ⬜ |
 | `CHROMA_AUTH_TOKEN` | 随机串 | Chroma token 认证（`X-Chroma-Token` 头）；服务端开了才需要 | 🟡 |
 | `KB_TOP_K` | `3` | 检索段落数（1–10） | ⬜ |
 | `KB_MAX_DISTANCE` | （可空） | 距离阈值：命中距离大于它即丢弃 | ⬜ |
@@ -584,14 +622,14 @@ vbcd/
 
 ## 7. 部署与迁移
 
-### 7.1 部署步骤（服务器 `47.85.210.76`）
+### 7.1 部署步骤（服务器 `139.224.192.94` · 阿里云上海 `fel`）
 1. 基础环境：`apt install docker.io docker-compose`；
 2. 目录：创建 `/srv/buddy/{data,logs}`，`data` 为私有仓克隆（deploy key）；
 3. 应用：`docker compose up -d`（后端 3000 仅绑 `127.0.0.1`；asr 8000 仅 compose 内网，不发布端口）；
 4. 入口：Nginx 反代 + certbot 申请证书（443 未开，需放行安全组）；
 5. 自启：`systemctl enable docker`（+ compose restart 策略）；
 6. 备份：每日 `git clone --mirror` 到本地 + 阿里云快照；
-7. 域名：A 记录指向 `47.85.210.76`。
+7. 域名：A 记录指向 `139.224.192.94`（当前以 IP 直连）。
 
 ### 7.2 安全清单
 > 本期隐私模块默认关闭：站点公开可读写。需要门禁时才设 `AUTH_ENABLED=1`。
@@ -625,8 +663,8 @@ vbcd/
 | A1 | 公开仓 `.gitignore` 排除资料目录 | ✅ 已完成（`memory/`、`drafts/`、根锚定 `/data/`，均已 `git check-ignore` 验证） |
 | A2 | 搭建自建 Gitea 私有仓（含 backup 与 deploy key） | ⬜ 待做 |
 | A3 | Docker Hub 不可达时的镜像来源 | ✅ 已定：用镜像站前缀拉取，见 `RUN.md` 8.7 |
-| A4 | 确认域名 A 记录是否指向 `47.85.210.76` | ⬜ 待确认 |
+| A4 | 确认域名 A 记录是否指向 `139.224.192.94` | ⬜ 待确认（当前对外用 IP 直连，见 §0） |
 | A5 | 开通 443 + certbot 证书自动化 | ⬜ 待做 |
 | A6 | 服务器安全组与 SSH 加固（改端口 / 限来源） | ⬜ 待做 |
 | A7 | F13 转写链路的三项验证（>20 分钟多片 `chunks ≥ 5`、TTL 内 `cache_hit=true`、逐句 `[mm:ss]` 归档复跑） | ✅ **已完成**（2026-09-29）：`chunks=14` / `cache_hit=true`（0.127s）/ 归档 68 段带时间戳；留证见 `runs/2026-09-29-f13-live-verify.md`（含「asr 镜像必须先重建」的前置条件），探针结论见 `asr/PROBE.md` §A4 |
-| A8 | `GET /api/health` 是否计入「N 个接口」 | ⬜ **待使用者拍板**（2026-09-29 由 `buddy-doc-sync` 子 agent 独立核对时发现；2026-10-05 F15 后更新数字）：代码实际注册 **19** 个 `router.*`（含 health），文档统一口径是**不含 health** 的「18 个」（2026-10-05 F15b 笔记 +2 后由 16 升至 18）——但本文件 §3 的表与正文从未收录 health，而 `RUN.md` §8.4 把「健康检查」写进「已有」，两份口径不齐。选项：① **维持 18**（推荐，改动最小）→ 在本文件 §3 表下加一行脚注「另有 `GET /api/health`（健康检查，无鉴权，不计入上表）」；② 改为计入 → 本文件 §3 标题 + `RUN.md` + `AGENT.md` + `TECH_DESIGN.md` + `PRD.md` **五处 18→19** 同步 |
+| A8 | 接口计数口径（历史遗留「19 vs 18」之争） | ✅ **已闭环**（2026-10-14）：旧争论基于当时的 19 条路由，现已过时。**新口径 = 全量计入 + 三分组**（见 §3）：业务 24 + 管理 8 + 运维 6 = **38 条**。核对命令（文档与代码必须一致）：<br>`grep -chE "router\.(get\|post\|put\|patch\|delete)\(" server/src/routes/*.js \| paste -sd+ \| bc` → 输出应为 **38**。差异即视为文档过期，须立即回改 §3。 |

@@ -3,6 +3,13 @@
 > 本文档是「给 buddy 建后台」的设计定稿，由 grilling 讨论收敛而来。
 > 仅作设计依据，落地按板块逐步执行；新增/变更需先改本文档再动手。
 
+> **实现状态（2026-10-14 批注）**：本文设计**已基本落地**，以下为与实现的差异，阅读 §4/§5 时请以本批注为准。
+> - **板块①–⑤ 全部完成**：`/admin` 路由 + `AdminApp`（`web/src/App.jsx` 已挂 `/admin/*`，lazy 加载）；`web/src/admin/pages/` 现有 **7 个页面**——`Dashboard` / `TaskList` / `AgentRuns` / `AgentTools` / `NoteBrowse` / `SiteSettings` / `EnvManager`。
+> - **板块⑥ 完成**：`PATCH /api/notes/:id` 与 `DELETE /api/notes/:id` **均已实现**（`server/src/routes/notes.js`），非 §4/§5 所写的「新接口/待做」。
+> - **第二期（配置管理）也已落地**：`GET/PATCH /api/admin/settings`、`GET /api/admin/env` 均已实现。
+> - **接口差异**：§5 提到的 `GET /api/admin/services` **未单独实现**（已并入 `GET /api/admin/overview` 的 `services[]`）。实际 `/api/admin/*` 端点为 4 个：`overview` / `env` / `settings`(GET) / `settings`(PATCH)，已录入 `SPEC.md` §3.0.2。
+> - **§4 标题措辞**：文中「第一期」指「只读运维台 + 资料浏览」这一阶段划法，与 `PRD.md` 的「第 1 期（本期 MVP）」**不是同一概念**，勿混。
+
 ## 0. 背景与结论速览
 
 - **定位**：buddy 的站长控制台 = 运维台（Admin）+ 资料/资产管理（部分 CMS）。不是通用 CMS——Obsidian 才是内容的主编辑入口，网站/后台是 `data/` 的合法写者之一。

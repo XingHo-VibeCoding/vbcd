@@ -55,7 +55,7 @@
 | F9 | 知识库问答（RAG） | 个人数据库 | P1 | 对资料库自然语言提问：先检索相关段落再让模型生成，回答附来源文件与段落号；支持流式输出（2026-09-25 追加） |
 | F10 | 深色模式 | 视觉 / 体验 | P1 | 全站深浅主题；开关是主页上的一个方格按钮，选择记在浏览器本地（2026-09-27 追加） |
 | F11 | 关于页 | 视觉 / 体验 | P2 | `/about`：自我介绍 + 研究动态（贡献热力图按资料日期 + 资料时间线），入口在顶部导航与主页个人卡（2026-09-27 追加） |
-| F12 | Agent 工具化（扩大 agent 能力） | agent / 能力组合 | 待定（拟 P1） | 把「归档/任务/确认/检索/问答」收编为 agent 可调用的工具：工具调用 + 多轮 + 确认闭环（2026-09-28 追加；**路线图与待确认项见第 7 章 F12**，边界未定前不算本期承诺、不进入验收标准） |
+| F12 | Agent 工具化（扩大 agent 能力） | agent / 能力组合 | P1（**已拍板 2026-10-09**） | 把「归档/任务/确认/检索/问答」收编为 agent 可调用的工具：工具调用 + 多轮 + 确认闭环（2026-09-28 追加；边界已定为 **S0+S1+S2-lite**，见第 7 章 F12「已确认决策」与验收标准） |
 | F13 | 视频/音频转写归档 | 能力组合 | P1 | 提交媒体链接 → fun-asr 微服务（`asr/`）转写 → LLM 整理摘要/要点 → 归档为资料；走既有任务链路 `transcribe_url`，不新增对外接口（2026-09-28 追加） |
 | F14 | 链接收敛（整理链接的后端解析） | 个人数据库 / 能力组合 | P1 | 归档页「收敛」贴链接 → 后端抓网页（SSRF 闸门）→ 提取正文 → LLM 整理摘要/要点 → 归档为资料；走既有任务链路 `organize`，F15 之前接口 13 个（2026-09-28 追加） |
 | F15 | ima 云端知识库只读视图 | 个人数据库 | P1 | `/notes` 页「云端」标签：列表/浏览/搜索你 ima 里的知识库；F15b 续加「笔记」卡片与详情（只读 Markdown），内容零落盘、不进向量库（2026-10-05 追加） |
@@ -337,6 +337,6 @@ data/
 | 2026-10-05 | v1.9 | 追加 F15 ima 云端知识库只读视图：`/notes` 新增「本地 / 云端」切换，3 个新接口（14–16，只读 GET），验收标准 6 条；内容零落盘，Key 仅 `server/.env`；踩坑记：`limit` 文档写 50 实测上限 20 |
 | 2026-10-05 | v1.10 | 追加 F15b ima 笔记只读视图：云端首页「笔记」卡片 + `?panel=notes` 列表 + `/notes/ima/:docid` 详情（Markdown 正文、`<mark>` 已剥、失效图片文字占位），接口 16→18 个，验收标准 +5 条；如实标注 F15「文件夹可下钻」在真实数据上暂不成立（上游 `media_type:99` 形状变化，判据过时） |
 | 2026-10-09 | v1.11 | F12 五条待确认项全部拍板：边界 S0+S1+S2-lite（archive_note 单写工具）、技术路线 A 终态 + JSON 状态接缝、前端改原 /ask 页（2026-10-10 已更名 /agent）、接口 +2（20→22）、时间盒 5 板块封顶；参考实现定为 Anything-LLM + LibreChat 借零件不借骨架 |
+| 2026-10-09 | v1.12 | F12 S0+S1+S2-lite 落地：agent 骨架（manifest/registry/state/audit/loop + tools×4）+ `POST /api/agent/chat` SSE + `GET /api/agent/runs` + `/api/agent/tools` + `/agent` 页改多轮对话（工具调用折叠行 + 确认提示）；接口 20→22（另有 tools 未计入）；`executeApproved` 补 `agent_archive_note` 分支；冒烟 ag①–ag⑤ 全过；实测本地 vLLM 链路批准/拒绝双路径通过 |
 | 2026-10-10 | v1.13 | F12 补 `GET /api/agent/sessions/:id`（会话读回，修「切页后消息丢失」）；前端 sessionId 落 localStorage + 挂载时自动拉历史还原；smoke ag⑥⑦ + LLM 失败分支补发 done（接口 22→23） |
 | 2026-10-10 | v1.14 | 追加 F16 关于页 × GitHub 动态：聚合接口 `GET /api/github/activity`（接口 23→24，`profile`+`calendar`+`events`、进程内 30 分钟缓存）；研究动态页签双热力图 + 混排时间线带来源徽章；自我介绍页签 GitHub 资料卡（`data/profile.md` 加 `github` 字段、`/api/me` 透传）；验收标准 +6 条 |
-| 2026-10-09 | v1.12 | F12 S0+S1+S2-lite 落地：agent 骨架（manifest/registry/state/audit/loop + tools×4）+ `POST /api/agent/chat` SSE + `GET /api/agent/runs` + `/api/agent/tools` + `/agent` 页改多轮对话（工具调用折叠行 + 确认提示）；接口 20→22（另有 tools 未计入）；`executeApproved` 补 `agent_archive_note` 分支；冒烟 ag①–ag⑤ 全过；实测本地 vLLM 链路批准/拒绝双路径通过 |
