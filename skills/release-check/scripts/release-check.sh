@@ -65,6 +65,24 @@ else
   warn ".env.example 齐全" "缺：$MISSING"
 fi
 
+# 1.4 compose 里被注释掉的 env 行（部署事故高发点）
+# 典型事故：Dockerfile 里写 `# ENV DATA_DIR=/app/data`、compose 里写
+# `#   DATABASE_URL: postgres://…` —— 作者以为「约定等于配置」，实际镜像里根本没有这个变量，
+# 部署后表现为「本地能跑、上线就炸 / 静默走了默认值」，且报错现场离病根很远。
+# ⚠️ 但 compose 的注释大量是**说明性**的（`# 不要删除下面的 DATA_DIR`、中文注解），
+#    真正有歧义的只有「注释行本身就是一条 KEY=VALUE 赋值」这一种写法。
+#    所以判据收窄成：整行是注释、且其**去掉注释符后的首个 token 就是赋值**。
+if [ -f docker-compose.yml ]; then
+  FAKE_ENV=$(grep -nE '^[[:space:]]*#[[:space:]]*[A-Za-z_][A-Za-z0-9_]*[[:space:]]*[:=]' docker-compose.yml 2>/dev/null || true)
+  if [ -z "$FAKE_ENV" ]; then
+    pass "compose 无注释掉的 env" "0 命中（注释里没有伪装成赋值的行）"
+  else
+    fail "compose 无注释掉的 env" "命中 $(echo "$FAKE_ENV" | wc -l) 行：$(echo "$FAKE_ENV" | head -2 | tr '\n' ' ')"
+  fi
+else
+  skip "compose 无注释掉的 env" "无 docker-compose.yml"
+fi
+
 echo
 echo "── ② 资料与本地数据不得入库（隐私边界）──────────────────────────────"
 
