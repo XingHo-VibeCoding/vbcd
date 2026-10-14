@@ -91,7 +91,9 @@ export async function runTurn({ sessionId, message, emit, registry: injectedRegi
       ai = await model.invoke(history)
     } catch (err) {
       await audit({ session_id: session.id, step, type: 'llm_call', ok: false, error: err.message, duration_ms: Date.now() - t0 })
-      emit('error', { code: 'LLM_FAILED', message: `模型调用失败：${err.message}` })
+      // 原始错误只进服务端日志与审计；给聊天框的中文短句不泄露模型/网络细节（Day 23 三类错误：③）
+      console.error(`[agent] llm_call failed: ${err.message}`)
+      emit('error', { code: 'LLM_FAILED', message: '模型服务暂时不可用，请稍后再试' })
       await saveSession(session)
       // 失败也是本轮终态：补发 done 让前端正常收尾（并带出 session_id 供恢复）
       emit('done', { session_id: session.id, suspended: false })
@@ -132,7 +134,9 @@ export async function runTurn({ sessionId, message, emit, registry: injectedRegi
         const out = await toolImpl.invoke(call.args)
         resultText = typeof out === 'string' ? out : String(out?.content ?? JSON.stringify(out))
       } catch (err) {
-        resultText = `工具执行失败：${err.message}`
+        // 工具原始错误只进日志与审计；给模型/前端的是中文短句（避免把 Node 英文抛进对话）
+        console.error(`[agent] tool ${call.name} failed: ${err.message}`)
+        resultText = `工具执行失败：${err?.expose && err.message ? err.message : '请稍后再试'}`
       }
       const okFlag = !resultText.startsWith('工具执行失败')
       await audit({ session_id: session.id, step, type: 'tool_result', tool: call.name, args: call.args, ok: okFlag, duration_ms: Date.now() - t1 })

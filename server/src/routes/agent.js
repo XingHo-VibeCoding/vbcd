@@ -9,6 +9,7 @@ import { runTurn } from '../services/agent/loop.js'
 import { listRuns } from '../services/agent/audit.js'
 import { loadSession, sessionToView } from '../services/agent/state.js'
 import { fail } from '../services/errors.js'
+import { userMessage, STATUS_BY_CODE } from '../middleware/errors.js'
 import { manifestStatus } from '../services/agent/registry.js'
 
 const router = Router()
@@ -38,8 +39,12 @@ router.post('/chat', async (req, res) => {
       emit: send,
     })
   } catch (err) {
-    // runTurn 入口参数校验错误（VALIDATION_FAILED / NOT_FOUND）走这里
-    send('error', { code: err.code || 'INTERNAL', message: err.message || '服务器内部错误' })
+    // runTurn 入口参数校验错误（VALIDATION_FAILED / NOT_FOUND）走这里。
+    // 与 HTTP 错误中间件同一口径：业务错误（expose）透出人工中文，原始错误换成中文兜底（Day 23）
+    const code = err.code || 'INTERNAL'
+    const status = err.status || STATUS_BY_CODE[code] || 500
+    if (status >= 500) console.error(`[agent] stream error ${code}: ${err.detail?.message || err.message}`)
+    send('error', { code, message: userMessage(err, code, status) })
     send('done', { suspended: false })
   } finally {
     if (!closed) res.end()

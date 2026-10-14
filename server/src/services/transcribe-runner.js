@@ -39,7 +39,8 @@ async function finishWithArchive(task, result, { partial = false } = {}) {
       : `已归档到 ${archived.path}${partial ? '（部分转写）' : ''}`
   } catch (err) {
     task.status = 'failed'
-    task.result = `归档失败：${err.message || '未知原因'}`
+    task.result = '归档失败，请稍后重试'
+    console.error(`[transcribe-runner] 归档失败：${err.message}`)
   }
   task.asr = task.asr ? { ...task.asr, last_error: '' } : task.asr
   await touch(task)

@@ -72,6 +72,18 @@ export function normalizeSourceUrl(raw) {
 
 /** 字段校验；不通过直接抛带 code 的错误（由统一错误中间件转成响应） */
 export function validate(input) {
+  // 类型断言（Day 23 必修-4）：`String({})` 会得到 "[object Object]"，把坏类型悄悄变成合法字符串。
+  // 这里先卡类型，非字符串（且未省略）直接 400，避免脏数据落库/落盘。
+  for (const key of ['title', 'content', 'category', 'source_url']) {
+    const v = input?.[key]
+    if (v !== undefined && v !== null && typeof v !== 'string') {
+      throw fail('VALIDATION_FAILED', `${key} 必须是字符串`)
+    }
+  }
+  if (input?.tags !== undefined && input.tags !== null && !Array.isArray(input.tags)) {
+    throw fail('VALIDATION_FAILED', 'tags 必须是数组')
+  }
+
   const title = String(input?.title ?? '').trim()
   const content = String(input?.content ?? '').trim()
   const category = String(input?.category ?? '').trim()
@@ -144,7 +156,7 @@ export async function createNote(input) {
     return await noteStore.put(note)
   } catch (err) {
     if (err.code) throw err
-    throw fail('STORAGE_FAILED', `写入资料目录失败：${err.message}`, 503)
+    throw fail('STORAGE_FAILED', '保存失败，请稍后再试', 503, err)
   }
 }
 
@@ -240,7 +252,7 @@ export async function updateNote(id, input) {
     return await files.put(note)
   } catch (err) {
     if (err.code) throw err
-    throw fail('STORAGE_FAILED', `写入资料目录失败：${err.message}`, 503)
+    throw fail('STORAGE_FAILED', '保存失败，请稍后再试', 503, err)
   }
 }
 

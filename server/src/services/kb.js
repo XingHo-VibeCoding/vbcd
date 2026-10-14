@@ -80,9 +80,9 @@ async function getCollection() {
 
 function chromaError(err) {
   if (err instanceof ChromaConnectionError || err?.cause?.code === 'ECONNREFUSED' || /fetch failed|ECONN|ETIMEDOUT|ENOTFOUND/i.test(err?.message || '')) {
-    return fail('CHROMA_UNAVAILABLE', `向量库连不上（${env('CHROMA_URL')}）：${err.message}`, 503)
+    return fail('CHROMA_UNAVAILABLE', '知识库检索暂时不可用，请稍后再试', 503, err)
   }
-  return fail('CHROMA_UNAVAILABLE', `向量库异常：${err.message}`, 503)
+  return fail('CHROMA_UNAVAILABLE', '知识库检索暂时不可用，请稍后再试', 503, err)
 }
 
 function llmError(err) {
@@ -123,7 +123,7 @@ async function writeManifest(notes) {
     await rename(tmp, MANIFEST_FILE)
   } catch (err) {
     await unlink(tmp).catch(() => {})
-    throw fail('STORAGE_FAILED', `写入索引清单失败：${err.message}`, 503)
+    throw fail('STORAGE_FAILED', '保存知识库索引失败，请稍后再试', 503, err)
   }
 }
 

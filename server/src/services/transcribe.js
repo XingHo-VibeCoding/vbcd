@@ -72,7 +72,8 @@ export async function submitTranscribeTask(task) {
     }
   } catch (err) {
     task.status = 'failed'
-    task.result = `查询已有资料失败：${err.message}`
+    task.result = '查询已有资料失败，请稍后重试'
+    console.error(`[transcribe] 查询已有资料失败：${err.message}`)
     return taskStore.put(task)
   }
 
@@ -93,8 +94,9 @@ export async function submitTranscribeTask(task) {
         task.asr.last_error = ''
       } catch (err) {
         task.status = 'failed'
-        task.result = `字幕归档失败：${err.message}`
-        task.asr.last_error = err.code || err.message
+        task.result = '字幕归档失败，请稍后重试'
+        task.asr.last_error = err.message
+        console.error(`[transcribe] 字幕归档失败：${err.message}`)
       }
       return taskStore.put(task)
     }
@@ -112,7 +114,8 @@ export async function submitTranscribeTask(task) {
     job = await submitTranscribe(parsed)
   } catch (err) {
     task.status = 'failed'
-    task.result = `提交转写失败：${err.message || '未知原因'}`
+    task.result = '提交转写失败，请稍后重试'
+    console.error(`[transcribe] 提交转写失败：${err.message}`)
     return taskStore.put(task)
   }
 
@@ -300,7 +303,9 @@ export async function archiveTranscript(task, result, { partial = false, subtitl
   try {
     llmResult = await summarize(transcriptForLlm, result?.source?.title || url)
   } catch (err) {
-    llmError = err?.message || '模型调用失败'
+    // llmError 会写进笔记正文（用户可见），所以只放中文短句；原始错误进日志（Day 23）
+    console.error(`[transcribe] 模型整理失败：${err?.message || String(err)}`)
+    llmError = '模型服务暂时不可用'
   }
 
   const note = buildNote(task, result, { partial, llmResult, llmError, subtitle })

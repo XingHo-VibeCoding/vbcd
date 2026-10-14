@@ -17,8 +17,9 @@ export async function ensureReady() {
   await mkdir(RUNTIME_DIR, { recursive: true })
 }
 
-function storageError(message) {
-  return Object.assign(new Error(message), { status: 503, code: 'STORAGE_FAILED' })
+// Day 23：message 一律是给用户看的中文；原始错误细节放 detail，只进服务端日志（SPEC §5.3）
+function storageError(message, detail) {
+  return Object.assign(new Error(message), { status: 503, code: 'STORAGE_FAILED', expose: true, detail })
 }
 
 // 读取整份清单；文件不存在、被手改坏、写完一半 —— 一律当空清单（运行时数据可再生，不阻塞服务）
@@ -43,7 +44,7 @@ async function writeAll(tasks) {
     await rename(tmp, TASKS_FILE)
   } catch (err) {
     await unlink(tmp).catch(() => {})
-    throw storageError(`写入任务失败：${err.message}`)
+    throw storageError('保存任务失败，请稍后再试', err)
   }
 }
 

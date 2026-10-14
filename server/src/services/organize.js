@@ -124,7 +124,9 @@ export async function runOrganizeTask(taskOrId) {
       try {
         llmResult = await summarizeArticle(article.text, article.title)
       } catch (err) {
-        llmError = err?.message || '模型调用失败'
+        // llmError 会写进笔记正文（用户可见），只放中文短句；原始错误进日志（Day 23）
+        console.error(`[organize] 模型整理失败：${err?.message || String(err)}`)
+        llmError = '模型服务暂时不可用'
       }
 
       // ④ 组装资料并归档；createNote 的 DUPLICATE（同内容）也算「归档过」
@@ -139,10 +141,10 @@ export async function runOrganizeTask(taskOrId) {
         if (err.code === 'DUPLICATE' && err.note) {
           return await finishDone(task, `已归档过 ${err.note.path}`, err.note.id)
         }
-        return await finishFail(task, `归档失败：${err.message || '未知原因'}`, err.code || 'STORAGE_FAILED')
+        return await finishFail(task, '归档失败，请稍后重试', err.code || 'STORAGE_FAILED')
       }
     } catch (err) {
-      return await finishFail(task, err.message || '整理链接失败', err.code)
+      return await finishFail(task, '整理链接失败，请稍后重试', err.code)
     }
   } finally {
     IN_FLIGHT.delete(id)

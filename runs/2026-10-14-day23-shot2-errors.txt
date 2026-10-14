@@ -1,0 +1,46 @@
+════════════════════════════════════════════════════════════════════════
+ Day 23 证据②　三类错误提示统一：改前 → 改后（真实 HTTP 实测）
+ 运行：node server/scripts/day23-verify.mjs
+════════════════════════════════════════════════════════════════════════
+
+【用户输入错 400】① 提交非法 JSON
+  改前: {"code":"INTERNAL","message":"Expected property name or '}' in JSON at position 1 (line 1 column 2)"}
+  改后: {"code":"VALIDATION_FAILED","message":"请求格式不正确，请检查提交的内容"}
+
+【用户输入错 413】② 提交内容超过 1MB
+  改前: {"code":"INTERNAL","message":"request entity too large"}
+  改后: {"code":"VALIDATION_FAILED","message":"提交内容过大（上限 1MB），请精简后重试"}
+
+【用户输入错 400】③ title 传了对象 {a:1}（改前是脏数据落盘！）
+  改前: 201 {"ok":true,"data":{"id":"2026-10-14-object-object", …}}   ← 脏数据
+  改后: {"code":"VALIDATION_FAILED","message":"title 必须是字符串"}
+
+【服务端错 503】④ 写盘失败
+  改前: {"code":"STORAGE_FAILED","message":"写入资料目录失败：ENOENT: no such file or directory, open '…'"}
+  改后: {"code":"STORAGE_FAILED","message":"保存失败，请稍后再试"}   ← 原始错进服务端日志
+
+────────────────────────────────────────────────────────────────────────
+ 实测输出（脚本实跑，捕获 19 项断言）：
+────────────────────────────────────────────────────────────────────────
+  PASS  ① 非法 JSON → 400  — status=400
+  PASS  ① 非法 JSON → code=VALIDATION_FAILED  — code=VALIDATION_FAILED
+  PASS  ① 非法 JSON → 中文人话  — msg=请求格式不正确，请检查提交的内容
+  PASS  ① 非法 JSON → 无英文原始错误泄漏  — {"ok":false,"error":{"code":"VALIDATION_FAILED","message":"请求格式不正确，请检查提交的内容"}}
+  PASS  ② title 传对象 → 400  — status=400
+  PASS  ② title 传对象 → 中文人话  — msg=title 必须是字符串
+  PASS  ② title 传对象 → 提示字段是字符串  — msg=title 必须是字符串
+  PASS  ③ 分类非法 → 400  — status=400
+  PASS  ③ 分类非法 → 中文人话  — msg=分类必须是 learning / life / work / essay 之一
+  PASS  ④ 不存在的 id → 404  — status=404
+  PASS  ④ 不存在的 id → 中文人话  — msg=这条资料不存在
+  PASS  ⑤ 提交过大 → 413  — status=413
+  PASS  ⑤ 提交过大 → 中文人话  — msg=提交内容过大（上限 1MB），请精简后重试
+  PASS  ⑤ 提交过大 → 无英文原始错误泄漏  — {"ok":false,"error":{"code":"VALIDATION_FAILED","message":"提交内容过大（上限 1MB），请精简后重试
+  PASS  ⑥ 新增 → 201  — status=201
+  PASS  ⑥ 查询 → 200  — status=200
+  PASS  ⑥ 修改 → 200  — status=200
+  PASS  ⑥ 删除 → 200  — status=200
+  PASS  ⑥ 删后查询 → 404  — status=404
+
+  → 19/19 通过
+════════════════════════════════════════════════════════════════════════

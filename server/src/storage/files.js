@@ -133,8 +133,9 @@ async function exists(file) {
   }
 }
 
-function storageError(message) {
-  return Object.assign(new Error(message), { status: 503, code: 'STORAGE_FAILED' })
+// Day 23：message 一律是给用户看的中文；原始错误细节放 detail，只进服务端日志（SPEC §5.3）
+function storageError(message, detail) {
+  return Object.assign(new Error(message), { status: 503, code: 'STORAGE_FAILED', expose: true, detail })
 }
 
 /**
@@ -150,7 +151,7 @@ export async function list() {
     categories = await readdir(DATA_DIR)
   } catch (err) {
     if (err.code === 'ENOENT') return { items, warnings } // 目录还没建：视为空库
-    throw storageError(`资料目录不可读：${err.message}`)
+    throw storageError('资料目录读不了，请检查目录权限', err)
   }
 
   for (const category of categories.sort()) {
@@ -181,7 +182,9 @@ export async function list() {
           size: fileStat.size,
         })
       } catch (err) {
-        warnings.push(`${category}/${name}：读取失败（${err.message}），已跳过`)
+        // warnings 会在页面上展示给用户：只给中文短句，原始解析错误进日志（Day 23）
+        console.error(`[files] 读取 ${category}/${name} 失败：${err?.message || String(err)}`)
+        warnings.push(`${category}/${name}：读取失败，已跳过`)
       }
     }
   }
@@ -199,7 +202,7 @@ export async function get(id) {
   try {
     parsed = parseNote(await readFile(path.join(DATA_DIR, hit.path), 'utf8'), id)
   } catch (err) {
-    throw storageError(`读取 ${hit.path} 失败：${err.message}`)
+    throw storageError(`读取 ${hit.path} 失败，文件可能已损坏`, err)
   }
   if (!parsed) return null
 
@@ -230,7 +233,7 @@ export async function put(note) {
     await rename(tmp, file)
   } catch (err) {
     await unlink(tmp).catch(() => {})
-    throw storageError(`写入资料失败：${err.message}`)
+    throw storageError('保存失败，请稍后再试', err)
   }
 
   return { id, path: `${note.category}/${id}.md`, hash: note.hash }
@@ -250,7 +253,7 @@ export async function remove(id) {
     await unlink(path.join(DATA_DIR, hit.path))
   } catch (err) {
     if (err.code === 'ENOENT') return null // 文件已不在（被手工删掉等）：按不存在处理
-    throw storageError(`删除 ${hit.path} 失败：${err.message}`)
+    throw storageError(`删除 ${hit.path} 失败，请稍后再试`, err)
   }
 
   return { id: hit.id, path: hit.path }

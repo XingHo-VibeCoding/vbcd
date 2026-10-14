@@ -43,7 +43,7 @@ async function readConfig() {
     st = await stat(SITE_FILE)
   } catch (err) {
     if (err.code === 'ENOENT') { cache = {}; cacheMtime = 0; return cache }
-    throw fail('SETTINGS_READ_FAILED', `读取站点配置失败：${err.message}`, 503)
+    throw fail('SETTINGS_READ_FAILED', '读取站点配置失败，请稍后再试', 503, err)
   }
   if (cache && st.mtimeMs === cacheMtime) return cache
   let parsed
@@ -51,7 +51,7 @@ async function readConfig() {
     parsed = JSON.parse(await readFile(SITE_FILE, 'utf8') || '{}')
   } catch (err) {
     if (err instanceof SyntaxError) throw fail('SETTINGS_CORRUPT', 'data/site.json 不是合法 JSON', 500)
-    throw fail('SETTINGS_READ_FAILED', `读取站点配置失败：${err.message}`, 503)
+    throw fail('SETTINGS_READ_FAILED', '读取站点配置失败，请稍后再试', 503, err)
   }
   cache = parsed
   cacheMtime = st.mtimeMs
@@ -93,7 +93,7 @@ export async function patchSettings(input) {
     await writeFile(tmp, JSON.stringify(next, null, 2) + '\n', 'utf8')
     await rename(tmp, SITE_FILE)
   } catch (err) {
-    throw fail('SETTINGS_WRITE_FAILED', `写入站点配置失败：${err.message}`, 503)
+    throw fail('SETTINGS_WRITE_FAILED', '保存站点配置失败，请稍后再试', 503, err)
   }
   cache = next
   cacheMtime = Date.now()

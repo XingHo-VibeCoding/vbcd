@@ -1,0 +1,28 @@
+════════════════════════════════════════════════════════════════
+ Day 23 证据①　密钥特征词全仓搜索（git 跟踪文件）
+ 命令：git ls-files | xargs grep -nEI '<密钥特征词>'
+════════════════════════════════════════════════════════════════
+
+▶ 特征词：sk-* / ghp_* / AKIA* / glpat-* / postgres://user:pass@ / mysql://
+────────────────────────────────────────────────────────────────
+docker-compose.yml:87:      DATABASE_URL: postgres://buddy:${PG_PASSWORD:?请在项目根 .env 里设置 PG_PASSWORD}@pg:5432/buddy
+server/scripts/smoke.mjs:136:      DATABASE_URL: `postgres://planning_test:local-test-only@127.0.0.1:${port}/planning_test`,
+server/scripts/smoke.mjs:565:            process.env.DATABASE_URL = 'postgres://planning_test:local-test-only@127.0.0.1:1/planning_test'
+server/scripts/smoke.mjs:582:        process.env.DATABASE_URL = 'postgres://planning_test:local-test-only@127.0.0.1:1/planning_test'
+────────────────────────────────────────────────────────────────
+
+▶ 真密钥计数（排除占位符 ${...} 与测试夹具 local-test-only / planning_test）：
+    真密钥 = 0 条
+
+▶ 结论：命中 4 条全部为占位符/测试夹具（见下），真密钥 0 条 ✅
+    1) docker-compose.yml  DATABASE_URL: postgres://buddy:${PG_PASSWORD:?...}@pg  ← 占位
+    2) smoke.mjs:136       postgres://planning_test:local-test-only@127.0.0.1  ← 测试夹具
+    3) smoke.mjs:565       同上                                                  ← 测试夹具
+    4) smoke.mjs:582       同上                                                  ← 测试夹具
+
+▶ .env 忽略核查：
+    git check-ignore -v .env  →  .gitignore:2:.env	.env
+    git ls-files | grep .env  →  .env.example asr/.env.example server/.env.example 
+    （仅有 .env.example，真 .env 未入库）✅
+
+════════════════════════════════════════════════════════════════

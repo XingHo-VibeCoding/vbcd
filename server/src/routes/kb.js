@@ -5,6 +5,7 @@
 // 本路由整体挂在 requireAuth 之后（见 app.js）。
 import { Router } from 'express'
 import { query, reindex, prepareStream } from '../services/kb.js'
+import { userMessage, STATUS_BY_CODE } from '../middleware/errors.js'
 
 const router = Router()
 
@@ -46,7 +47,11 @@ router.get('/stream', async (req, res) => {
     }
     send('done', {})
   } catch (err) {
-    send('error', { code: err.code || 'INTERNAL', message: err.message || '服务器内部错误' })
+    // 与 HTTP 错误中间件同一口径：业务错误透出中文，原始错误换成中文兜底（Day 23）
+    const code = err.code || 'INTERNAL'
+    const status = err.status || STATUS_BY_CODE[code] || 500
+    if (status >= 500) console.error(`[kb] stream error ${code}: ${err.detail?.message || err.message}`)
+    send('error', { code, message: userMessage(err, code, status) })
   } finally {
     if (!closed) res.end()
   }

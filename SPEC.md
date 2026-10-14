@@ -207,10 +207,10 @@ vbcd/
 ## 3. API 列表（全量 38 条）
 
 > **口径**：本节列出 `server/src/routes/` 实际注册的**全部**端点，是接口的唯一事实源；改动代码必须同步回改本节。核对命令见 §7.5 A8。
-> 分组：**业务接口**（用户/页面直接消费，24 条）｜ **管理接口**（`/api/admin`、`/api/planning`，8 条）｜ **运维与辅助接口**（健康检查、资料扩展读写、工具清单、首页聚合，6 条）。
+> 分组：**业务接口**（用户/页面直接消费，24 条）｜ **管理接口**（`/api/admin`、`/api/planning`，8 条）｜ **运维与辅助接口**（健康检查、资料扩展读写、工具清单、首页聚合，6 条）。后台规划不等于再造一套业务数据；后台必须复用本节接口和已有确认/事务流程。
 >
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录（公开模式下 `requireAuth` 直通）。
-> 删除资料不单独开接口，复用任务链路（`POST /api/tasks` + `type=delete_note`）并强制走 3.3 确认流。
+> 删除资料目前存在两条已注册路径：核心业务的 `delete_note` 任务确认流（见 §3.3），以及后台使用的 `DELETE /api/notes/:id` 直删接口（见 S3）。两者的生产数据源和权限边界尚未完全统一；后台规划不得把它们描述成同一条链路，后续需单独收敛。
 
 ### 3.0.1 业务接口（24 条）
 
@@ -251,14 +251,14 @@ vbcd/
 
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
 |---|---|---|---|---|---|
-| M1 | `GET /api/admin/overview` | 后台仪表盘总览（服务状态、任务/资料/agent 计数） | — | `200 {...}` | `INTERNAL` |
-| M2 | `GET /api/admin/env` | 环境变量查看（值脱敏） | — | `200 {items[]}` | `INTERNAL` |
+| M1 | `GET /api/admin/overview` | 后台仪表盘总览（服务状态、任务/资料计数、任务状态、最近任务） | — | `200 {services[], counts, recentTasks[], time, auth_enabled}` | `INTERNAL` |
+| M2 | `GET /api/admin/env` | 环境变量只读总览（敏感值脱敏） | — | `200 {scopes:{server,asr,root}}` | `INTERNAL` |
 | M3 | `GET /api/admin/settings` | 站点设置读取 | — | `200 {...}` | `INTERNAL` |
 | M4 | `PATCH /api/admin/settings` | 站点设置更新 | 设置项字段 | `200 {...}` | `VALIDATION_FAILED` |
 | M5 | `GET /api/planning` | 计划视图数据（日程/待办聚合） | — | `200 {...}` | `INTERNAL` |
 | M6 | `POST /api/planning/drafts` | 新建计划草稿 | `title, ...` | `201 {draft}` | `VALIDATION_FAILED` |
 | M7 | `GET /api/planning/drafts/:id` | 计划草稿详情 | — | `200 {draft}` | `NOT_FOUND` |
-| M8 | `PATCH /api/planning/drafts/:id` | 更新计划草稿 | 草稿字段 | `200 {draft}` | `VALIDATION_FAILED`、`NOT_FOUND` |
+| M8 | `PATCH /api/planning/drafts/:id` | 审批或拒绝规划草案；成功后执行确认事务并尝试同步 Agent 会话 | `decision=approved\|rejected`、`review_token?` | `200 {draft, confirmation, result, agent_sync?}`；冲突变化返回 `409 PLANNING_REVIEW_REQUIRED` | `VALIDATION_FAILED`、`NOT_FOUND`、`PLANNING_REVIEW_REQUIRED`、`DB_UNAVAILABLE` |
 
 ### 3.0.3 运维与辅助接口（6 条）
 
@@ -267,13 +267,21 @@ vbcd/
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
 |---|---|---|---|---|---|
 | S1 | `GET /api/health` | 健康检查（部署探针、`RUN.md` 8.7 用） | — | `200 {ok:true, ...}` | — |
-| S2 | `PATCH /api/notes/:id` | 编辑资料（改标题/分类/标签/正文） | `title?, category?, content?, tags?` | `200 {id, path, hash}` | `VALIDATION_FAILED`、`NOT_FOUND` |
-| S3 | `DELETE /api/notes/:id` | 删除资料（后台直删口；页面入口走任务链路 3.3 确认流） | — | `200 {id, path}` | `NOT_FOUND` |
-| S4 | `GET /api/agent/tools` | agent 工具清单与可用状态（供前端灰显） | — | `200 {items[]}` | `INTERNAL` |
+| S2 | `PATCH /api/notes/:id` | 后台编辑资料（改标题/分类/标签/正文；当前文件存储模式专用） | `title?, category?, content?, tags?` | `200 {id, path, hash}` | `VALIDATION_FAILED`、`NOT_FOUND`、`NOT_SUPPORTED`（数据库模式） |
+| S3 | `DELETE /api/notes/:id` | 后台直删资料；与任务确认流并存，生产策略待收敛 | — | `200 {id, path}` | `NOT_FOUND`、`NOT_SUPPORTED`（数据库模式） |
+| S4 | `GET /api/agent/tools` | Agent 工具清单、风险等级和可用状态 | — | `200 {tools[]}` | `INTERNAL` |
 | S5 | `GET /api/github/projects` | GitHub 仓库列表聚合（关于页项目卡片） | — | `200 {items[]}` | `GITHUB_UPSTREAM` |
 | S6 | `GET /api/home` | 站点首页聚合数据（首页卡片所需） | — | `200 {...}` | `INTERNAL` |
 
 > **计数口径**：`GET /images/*`（`DATA_DIR/images` 静态服务）由 `app.js` 直接挂载、不属 `routes/`，**不计入 38 条**；`POST /api/login`、`POST /api/logout` 在 `AUTH_ENABLED=0`（默认公开）时仍注册，故计在业务接口内。
+
+### 3.0.4 后台与信息流边界
+
+- `/api/home` 是首页派生视图，不是后台业务数据源；它聚合 PostgreSQL notes、规划快照、GitHub 和个人资料，并返回各来源状态。
+- 规划后台必须复用 `/api/planning` 的草案、冲突检查、确认和事务写入流程，不得直接改 `plans` / `schedules` 表。
+- Agent 后台当前只读 runs、sessions、tools；不得直接修改会话 JSON 或 `runs.jsonl`，需要业务写入时走现有工具和确认闸门。
+- `/api/notes` 与 `/api/db/notes` 在迁移期并存：部署环境 `POST /api/notes` 配置数据库后只写 `notes` 表，但后台现有列表仍调用 `/api/notes`，这是待收敛的技术债，不得在文档中宣称两者已经完全统一。
+- `data/site.json` 是站点业务配置，`.env` 是基础设施配置和秘密；后台 settings 可写前者，env 页面只读脱敏。
 
 ### 3.1 知识库问答（F9）
 
@@ -301,7 +309,7 @@ vbcd/
 
 ### 3.3 高风险动作的确认流（F6）
 
-删除资料不可撤销，后端不提供任何直接删除入口。
+通过任务链路删除资料不可撤销，`delete_note` 业务动作不提供绕过确认的直接删除入口；后台另有 `DELETE /api/notes/:id` 直删接口，生产环境是否保留该入口及其与任务确认流的统一策略仍待收敛。
 
 **三步时序**：
 1. **请求**：`POST /api/tasks` 带 `type=delete_note` + `payload.note_id` → 校验资料存在 → 任务落 `attention` → 写一条 `Confirmation`（`action=delete_note`、`summary` 写明后果、`decision` 为空）→ 一个字节都不删；
@@ -507,6 +515,23 @@ vbcd/
 ### 5.3 用户可见文案
 - 一律中文、说清后果，不暴露堆栈，例如「保存失败：服务器磁盘空间不足，请稍后重试」；
 - 前端收到任何 `ok:false` 都必须显示提示，不允许静默失败（F1 验收）。
+
+#### 5.3.0 三类错误归一化（Day 23 · 错误处理与安全）
+
+所有对外的错误文案只有三类，由 `server/src/middleware/errors.js` 统一出口，**不允许任何路由/服务把原始 `err.message` 直接拼进响应体**。
+
+| 类别 | 典型 HTTP | 什么算这类 | 给用户看到什么 | 原始错误去哪 |
+|---|---|---|---|---|
+| ① 用户输入错 | 400 / 404 / 409 / 428 | 字段缺失/超长/类型不对、id 不存在、内容重复、高风险操作缺确认 | 说清**改什么**，如「标题不能为空」「title 必须是字符串」「分类必须是 learning / life / work / essay 之一」 | 业务错误本身就是中文，`console.warn` 记一行 |
+| ② 网络/接口错 | 502 / 503 | 上游不可达/超时/非 2xx：GitHub、ima、Chroma、ASR、模型端点 | 说清**稍后再试**，如「GitHub 暂时连不上，请稍后再试」 | 原始错误（含上游英文）只进服务端日志 |
+| ③ 服务端错 | 500 / 503 | 本机写盘失败、配置读写失败、未预期异常 | **通用中文**，如「保存失败，请稍后再试」「服务器处理出错，请稍后再试」 | `console.error` 记全量，响应体里绝不出现 |
+
+**判据（实现约定）**：业务代码用 `fail(code, message, status, detail)` / `storageError(message, detail)` 构造的错误带 `expose:true` 标记 → 其人工中文 `message` **原样透出**；其余（Node `fs` / `pg` / `body-parser` 抛的原始错误）**无标记** → 一律替换为按类中文兜底。原始错误经 `detail` 字段进服务端日志，用于排查（详见 `runs/2026-10-14-day23.md`）。
+
+已归口的两处特例：
+- **body-parser**：非法 JSON → 400「请求格式不正确，请检查提交的内容」；超 1MB → 413「提交内容过大（上限 1MB），请精简后重试」。
+- **SSE 流式接口**（`/api/agent/chat`、`/api/kb/query`）：不走 `errorHandler`，改为复用同一 `userMessage()` 口径，保证聊天框/问答框同样不吐英文。
+
 
 ### 5.3.1 交互反馈档位与提示条（Day 11 · 交互反馈）
 

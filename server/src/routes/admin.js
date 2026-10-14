@@ -20,7 +20,10 @@ async function probe(fn, timeoutMs = 3000) {
     ])
     return { ok: true, latencyMs: Date.now() - t0, ...(detail || {}) }
   } catch (err) {
-    return { ok: false, latencyMs: Date.now() - t0, error: err?.message || String(err) }
+    // 探活失败原因只进服务端日志；响应只给中文短句（Day 23 三类错误：② 网络/接口错）
+    console.error(`[admin] probe failed: ${err?.message || String(err)}`)
+    const reason = err?.message === 'timeout' ? '连接超时' : '连接失败'
+    return { ok: false, latencyMs: Date.now() - t0, error: reason }
   }
 }
 
@@ -64,13 +67,16 @@ async function buildCounts() {
     for (const t of tasks.items) byStatus[t.status] = (byStatus[t.status] || 0) + 1
     counts.tasks = { total: tasks.total, byStatus }
   } catch (err) {
-    counts.tasks = { error: err?.message }
+    // 原始原因只进日志，响应只给中文短句（不把 fs/Node 英文抛给前端）
+    console.error(`[admin] counts.tasks failed: ${err?.message || String(err)}`)
+    counts.tasks = { error: '统计任务数失败' }
   }
   try {
     const { items } = await noteStore.list()
     counts.notes = { total: items.length }
   } catch (err) {
-    counts.notes = { error: err?.message }
+    console.error(`[admin] counts.notes failed: ${err?.message || String(err)}`)
+    counts.notes = { error: '统计资料数失败' }
   }
   return counts
 }

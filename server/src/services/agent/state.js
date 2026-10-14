@@ -16,8 +16,9 @@ async function ensureReady() {
   await mkdir(AGENT_DIR, { recursive: true })
 }
 
-function storageError(message) {
-  return Object.assign(new Error(message), { status: 503, code: 'STORAGE_FAILED' })
+// Day 23：message 一律是给用户看的中文；原始错误细节放 detail，只进服务端日志（SPEC §5.3）
+function storageError(message, detail) {
+  return Object.assign(new Error(message), { status: 503, code: 'STORAGE_FAILED', expose: true, detail })
 }
 
 function sessionPath(id) {
@@ -62,7 +63,7 @@ export async function saveSession(session) {
     await rename(tmp, file)
   } catch (err) {
     await unlink(tmp).catch(() => {})
-    throw storageError(`写入会话状态失败：${err.message}`)
+    throw storageError('保存会话状态失败，请稍后再试', err)
   }
 }
 

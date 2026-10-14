@@ -72,7 +72,7 @@ export async function listEnv() {
         scopes[name] = { exists: false, vars: [] }
         continue
       }
-      throw fail('ENV_READ_FAILED', `读取 ${name} 环境文件失败：${err.message}`, 503)
+      throw fail('ENV_READ_FAILED', '读取服务配置失败，请稍后再试', 503, err)
     }
     const vars = parseEnv(text)
       .filter((e) => !e.isComment)

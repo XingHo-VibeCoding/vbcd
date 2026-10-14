@@ -60,8 +60,10 @@ async function executeNoteTask(task) {
     // 用户填错字段（标题空、分类不对等）：抛给路由返回 400，不落任务 —— 这不是"任务失败"，是请求不合法
     if (err.code === 'VALIDATION_FAILED') throw err
     // 其余（重复提交、写盘失败）：落一条失败任务，让手机端在列表里能看到原因（F5）
+    // 任务列表会展示 task.result，所以只写中文短句（不把 fs/Node 英文抛给手机端）
+    console.error(`[tasks] save_note failed: ${err.detail?.message || err.message}`)
     task.status = 'failed'
-    task.result = err.message || '执行失败'
+    task.result = (err.expose && err.message) || '执行失败，请稍后再试'
   }
   return taskStore.put(task)
 }
@@ -122,8 +124,10 @@ async function executeApproved(task, confirmation, iso) {
       task.result = `暂不支持的确认动作：${confirmation.action}`
     }
   } catch (err) {
+    // 确认执行失败：只留中文短句（task.result 会在列表展示），原始错误进日志
+    console.error(`[tasks] confirm ${confirmation?.action || ''} failed: ${err.detail?.message || err.message}`)
     task.status = 'failed'
-    task.result = err.message || '执行失败'
+    task.result = (err.expose && err.message) || '执行失败，请稍后再试'
   }
   task.updated_at = iso
   return taskStore.put(task)
