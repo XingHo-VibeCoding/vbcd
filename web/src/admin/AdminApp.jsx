@@ -16,7 +16,8 @@ import AgentTools from './pages/AgentTools.jsx'
 import NoteBrowse from './pages/NoteBrowse.jsx'
 import EnvManager from './pages/EnvManager.jsx'
 import SiteSettings from './pages/SiteSettings.jsx'
-import { UnorderedListOutlined, RobotOutlined, ToolOutlined, FileTextOutlined, SettingOutlined, ControlOutlined } from '@ant-design/icons'
+import ImageAssets from './pages/ImageAssets.jsx'
+import { UnorderedListOutlined, RobotOutlined, ToolOutlined, FileTextOutlined, SettingOutlined, ControlOutlined, PictureOutlined } from '@ant-design/icons'
 
 export default function AdminApp() {
   return (
@@ -62,6 +63,11 @@ export default function AdminApp() {
               name: 'env',
               list: '/admin/env',
               meta: { label: '环境变量', icon: <SettingOutlined /> },
+            },
+            {
+              name: 'images',
+              list: '/admin/assets/images',
+              meta: { label: '图片资产', icon: <PictureOutlined /> },
             },
           ]}
           options={{ syncWithLocation: true }}
@@ -120,6 +126,14 @@ export default function AdminApp() {
               element={
                 <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
                   <EnvManager />
+                </ThemedLayout>
+              }
+            />
+            <Route
+              path="assets/images"
+              element={
+                <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
+                  <ImageAssets />
                 </ThemedLayout>
               }
             />

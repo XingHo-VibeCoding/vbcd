@@ -1,131 +1,745 @@
-# PLAN-admin —— buddy 站长控制台（后台）设计
+# PLAN-admin —— buddy 站长控制台规划
 
-> 本文档是「给 buddy 建后台」的设计定稿，由 grilling 讨论收敛而来。
-> 仅作设计依据，落地按板块逐步执行；新增/变更需先改本文档再动手。
+> 本文档只规划后台，不定义新的业务真相源。
+> 后台必须基于当前 buddy 信息流、实际接口、数据库结构和上游文档建设。
+> 本文与代码不一致时，先核对 `server/src/routes/`、`server/src/services/`、数据库迁移和 `SPEC.md`，确认后再回改文档；不得按旧计划继续扩展。
 
-> **实现状态（2026-10-14 批注）**：本文设计**已基本落地**，以下为与实现的差异，阅读 §4/§5 时请以本批注为准。
-> - **板块①–⑤ 全部完成**：`/admin` 路由 + `AdminApp`（`web/src/App.jsx` 已挂 `/admin/*`，lazy 加载）；`web/src/admin/pages/` 现有 **7 个页面**——`Dashboard` / `TaskList` / `AgentRuns` / `AgentTools` / `NoteBrowse` / `SiteSettings` / `EnvManager`。
-> - **板块⑥ 完成**：`PATCH /api/notes/:id` 与 `DELETE /api/notes/:id` **均已实现**（`server/src/routes/notes.js`），非 §4/§5 所写的「新接口/待做」。
-> - **第二期（配置管理）也已落地**：`GET/PATCH /api/admin/settings`、`GET /api/admin/env` 均已实现。
-> - **接口差异**：§5 提到的 `GET /api/admin/services` **未单独实现**（已并入 `GET /api/admin/overview` 的 `services[]`）。实际 `/api/admin/*` 端点为 4 个：`overview` / `env` / `settings`(GET) / `settings`(PATCH)，已录入 `SPEC.md` §3.0.2。
-> - **§4 标题措辞**：文中「第一期」指「只读运维台 + 资料浏览」这一阶段划法，与 `PRD.md` 的「第 1 期（本期 MVP）」**不是同一概念**，勿混。
+## 0. 当前结论
 
-## 0. 背景与结论速览
+buddy 的后台不是一组孤立 CRUD 页面，而是当前信息流的 **观察台、控制台和审计台**：
 
-- **定位**：buddy 的站长控制台 = 运维台（Admin）+ 资料/资产管理（部分 CMS）。不是通用 CMS——Obsidian 才是内容的主编辑入口，网站/后台是 `data/` 的合法写者之一。
-- **形态**：Refine 嵌入现有 `web/`（React 19 + Vite 8）的 `/admin` 路径，与主站同栈同仓。**不**新建前端项目、**不**引入独立后台服务。
-- **部署**：`xxx.com/admin` 路径部署；`admin.xxx.com` 二级域名**留作未来项**。
-- **第一期**：只读运维台 + 资料浏览起步，按板块推进到「资料编辑/删除」。
+```text
+内容输入
+  ├─ 主站归档
+  ├─ 视频转写
+  ├─ 链接整理
+  ├─ Agent 归档
+  └─ 手工录入
+        ↓
+任务处理 / 查重 / 归档
+        ↓
+资料业务层
+  ├─ PostgreSQL notes（部署环境主数据）
+  └─ Markdown 文件（本地降级路径 / 共享内容边界）
+        ├─ 首页聚合
+        ├─ 资料查询
+        ├─ 知识库索引
+        └─ Agent 查询
 
-## 1. 已确认的架构事实（讨论的锚点）
+用户或 Agent 提出规划
+        ↓
+planning draft
+        ↓
+冲突检查 / 版本检查
+        ↓
+确认或拒绝
+        ↓
+plans + schedules + planning_changes
+        ↓
+首页 / 规划页 / Agent 查询
+```
 
-| 事实 | 含义 |
+后台的核心问题不是“还有哪些表没有做 CRUD”，而是：
+
+> **输入有没有被处理？处理结果有没有成为资料？资料有没有进入数据库和知识库？规划有没有经过确认并落库？Agent 的动作有没有留下可追溯记录？**
+
+## 1. 当前已完成
+
+### 1.1 后台基础设施
+
+- React + Vite 内嵌现有 `web/`，入口为 `/admin`。
+- Refine + Ant Design，后台 lazy 加载，不影响主站首屏。
+- `dataProvider` 复用 `{ ok: true, data }` / `{ ok: false, error }` 契约。
+- 后台页面已经注册在 `web/src/admin/AdminApp.jsx`。
+- 当前后台页面：
+  - `Dashboard`
+  - `TaskList`
+  - `AgentRuns`
+  - `AgentTools`
+  - `NoteBrowse`
+  - `SiteSettings`
+  - `EnvManager`
+
+### 1.2 已落地的后台能力
+
+| 页面 | 当前能力 | 状态 |
+|---|---|---|
+| `/admin` | 服务探针、资料/任务计数、最近任务 | 已完成，仍需接入新的规划和信息流指标 |
+| `/admin/tasks` | 任务列表、状态筛选、失败/需处理重试 | 已完成 |
+| `/admin/agent/runs` | LLM/工具调用审计 | 已完成，只读 |
+| `/admin/agent/tools` | Agent 工具清单和风险标记 | 已完成，只读 |
+| `/admin/notes` | 资料搜索、分类、详情、编辑、删除 | 已完成，但数据源统一性待确认 |
+| `/admin/settings` | `data/site.json` 业务配置读写 | 已完成，schema 需与真实配置统一 |
+| `/admin/env` | `.env` 脱敏只读总览 | 已完成，只读 |
+
+### 1.3 明确暂不做
+
+- `admin.xxx.com` 二级域名。
+- 用户、角色、RBAC。
+- 网页直接编辑 `.env` 或密钥。
+- Agent prompt 运行时编辑。
+- 通用 CMS 工作流、多用户协作、审批系统。
+- 图片上传和卡片 CRUD，直到主站图片用途和 `site.json` schema 稳定。
+
+## 2. 数据真相源和写入边界
+
+后台任何页面必须先标明自己读取的真相源，不能自行复制一套状态。
+
+| 对象 | 当前真相源/状态 | 主站消费 | 后台当前消费 | 后台写入边界 |
+|---|---|---|---|---|
+| 资料 `notes` | 部署环境由 PostgreSQL 主导；无库本地走 Markdown | `/api/home`、`/api/db/notes` 等 | `/api/notes`，存在迁移期双源风险 | 现有编辑/删除需先统一生产数据源 |
+| Markdown | `data/` 目录 | Obsidian、文件降级路径 | 详情路径展示 | 不得在未定义同步边界前扩大文件写入 |
+| 任务 | runtime task store / `tasks` 表映射 | 日志、任务相关页面 | `/api/tasks` | 只允许合法状态迁移和重试 |
+| 规划 | PostgreSQL `plans` / `schedules` | `/api/home`、`/api/planning` | 当前无规划后台页 | 必须走 draft、冲突检查和确认事务 |
+| 规划草案 | `planning_drafts` + `confirmations` | 规划确认页、Agent | 当前无后台页 | 批准/拒绝复用现有确认流程 |
+| 规划变更 | `planning_changes` | 当前主要用于留痕 | 当前无后台页 | 只读审计 |
+| Agent 会话 | `data/.runtime/agent/*.json` | `/agent` 页面 | 当前只看 runs | 不直接编辑会话文件 |
+| Agent 审计 | `data/.runtime/agent/runs.jsonl` | Agent 运行过程 | `/api/agent/runs` | 只读 |
+| 站点业务配置 | `data/site.json` | `/api/me`、`/api/home`、主站视觉 | `/api/admin/settings` | 白名单结构化写入、原子写 |
+| 基础设施秘密 | `.env` / compose 注入 | 服务启动 | `/api/admin/env` 脱敏只读 | 后台不写、不回显 |
+| 图片 | `data/images/` | `/images/*` | 当前未管理 | 上传/删除待独立设计 |
+
+## 3. 当前已知偏差
+
+### 3.1 资料数据源偏差
+
+当前首页主要使用 PostgreSQL 资料，而后台资料页仍调用 `/api/notes`。在数据库模式和文件模式之间存在迁移期分叉，必须先明确：
+
+- 生产环境后台资料列表是否切换到数据库读接口。
+- 编辑/删除是否同时支持数据库模式。
+- Markdown 是主数据、同步副本还是本地降级存储。
+- 知识库索引的资料来源是否与首页一致。
+
+在该边界定稿前，不新增后台资料写功能。
+
+### 3.2 仪表盘信息不足
+
+当前 `/api/admin/overview` 主要返回：
+
+- 服务探针
+- 资料数量
+- 任务数量和状态
+- 最近任务
+
+还没有反映：
+
+- 今日计划
+- 逾期计划
+- 今日安排
+- 待确认规划草案
+- Agent 待确认会话
+- 知识库索引是否落后
+- 最近业务活动
+
+### 3.3 规划流尚未进入后台
+
+当前已有：
+
+```text
+GET  /api/planning
+POST /api/planning/drafts
+GET  /api/planning/drafts/:id
+PATCH /api/planning/drafts/:id
+```
+
+以及数据库表：
+
+```text
+plans
+schedules
+planning_drafts
+confirmations
+planning_changes
+```
+
+但后台没有规划总览、草案审计和变更记录页面。
+
+### 3.4 Agent 页面仍按早期工具清单设计
+
+当前工具已经覆盖两个以上业务域：
+
+```text
+资料：search_notes / get_note / archive_note
+知识库：ask_kb
+规划：get_planning / propose_planning
+```
+
+后台工具页后续应按业务域、风险级别、确认状态和调用统计展示，不能只固定显示早期的“4 个工具”。
+
+### 3.5 `site.json` schema 已扩展
+
+实际配置已经包含：
+
+```text
+site
+background
+stats
+social
+hotspots
+projects
+cover
+accent
+```
+
+后台设置页目前还偏向：
+
+```text
+llm
+site.title / subtitle / avatar / background
+limits
+```
+
+必须先统一配置模型，再决定是否把背景、热点、项目和社交链接纳入后台表单。
+
+## 4. 后续后台路线
+
+后续不按“再添加一个 CRUD 页面”的方式推进，而按信息流阶段推进。
+
+### 阶段 A：信息流总览
+
+目标：让 `/admin` 能回答“系统当前走到哪一步”。
+
+建议增加的聚合指标：
+
+```text
+服务状态
+资料总数 / 今日新增资料
+任务 todo / doing / failed / attention
+今日计划 / 逾期计划 / 待确认草案
+Agent 活跃会话 / 待确认动作 / 失败运行
+知识库最后索引时间 / 待索引数量
+最近业务活动
+```
+
+完成标准：仪表盘数据能对应当前 `/api/home`、`/api/planning`、`/api/agent` 和任务数据，不能另造统计口径。
+
+### 阶段 B：内容流管理
+
+建议页面：
+
+```text
+/admin/content
+/admin/content/tasks
+/admin/content/notes
+/admin/content/index
+```
+
+第一版重点不是增加写操作，而是串起：
+
+```text
+任务 → 归档结果 → 资料 → PostgreSQL → 知识库索引
+```
+
+需要能查看：
+
+- 任务是否生成资料。
+- 资料是否进入数据库。
+- 资料是否进入知识库。
+- 失败发生在哪一步。
+- 是否允许重试。
+- 是否发生重复来源或重复内容。
+
+### 阶段 C：规划管理
+
+建议页面：
+
+```text
+/admin/planning
+/admin/planning/drafts
+/admin/planning/changes
+```
+
+能力：
+
+- 计划列表、状态、优先级、开始/截止时间。
+- 日程列表和时间冲突标记。
+- 待确认草案查看、批准、拒绝。
+- 草案来源 Agent 会话查看。
+- 变更前后数据审计。
+
+硬约束：后台批准或拒绝不得绕过现有 `planning_drafts`、`confirmations` 和事务写入流程。
+
+### 阶段 D：Agent 治理
+
+建议页面：
+
+```text
+/admin/agent/sessions
+/admin/agent/runs
+/admin/agent/tools
+/admin/agent/confirmations
+```
+
+能力：
+
+- 会话状态和待确认状态。
+- 工具按业务域分组。
+- 工具调用次数、失败次数和最近调用时间。
+- Agent 动作与资料、规划、任务的关联。
+- 确认动作的批准、拒绝和执行结果。
+
+工具启停、prompt 编辑暂不进入本阶段，需另行设计运行时配置模型。
+
+### 阶段 E：站点设置和图片资产
+
+先统一 `site.json` schema，再做结构化设置表单。主站与图片管理的已确认设计和现有实现差异见 §9；不能直接把旧 `hotspots/projects` 配置接回首页。
+
+图片后台建议单独使用：
+
+```text
+/admin/assets/images
+```
+
+第一版只规划：
+
+- 图片列表和预览。
+- 文件类型、大小、尺寸、修改时间。
+- 复制 URL。
+- 引用位置检查。
+- 上传和删除保护。
+
+图片实际文件继续放在 `data/images/`，不把二进制放进 PostgreSQL。
+
+### 阶段 F：卡片内容
+
+卡片是独立内容类型，不等同于图片附件：
+
+```text
+/admin/cards
+```
+
+等待图片资产和站点配置稳定后再设计字段、存储方式和首页消费关系。
+
+## 5. 当前优先级
+
+| 优先级 | 工作项 | 状态 |
+|---|---|---|
+| P0 | 统一资料真实来源和后台读写边界 | 待定稿 |
+| P0 | 后台总览接入规划、确认和索引状态 | 待做 |
+| P0 | 规划后台：计划、日程、草案、变更 | 待做 |
+| P1 | 内容流管理：任务 → 资料 → 数据库 → 索引 | 待做 |
+| P1 | Agent 会话和确认中心 | 待做 |
+| P1 | 同步 SPEC / TECH_DESIGN / RUN / AGENTS | 待做 |
+| P2 | 统一 `site.json` schema 和设置表单 | 待做 |
+| P2 | 图片资产管理 | 后置 |
+| P3 | 卡片管理 | 后置 |
+| P3 | Agent 工具启停 | 后置 |
+| P4 | Prompt 管理、RBAC、二级域名、异地部署 | 暂不排期 |
+
+## 6. 接口原则
+
+- 接口和字段以 `server/src/routes/`、`server/src/services/`、数据库迁移和 `SPEC.md` 的核对结果为准。
+- 后台优先复用现有业务接口，不为同一对象制造第二套读写契约。
+- 后台新增聚合接口只能聚合已有业务数据，不改变业务真相源。
+- 规划写操作必须复用草案、冲突检查、确认和事务流程。
+- Agent 审计和运行状态只读；不得通过后台直接修改会话文件或审计文件。
+- `.env` 只读脱敏；业务配置写入 `data/site.json`，使用白名单和原子写。
+
+## 7. 文档同步顺序
+
+本文件只负责后台路线。确认本文件后，再按顺序同步：
+
+1. `SPEC.md`：接口、数据对象、写入和确认契约。
+2. `TECH_DESIGN.md`：信息流、数据源、后台 control plane。
+3. `RUN.md`：后台访问、部署、验收和排错。
+4. `AGENTS.md` 第 4 节：当前已完成和待办状态。
+
+每次同步前执行五维自检：
+
+- 内部一致性。
+- 验收可复现性。
+- 范围一致性。
+- 与上游文档一致性。
+- 术语与前提定义。
+
+## 8. 协作与提交纪律
+
+- 遵守 `AGENTS.md` 的“一次一个板块”。
+- 其他 agent 正在修改的主站文件不属于本规划板块，不得顺手改动。
+- 文档修改前列出文件边界；提交前列出实际改动文件，等待使用者确认。
+- 非打卡内部改动使用：`[ BIRD ] | 中文解释提交内容`。
+- 密钥、`.env`、数据库连接串和个人资料不得进入代码或提交。
+
+## 9. 主站与图片后台设计记录（2026-10-14）
+
+> 本节记录本轮讨论已确认的设计方向，**不是已实现功能**。本轮明确排除「日程与任务是否合并」；不在此定稿、修改或迁移其数据模型。图片和站点配置的实施仍受 §2 的真相源边界及 §4 的阶段顺序约束。
+
+### 9.1 后台板块与职责
+
+后台一级板块采用：总览、内容流、规划管理、Agent 管理、主站管理、图片资产。主站管理下按站点身份、联系方式、背景、首页卡片、热点五类组织；这只是后台信息架构，**不是已经建好的页面或接口**。
+
+| 板块 | 管理对象 | 边界 |
+|---|---|---|
+| 站点身份 | 站点名、副标题、个人昵称、头像、简介 | 统一编辑体验，底层暂保留 `site.json` 与 `profile.md` 各自归属 |
+| 联系方式 | GitHub、邮箱、个人主页、订阅等 | 链接配置与个人资料字段分清来源，不为统一界面迁移文件 |
+| 背景控制 | 浅色/深色图片列表、顺序、轮播间隔、启用及自动轮播 | 图片选择只改引用，不覆盖原图片 |
+| 首页卡片 | 卡片内容和配图 | 不与独立内容卡片混为同一业务对象 |
+| 热点 | 标签、标题、副标题、图片、链接、排序及显示状态 | 图片与热点内容一同管理，但不自动并入资料流 |
+| 图片资产 | 文件清单、预览、自动用途、实际引用、手工标签、上传与删除保护 | 不用图片文件冒充站点配置，也不把图片二进制放数据库 |
+
+### 9.2 图片资源池：已确认
+
+- 图片统一放在 `data/images/`，Web 引用格式为 `/images/<文件名>`；允许同一张图被背景、热点、项目等多处复用。当前本地图片可用于验证，不能把测试等同于允许随意覆盖或删除正式资源。
+- 图片元数据（类型、大小、尺寸、修改时间）由文件扫描得到；**不新增图片表或独立图片 manifest**。`usage` 可有多个值，按引用自动推导；`references` 是具体引用位置，如 `site.json → background.dark.images[0]`，不能靠手工标签判定是否在用。
+- 手工 `tags` 使用「预设标签 + 允许新建」；它仅用于筛选，不决定用途或删除权限。**标签持久化位置尚未拍板**：不新增 manifest 的前提下，曾建议 `site.json.assets`，但尚未得到确认；实现标签编辑前必须先决定存储位置和迁移方式。
+- 上传后由服务端生成安全唯一文件名；不持久化原始文件名。现有文件名不因这个规则自动重命名。被任何真实引用使用的图片禁止删除，显示所有引用位置；首版不提供强制删除。
+- 落地顺序已确认：**只读扫描 → 修改站点图片引用 → 上传 → 删除**。每阶段单独验证，不一次开放所有写操作。
+
+### 9.3 背景、卡片与站点身份：已确认
+
+- 背景基础控制保留现有 `background.light.images`、`background.dark.images` 和 `interval`（毫秒）；目标模型增加 `enabled` 与 `autoplay`。可选图、调整顺序和间隔；按时间段/设备/页面切换及随机策略不在第一版。新增字段尚未在当前主站实现，不能宣称保存后已经生效。
+- 项目与热点**保持两个集合**，图片资源池共用；两类展示字段统一命名为 `id/title/subtitle/tag/image/url/visible/order`，`icon` 为可选字段。现有 `projects.name`、`projects.desc` 到 `title`、`subtitle` 的转换属于待实施迁移，不能让后台直接写新字段而主站继续读旧字段。
+- 卡片只存 `/images/...` 引用，不重复存图片尺寸、文件大小、MIME、`usage` 或 `references`。独立知识/灵感卡片仍是后续内容模型，不与首页项目和热点配置自动合并。
+- 站点身份和联系方式在后台可以统一呈现，但目前 `site.json` 管站点与社交配置、`profile.md` 管个人昵称/头像/简介/GitHub 字段；不为了后台界面统一而迁移文件。
+
+### 9.4 与当前主站信息流的待对齐点
+
+当前 `GET /api/home` 从 PostgreSQL 资料（如「焦点」标签）、规划与 GitHub 项目派生首页内容，`services/home.js` 明确不把旧 `site.json.stats/hotspots/projects` 作为首页业务数据。故上面的「首页卡片/热点内容后台管理」**只是设计目标，不等于当前首页能消费这些字段**。进入实现前必须由使用者裁定：热点/卡片要继续作为独立站点配置，还是映射到现有资料/GitHub 聚合流；不得为方便做后台而直接恢复旧的手填首页内容源。
+
+同样，当前 `server/src/services/settings.js` 的 PATCH 白名单只覆盖 `llm/site/limits` 的少数字段，不支持 `background/social/hotspots/projects/assets`；`profile.md` 也没有后台写接口。先对齐读取源、字段归属和写入契约，再开放对应控制项。这里保留未决项，不伪称后台已经可以控制背景轮播、卡片或联系方式。
+
+### 9.5 长期任务、项目子任务与日程（已记录，暂不实现）
+
+本轮新增需求：长期任务/项目应包含执行任务、任务进度和日程；AI Tool 能查询和规划这些对象，并可根据进度提出日程调整建议。
+
+#### 领域边界
+
+当前不把所有对象合并成一个 `activities` 或统一 `tasks` 模型：
+
+```text
+Plan = 长期目标 / 项目容器
+ProjectTask = 长期任务内部的可执行子任务
+Schedule = 为 Plan 或 ProjectTask 预留的时间安排
+SystemTask = 转写、收敛、归档、删除等系统异步处理任务
+```
+
+明确区分：
+
+| 对象 | 当前对应 | 作用 | 是否与另一类合并 |
+|---|---|---|---|
+| 长期任务/项目 | 当前 `plans` | 描述长期目标、优先级、开始/截止时间和总体进度 | 不与系统任务合并 |
+| 项目子任务 | **当前尚未建立** | 描述长期项目中的具体执行步骤、进度和依赖 | 建议新增 `project_tasks`，待数据库设计确认 |
+| 日程 | 当前 `schedules` | 描述某个时间段的安排 | 保持独立，可关联 `plan_id` 和可选 `task_id` |
+| 系统任务 | 当前 runtime task store / `tasks` | 描述转写、收敛、归档、删除等系统处理过程 | 不并入项目子任务 |
+
+#### 目标关系
+
+```text
+Plan
+  ├─ ProjectTask
+  │    ├─ status
+  │    ├─ progress
+  │    ├─ depends_on
+  │    ├─ estimated_minutes
+  │    └─ Schedule
+  │
+  └─ Schedule（可不绑定具体子任务）
+
+SystemTask 独立存在：
+  transcribe_url / organize / note / delete_note / remind
+```
+
+目标数据关系：
+
+```text
+plans 1 ── * project_tasks
+plans 1 ── * schedules
+project_tasks 1 ── * schedules（可选关联）
+```
+
+当前 `schedules.plan_id` 已存在；`project_tasks` 和 `schedules.task_id` 尚未实现，不得在现有前端中伪造为已经存在的字段。
+
+#### 进度模型
+
+长期任务总体进度目标支持：
+
+```text
+progress_mode = auto | manual | hybrid
+```
+
+- `auto`：按项目子任务完成状态或权重计算。
+- `manual`：使用者手动设置总体进度。
+- `hybrid`：自动进度作为建议，使用者可以修正。
+
+推荐默认 `auto`，但该字段和计算规则仍需在数据库设计板块单独确认。
+
+项目子任务目标状态：
+
+```text
+todo / doing / blocked / done / cancelled
+```
+
+系统任务继续使用现有状态集合：
+
+```text
+todo / doing / done / failed / attention
+```
+
+两套状态不可直接混用。
+
+#### AI Tool 规划边界
+
+当前已有：
+
+```text
+get_planning
+propose_planning
+```
+
+目标是扩展为长期任务规划入口，但必须继续走现有草案、冲突检查、确认和事务流程：
+
+| Tool | 目标职责 | 风险 | 写入方式 |
+|---|---|---|---|
+| `get_planning` | 查询 Plan、ProjectTask、Schedule、进度和依赖 | readonly | 可直接执行 |
+| `propose_planning` | 生成长期任务、子任务和初始日程草案 | needs-confirm | 只生成草案，确认后事务写入 |
+| `propose_schedule_adjustment` | 根据任务进度、延期或阻塞生成日程调整建议 | needs-confirm | 只生成调整草案，确认后更新 |
+| `get_project_progress` | **可选**；若 `get_planning` 已返回完整进度则不单独新增 | readonly | 不写入 |
+
+AI 不得：
+
+- 直接写 `plans`、`project_tasks` 或 `schedules`。
+- 因为任务延期就自动移动用户日程。
+- 把 `SystemTask` 当成长期项目子任务。
+- 绕过 `planning_drafts`、`confirmations` 和事务写入。
+
+目标流程：
+
+```text
+AI 查询当前规划和进度
+        ↓
+AI 生成任务拆解 / 日程建议
+        ↓
+planning draft
+        ↓
+冲突检查 + 用户确认
+        ↓
+事务写入 Plan / ProjectTask / Schedule
+```
+
+#### 对当前前端的影响
+
+目标改造位置：
+
+| 当前页面 | 目标变化 |
 |---|---|
-| `data/` = **云端共享内容库**（服务器上的真本） | Obsidian 通过远程插件连它；网站在服务器上读写的就是真本 |
-| `data/` 的写者 = **Obsidian + 网站** | 网站本就写 `data/`（`POST /api/notes`、任务自动归档），不是"Obsidian 独占、网站只读" |
-| 网站已有写入口 | 主站新建 note、F13/F14 任务归档——网站是合法写者 |
-| 响应契约 `{ ok:true, data }` / `{ ok:false, error:{code,message} }` | Refine 需一个 dataProvider 适配层统一翻译 |
-| 鉴权 `requireAuth` + `AUTH_ENABLED` 开关 | 公开模式下中间件直通，API 实际裸露；后台须自行控制暴露面 |
+| `/planning` | 计划页增加项目进度和子任务视图；日程页显示关联子任务 |
+| `/planning/:id` | **目标新增**：长期任务详情、子任务、进度、关联日程 |
+| `/` | 长期计划卡显示进度和下一项日程；今日日程显示关联任务 |
+| `/agent` | AI Tool 可查询、拆解长期任务、提出日程调整建议 |
+| `/log` | 继续管理 SystemTask，不并入 ProjectTask |
 
-## 2. 需求全景（讨论中收敛的清单）
+本节只记录规划方向，不修改上述页面和接口。
 
-```
-Admin（运维）              第一期
-  · 服务健康（server/asr/pg/chroma 四盏灯）
-  · 任务队列：列表 + 重试 + 僵死恢复状态
-  · agent runs 审计 + 工具清单（只读）+ 待确认操作
-  · 资料浏览：搜索/分类/详情（先只读）
+## 10. 未来优化方案：统一信息对象与智能规划体系
 
-资料管理（CMS 的一部分）    第一期后段
-  · 资料编辑 + 删除（比主站深的权限）
+> 本节记录已讨论确认的长期优化方向，**当前不实现**。启动前必须由使用者提供明确的后续任务清单，并重新核对代码、数据库和文档。日程与系统任务合并问题本轮明确排除。
 
-站点设置 + 资产           第二期
-  · 通用上传 POST /api/uploads → data/images/
-  · 图片资产列表（Refine 网格）
-  · 站点设置：头像 / 主站背景 → data/site.json
-  · 卡片：独立内容类型（标题+图+文，类 flomo/Notion gallery）→ data/cards/
+### 10.1 目标
 
-配置管理（分层）          第二期
-  · data/site.json：业务配置（LLM model/base_url、头像、背景、限额）— 网页可改、热生效、容器可达
-  · .env 只读总览：基础设施秘密（DB/密钥/AUTH）— 网页只显状态，不编辑
-  · 已弃：网页直接改 .env（容器不可达 + 密钥过 HTTP + 需重建，非规范）
+未来希望把两类能力逐步统一到同一套信息流视图中：
 
-Agent 治理               第二/三期
-  · 工具清单只读（第一期已含）
-  · 工具启停开关（改 registry，中期）
-  · 工具/提示词运行时可编辑（远期，独立工程）
-
-未来项
-  · admin.xxx.com 二级域名部署（隔离/白名单价值）
-  · 完整 CMS（note 全量编辑流，取决于与 Obsidian 的分工演化）
+```text
+A. 长期任务 / 项目 / 项目子任务 / 日程 / 进度
+B. 焦点 / 项目卡片 / 热点 / 图片资源
 ```
 
-## 3. 关键设计决策（已拍板）
+目标不是把所有底层对象强行合成一张表，而是：
 
-| # | 决策 | 结论 | 理由/代价 |
+- 保留不同领域对象的业务边界。
+- 通过统一展示模型和关联关系减少前端重复逻辑。
+- 让 Agent 能查询进度、拆解长期任务并提出日程调整建议。
+- 让后台能观察完整信息流，但不绕过现有确认和事务机制。
+
+### 10.2 长期任务与日程优化
+
+目标领域模型：
+
+```text
+Plan = 长期目标 / 项目容器
+ProjectTask = 长期项目内部的可执行子任务
+Schedule = 为 Plan 或 ProjectTask 预留的时间安排
+SystemTask = 转写、收敛、归档、删除等系统处理任务
+```
+
+目标关系：
+
+```text
+plans 1 ── * project_tasks
+plans 1 ── * schedules
+project_tasks 1 ── * schedules（可选关联）
+```
+
+建议的增量结构变化：
+
+```text
+新增 project_tasks 表
+schedules 增加可选 task_id
+保留现有 plans
+保留现有 SystemTask / tasks
+```
+
+当前明确不做：
+
+- 不把 `SystemTask` 与 `ProjectTask` 合并。
+- 不把所有对象合并为统一 `activities` 表。
+- 不立即修改 `plans`、`schedules` 或现有任务状态。
+- 不在没有迁移设计和事务方案前新增字段。
+
+目标进度模式：
+
+```text
+progress_mode = auto | manual | hybrid
+```
+
+- `auto`：根据项目子任务状态或权重计算。
+- `manual`：使用者手动设置总体进度。
+- `hybrid`：自动进度作为建议，使用者可以修正。
+
+项目子任务目标状态：
+
+```text
+todo / doing / blocked / done / cancelled
+```
+
+系统任务继续使用现有状态：
+
+```text
+todo / doing / done / failed / attention
+```
+
+### 10.3 AI Tool 优化方向
+
+当前已有 `get_planning` 和 `propose_planning`。未来可在数据结构稳定后扩展：
+
+| Tool | 目标职责 | 风险 | 写入方式 |
 |---|---|---|---|
-| D1 | 框架 | **Refine**（嵌 `web/`） | 与 React 19 + Vite 8 同栈；dataProvider 一次适配后资源页近免费；比 AdminJS 更贴合长期演进 |
-| D2 | UI 库 | **Ant Design**，仅 `/admin` 路由内 | 后台需信息密度与成套控件；lazy chunk 隔离，不污染主站手写 CSS；bundle +~1MB 可接受 |
-| D3 | 部署 | `xxx.com/admin` **路径**部署 | 零新增运维面；二级域名留未来（价值在隔离/白名单，非好看） |
-| D4 | 鉴权 | 后台要求 `AUTH_ENABLED=1` 且登录 | 单人系统，登录者即管理员；公开模式下后台入口提示未启用 |
-| D5 | `data/` 写者分工 | 按**目录**划主写权 | `data/notes`：网站现有写（新建/归档）→后台扩展编辑/删除；`data/images|cards|site.json`：未来网站主写；Obsidian 全域可读可写，其余笔记目录以 Obsidian 为主 |
-| D6 | 资料管理深度 | 后台可**编辑 + 删除** note（比主站深） | 后台是管理入口，权限高于主站合理；需新 PATCH/DELETE 接口 |
-| D7 | 编辑冲突策略 | **A：网站改动直接覆盖**，Obsidian 靠远程同步刷新 | 最简单；风险是 Obsidian 未保存编辑可能被同步覆盖——接受，单人使用可控 |
-| D8 | 卡片类型 | **独立内容类型**（非图片附件） | 第二期工程：`data/cards/`，标题+图+文 |
-| D9 | 第一期写操作 | 仅安全触发：任务重试 / KB reindex / agent 确认 | 零新数据语义；编辑/删除放板块⑥ |
-| D10 | 配置管理 | **分层**：`.env` 管基础设施秘密（网页只读状态，不编辑）；`data/site.json` 管业务配置（网页可改、热生效） | 更规范：密钥不过 HTTP、业务配置容器可达（data/ 已挂载）、免重建；修正早期"网页改 .env"方向 |
+| `get_planning` | 查询 Plan、ProjectTask、Schedule、进度和依赖 | readonly | 可直接执行 |
+| `propose_planning` | 生成长期任务、子任务和初始日程草案 | needs-confirm | 只生成草案，确认后事务写入 |
+| `propose_schedule_adjustment` | 根据进度、延期或阻塞生成日程调整建议 | needs-confirm | 只生成调整草案，确认后更新 |
+| `get_project_progress` | 若 `get_planning` 不足，再独立提供进度查询 | readonly | 不写入 |
 
-## 4. 第一期板块切分（一次一步，当天出成果）
+目标流程：
 
-| 板块 | 内容 | 改动点 | 当天可见产出 |
-|---|---|---|---|
-| ① 骨架 | 装 `@refinedev/core` `@refinedev/antd` `antd` 等；`/admin` 路由 + `AdminLayout`（侧边栏）；dataProvider 适配层 | `web/package.json`、`web/src/App.jsx`、新增 `web/src/admin/` | `/admin` 打开空后台布局 |
-| ② 仪表盘 | 新增 `GET /api/admin/overview`（聚合服务健康+计数+最近任务） | `server/src/routes/`、`web/src/admin/` 仪表盘页 | 首页四服务灯 + 计数 |
-| ③ 任务 | 任务列表（Refine list）+ 重试按钮（复用 `PATCH /api/tasks/:id`） | `web/src/admin/tasks` | 能看任务、点重试 |
-| ④ agent | runs 审计表 + tools 清单（只读） | `web/src/admin/agent` | 两页只读表 |
-| ⑤ 资料浏览 | 资料 list + 搜索/分类 + 详情 + 新建入口 | `web/src/admin/notes` | 能浏览/搜资料 |
-| ⑥ 资料写 | `PATCH /api/notes/:id` + `DELETE /api/notes/:id`（新接口）+ 后台编辑/删除 UI + 冲突策略 A | `server/src/routes/notes.js` + `web/src/admin/notes` | 后台能改/删资料 |
+```text
+AI 查询当前规划和进度
+        ↓
+AI 生成任务拆解 / 日程建议
+        ↓
+planning draft
+        ↓
+冲突检查 + 使用者确认
+        ↓
+事务写入 Plan / ProjectTask / Schedule
+```
 
-## 5. 接口契约（第一期）
+AI 不得直接修改计划、项目子任务或日程，也不得因为任务延期而自动移动日程。
 
-复用现有：`GET /api/tasks`、`PATCH /api/tasks/:id`、`GET /api/agent/runs`、`GET /api/agent/tools`、`GET /api/notes`、`GET /api/notes/:id`、`POST /api/kb/index`。
+### 10.4 焦点和主站卡片优化方向
 
-新增（第一期）：
-- `GET /api/admin/overview` → `{ ok, data:{ services:[{name,ok,latencyMs}], counts:{notes,tasks,runs}, recentTasks:[...] } }`
-- `GET /api/admin/services`（或并入 overview）
-- `PATCH /api/notes/:id`（板块⑥，`{title?,content?,tags?,category?}` → 覆盖写文件，策略 A）
-- `DELETE /api/notes/:id`（板块⑥，物理删文件 + 处理 `.index.json` 缓存）
+未来统一的是展示模型，不是立即合并所有底层来源。
 
-新增（第二期 · 配置管理，分层）：
-- `GET /api/admin/settings` → 读 `data/site.json` 业务配置（LLM/站点/限额），网页可改
-- `PATCH /api/admin/settings` → 写 `data/site.json`（原子写），热生效（进程内缓存失效）
-- `GET /api/admin/env` → .env **只读总览**：各键 `{set, sensitive, preview?}`，永不回显明文、不提供 PATCH
-- 读取优先级：`data/site.json` > `process.env` > 默认值（site.json 可覆盖业务配置，密钥仍只走 env）
+目标 `FocusItem` 展示字段：
 
-dataProvider 适配层职责：
-- 请求路径映射 Refine 资源 → `/api/*`
-- 响应 `{ok,data}` → Refine `{data,total}`
-- 错误 `{ok:false,error.code}` → Refine HttpError，统一中文提示
+```text
+id
+title
+subtitle
+tag
+image
+url
+visible
+order
+source_type
+source_label
+updated_at
+```
 
-## 6. 验证方式（每板块）
+可能的来源：
 
-- 板块①：`npm run build` 过、`/admin` 打开侧边栏空壳
-- 板块②：`curl /api/admin/overview` 返回聚合结构；仪表盘渲染四服务状态
-- 板块③：列表出任务、点重试状态翻转（`failed→doing`）
-- 板块④：runs 表出行、tools 列出 4+ 工具
-- 板块⑤：搜索命中、详情跳转主站一致
-- 板块⑥：PATCH 后文件内容变、`GET /api/notes/:id` 读回新值；DELETE 后列表消失、文件物理删除
+```text
+资料标签「焦点」
+GitHub focus 项目
+site.json 手工配置
+未来独立卡片内容
+```
 
-## 7. 未决与遗留（动工前须看）
+目标流程：
 
-- **板块⑥前置**：冲突策略已定 A（直接覆盖），但需在 UI 提示"Obsidian 未保存编辑可能被覆盖"
-- `?limit` 上限 500 的资料，超量需游标分页（存量已知债）
-- 公开模式下 API 裸露是**存量风险**，后台上线不放大它，但建议后续给 `/api/*` 加整体鉴权或只读降级
-- 第二期依赖：`/api/uploads`、`/api/images`、`data/site.json`、`data/cards/` 均未建
-- **配置分层边界**：`.env` 只读总览（`GET /api/admin/env`，敏感键只显 `set+preview`，**不提供 PATCH**——网页不碰密钥）；业务配置走 `data/site.json`（`GET/PATCH /api/admin/settings`，热生效）。已修正原"网页改 .env"方向——容器内够不到宿主机 .env、密钥过 HTTP 是红线、改 env 需重建，三者都违背规范。`data/` 已绑定挂载进容器，天然可达
+```text
+不同业务来源
+        ↓
+统一 FocusItem 展示模型
+        ↓
+首页焦点 / 项目 / 热点卡片
+```
 
-## 8. 提交纪律（AGENTS.md §9.4）
+当前明确不做：
 
-- 每个板块一次原子提交，格式 `[ BIRD ] | 中文说明`
-- 文档类产出先五维自检：内部一致性 / 验收可复现 / 范围一致 / 与上游文档一致 / 术语前提定义
-- 密钥、`.env` 不进库
+- 不立即把资料焦点、GitHub 项目和 `site.json` 手工配置迁移到同一张表。
+- 不立即恢复旧 `site.json.hotspots/projects` 作为首页业务数据源。
+- 不把项目卡片、热点卡片和未来独立内容卡片强行合并。
+
+项目卡片和热点卡片未来可共用轻量公共字段：
+
+```text
+id
+title
+subtitle
+tag
+image
+url
+visible
+order
+```
+
+`icon` 作为可选字段保留；项目和热点仍然保持不同集合和业务语义。
+
+### 10.5 图片资源优化方向
+
+统一图片资源池：
+
+```text
+data/images/
+```
+
+Web 引用格式：
+
+```text
+/images/<文件名>
+```
+
+目标：
+
+- 同一张图片可以被背景、项目、热点、头像或内容多处引用。
+- 文件元数据（类型、大小、尺寸、修改时间）由实时扫描生成。
+- `usage` 根据实际引用位置自动推导，可以有多个值。
+- `references` 展示具体引用位置，例如 `site.json → background.dark.images[0]`。
+- 手工 `tags` 使用预设标签并允许创建新标签，仅用于筛选辅助。
+- 被真实引用的图片禁止删除；第一版不提供强制删除。
+- 上传时服务端生成安全唯一文件名，不持久化原始文件名。
+
+目标落地顺序：
+
+```text
+只读扫描
+  → 修改站点图片引用
+  → 上传
+  → 删除保护
+```
+
+图片元数据存储位置、手工标签持久化方式和引用扫描范围，启动实现前仍需单独拍板；在不新增图片表或独立 manifest 的方向下，候选方案包括纳入 `site.json.assets`，但当前不默认实施。
+
+### 10.6 未来启动前置条件
+
+启动本节任何代码工作前，必须完成：
+
+1. 确认 `project_tasks` 的字段、状态、依赖和进度计算规则。
+2. 确认 `schedules.task_id` 的可选关联和迁移策略。
+3. 确认规划草案如何在同一事务中写入 Plan、ProjectTask 和 Schedule。
+4. 确认 `get_planning` / `propose_planning` 的新响应和草案契约。
+5. 确认 `FocusItem` 的来源优先级与首页消费方式。
+6. 确认 `site.json`、`profile.md` 和图片资源元数据的字段归属。
+7. 更新 `SPEC.md`、`TECH_DESIGN.md`、`RUN.md` 后再写代码。
+8. 先做数据库迁移和只读验证，再开放后台写操作。
+
+本节状态：**已记录，当前不实现。**

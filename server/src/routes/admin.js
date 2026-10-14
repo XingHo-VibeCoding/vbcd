@@ -7,6 +7,7 @@ import { dbConfigured, query as dbQuery } from '../db/pool.js'
 import * as noteStore from '../storage/note-store.js'
 import { listEnv } from '../services/env.js'
 import { getSettings, patchSettings } from '../services/settings.js'
+import { listImages, getImage } from '../services/images.js'
 
 const router = Router()
 
@@ -132,6 +133,23 @@ router.get('/settings', async (req, res, next) => {
 router.patch('/settings', async (req, res, next) => {
   try {
     res.json({ ok: true, data: await patchSettings(req.body ?? {}) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// 图片资产只读扫描：文件元数据 + 实际引用位置；本阶段不提供上传/删除。
+router.get('/images', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await listImages() })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.get('/images/:id', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await getImage(req.params.id) })
   } catch (err) {
     next(err)
   }

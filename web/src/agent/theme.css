@@ -208,6 +208,10 @@
 .aui-page .aui-tool-args { overflow-wrap: anywhere; }
 @media (max-width: 767px) {
   .aui-page { height: calc(100dvh - 160px); grid-template-columns: minmax(0, 1fr); min-height: 300px; }
+  .app[data-keyboard-open='true'] .aui-page {
+    height: calc(var(--app-visual-height, 100dvh) - 84px);
+    min-height: 0;
+  }
   .aui-sidebar { position: fixed; inset: 12px auto 76px 12px; width: min(300px, calc(100vw - 36px)); z-index: 70; }
   .aui-sidebar-scrim { position: fixed; inset: 0; z-index: 65; border: 0; background: rgb(15 23 42 / .35); }
   .aui-workspace-header { padding: 12px; gap: 8px; }
@@ -219,11 +223,23 @@
   .aui-message-avatar { width: 24px; height: 24px; }
   .aui-bubble.user { max-width: 86%; padding: 8px 12px; }
   .aui-bubble.assistant { padding: 12px; }
-  .aui-composer-area { padding: 12px; }
+  .aui-composer-area { padding: 8px 12px 4px; }
+  .aui-composer-panel {
+    padding: 8px 10px;
+    border: 1px solid var(--site-glass-border);
+    background: var(--aui-inner);
+  }
+  .aui-input { min-height: 44px; max-height: 88px; padding: 0 0 6px; line-height: 1.5; }
   .aui-composer-actions > span { font-size: 12px; }
+  .aui-input-hint { margin-top: 4px; font-size: 11px; }
   .aui-input-hint > span { display: none; }
-  .aui-suggestions { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 20px; }
-  .aui-suggestion { min-height: 44px; flex-direction: row; align-items: center; gap: 12px; padding: 12px; }
+  .app[data-keyboard-open='true'] .aui-input-hint { display: none; }
+  .aui-welcome { padding: 8px 0; }
+  .aui-welcome-icon { width: 40px; height: 40px; margin-bottom: 8px; }
+  .aui-welcome h2 { margin: 8px 0; line-height: 1.375; }
+  .aui-welcome > p { line-height: 1.625; }
+  .aui-suggestions { grid-template-columns: minmax(0, 1fr); gap: 6px; margin-top: 12px; }
+  .aui-suggestion { min-height: 44px; flex-direction: row; align-items: center; gap: 8px; padding: 10px; }
   .aui-suggestion > span:last-child { margin-left: auto; align-self: auto; }
   .aui-sidebar-heading h2 { font-size: 18px; }
   .aui-welcome h2 { font-size: 18px; }

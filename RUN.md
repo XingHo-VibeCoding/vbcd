@@ -38,7 +38,7 @@ npm run dev                 # :5174，/api 代理到 :3100
 | 入口 | 地址 |
 |---|---|
 | 本机 | http://localhost:5174 （打卡截图用这个） |
-| 手机 | http://<本机局域网IP>:5174 （同一 Wi-Fi，局域网预览；公网 HTTPS 见 8.7） |
+| 手机 | http://<本机局域网IP>:5174 （同一 Wi-Fi，局域网预览；公网 HTTPS 见 8.8） |
 
 页面清单：
 
@@ -51,23 +51,37 @@ npm run dev                 # :5174，/api 代理到 :3100
 | `/tasks/:id/confirm` | 确认页 | 高风险动作的后果说明 + 确认 / 取消（F6） |
 | `/notes/:id` | 资料详情 | 正文 + 文件路径；底部「删除这条资料」入口（F6） |
 | `/new` `/tasks` `/confirmations` | — | 旧入口，重定向到 `/archive`、`/log`、`/log?tab=confirm` |
-| `/agent` | agent 对话页（F12 工具化，原 /ask 已 redirect 至此） | 见 8.11 |
+| `/agent` | agent 对话页（F12 工具化，原 /ask 已 redirect 至此） | 见 8.12 |
 | `/about` | 关于 | 自我介绍 / 研究动态页签（`?tab=activity`）；热力图按资料 date 聚合，时间线取最新 8 条（F11） |
 | `/login` | 登录 | 仅 `AUTH_ENABLED=1` 时可达 |
+
+后台入口（`/admin`）：
+
+| 路径 | 页面 | 当前职责 |
+|---|---|---|
+| `/admin` | 运维总览 | 服务探针、任务/资料计数、最近任务；规划/确认/索引指标尚待补齐 |
+| `/admin/tasks` | 任务队列 | 查看任务状态；`failed` / `attention` 可退回 `todo` 重试 |
+| `/admin/agent/runs` | Agent 审计 | 查看 LLM/工具调用记录，只读 |
+| `/admin/agent/tools` | Agent 工具 | 查看当前工具清单与风险等级，只读 |
+| `/admin/notes` | 资料管理 | 搜索、分类、详情、编辑、删除；资料文件/数据库迁移边界见下文 |
+| `/admin/settings` | 站点设置 | 读写 `data/site.json` 业务配置，热生效 |
+| `/admin/env` | 环境变量 | `.env` 脱敏只读总览，不提供网页编辑 |
+
+后台不是第二套业务系统：内容流、规划流和 Agent 确认都必须复用主站已有接口与事务，不直接修改数据库、会话文件或审计文件。
 
 ## 4. 功能边界
 
 | 能做 | 不能做 |
 |---|---|
-| 资料：新建 / 列表检索 / 详情看原文（F1–F3） | 编辑已有资料 |
+| 资料：新建 / 列表检索 / 详情看原文（F1–F3）；后台可编辑已有资料 | 主站普通资料页不提供编辑入口；后台编辑受资料存储模式限制 |
 | 任务：发起（记资料 / 提醒 / 收敛 / 删除资料 / 视频转写）+ 查看与推进状态（F4/F5） | `remind` 的自动执行器：只登记待办；`note` 同步归档，`organize`（收敛）提交即异步整理归档（F14），`transcribe_url` 由轮询器异步归档（F13） |
 | 删除资料：详情页发起 → 确认页看后果 → 确认后才真删（F6） | smail 邮箱关联、ehall 事务（第 2–3 期） |
 | 确认留痕：每次请求与决定可回看（F6） | 多用户与权限、原生 App、自动后台记录 |
 | 个人主页；agent 对话 `/agent` | RAG 进阶：混合检索 / Rerank / 多轮记忆 |
 | 全站深浅主题：主页方格开关，偏好存浏览器本地，首次跟随系统（F10） | 主题跨设备同步；跟随系统 / 浅 / 深 三态切换；切换动画 |
 | 关于页：自我介绍 / 研究动态（F11） | 真实横幅图、热力图按天点击查看资料 |
-| 视频转写：curl 提交 `transcribe_url` 任务 → 自动转写归档（F13，见 8.8） | 前端表单入口、上传文件转写、说话人分离 |
-| 查重：内容完全相同则拒绝写入 | 公网 HTTPS 部署（见 8.7） |
+| 视频转写：curl 提交 `transcribe_url` 任务 → 自动转写归档（F13，见 8.9） | 前端表单入口、上传文件转写、说话人分离 |
+| 查重：内容完全相同则拒绝写入 | 公网 HTTPS 部署（见 8.9） |
 
 ## 5. 数据存哪
 
@@ -77,6 +91,8 @@ npm run dev                 # :5174，/api 代理到 :3100
 | 索引缓存 | `data/.index.json` | 派生数据，删了下次重建 |
 | 任务、确认记录 | `data/.runtime/tasks.json`、`data/.runtime/confirmations.json` | 删了只丢任务与留痕，不影响资料 |
 | 个人主页 | `data/profile.md`（`nickname` / `avatar` / `bio`）、`data/schedule.md`（每行 `- YYYY-MM-DD [HH:mm] 事项`） | 根级文件，不进资料索引 |
+| 站点业务配置 | `data/site.json` | 后台 `/admin/settings` 结构化读写；实际字段以 `site.json` 和 `SPEC.md` 为准 |
+| 图片资产 | `data/images/` | 主站通过 `/images/*` 读取；后台资产管理尚未开放 |
 | 转写临时产物 | `asr/data/jobs/`（本机）或命名卷 `asr-jobs`（compose） | 临时媒体终态即删；只剩小体积 job JSON，TTL 30 分钟 GC |
 
 `data/` 不进公开仓（`.gitignore` 已排除），换机器 `git clone` 不会带过去。
@@ -197,7 +213,7 @@ curl -s -X PATCH http://localhost:3000/api/tasks/<任务id> \
 curl -s http://localhost:3000/api/confirmations
 # 200 {"ok":true,"data":{"total":N,"items":[...]}}
 
-# ⑩ 视频转写任务（F13，需先配 ASR env 与起 asr 服务，见 8.8）
+# ⑩ 视频转写任务（F13，需先配 ASR env 与起 asr 服务，见 8.9）
 curl -s -X POST http://localhost:3000/api/tasks \
   -H "Content-Type: application/json" \
   -d '{"type":"transcribe_url","payload":{"url":"https://www.bilibili.com/video/BVxxxx"}}'
@@ -214,7 +230,7 @@ curl -i -X POST http://localhost:3000/api/login \
 
 ### 8.4 接口边界
 
-> 全量清单与字段契约见 `SPEC.md` §3（**38 条**：业务 24 + 管理 8 + 运维 6）。本表只做「有 / 没有」的速查。
+> 全量清单与字段契约见 `SPEC.md` §3（**40 条**：业务 24 + 管理 10 + 运维 6）。本表只做「有 / 没有」的速查。
 
 | 已有 | 没有 |
 |---|---|
@@ -228,7 +244,7 @@ curl -i -X POST http://localhost:3000/api/login \
 | `/api/db/*`：Postgres 只读迁移口（Day 17–18） | |
 | `/api/agent/*`：对话（SSE）、审计、会话读回、工具清单（F12） | |
 | `/api/github/*`：动态聚合、仓库列表（F16） | |
-| 转写：`type=transcribe_url` 任务（F13，复用任务链路，需配 env，见 8.8） | |
+| 转写：`type=transcribe_url` 任务（F13，复用任务链路，需配 env，见 8.9） | |
 | `/api/admin/*`、`/api/planning/*`、`/api/home`：后台与计划模块（非 PRD 验收范围） | |
 
 ### 8.5 目录速查（后端）
@@ -281,7 +297,32 @@ curl -N "http://localhost:3000/api/kb/stream?q=WSL"     # 流式
 | 换 Embedding 模型后检索全乱 | 向量维度变了 | 删 Chroma collection `buddy-notes` 与 `data/.kb-manifest.json`，重跑 `/api/kb/index` |
 | Chroma 裸奔公网 | 没配认证 | 设 `CHROMA_SERVER_AUTHN_CREDENTIALS` + `CHROMA_AUTH_TOKEN`，或安全组只放后端 IP |
 
-### 8.7 Docker 部署（Nginx + 后端 + Chroma + ASR + Postgres）
+### 8.7 后台与规划流验收
+
+后台依赖与主站同一份登录配置。隐私模式下先设置 `AUTH_ENABLED=1` 并准备 `PASSWORD_HASH`，再登录后访问 `/admin`；公开模式下 `requireAuth` 会直通，但不建议把后台和全部管理接口暴露在公网。
+
+```bash
+# 本机后端已启动时，检查后台核心接口
+curl -s http://localhost:3100/api/admin/overview
+curl -s http://localhost:3100/api/admin/settings
+curl -s http://localhost:3100/api/admin/env
+curl -s http://localhost:3100/api/planning
+```
+
+规划写入不能直接改 `plans` / `schedules`：先通过 `POST /api/planning/drafts` 生成草案，再用 `PATCH /api/planning/drafts/:id` 提交批准/拒绝；若数据或冲突快照已变化，预期返回 `409 PLANNING_REVIEW_REQUIRED`，必须重新读取并审阅。
+
+资料接口处于文件→PostgreSQL 迁移期：生产环境配置 `DATABASE_URL` 时 `POST /api/notes` 只写 `notes` 表；本地裸跑未配置数据库时才落 Markdown。后台资料页当前仍走 `/api/notes`，编辑/删除在数据库模式下可能返回 `NOT_SUPPORTED`，不要把文件和数据库结果混为同一份数据。
+
+站点设置与环境变量的边界：
+
+```text
+/admin/settings → data/site.json，业务配置，可网页修改，热生效
+/admin/env      → .env，基础设施和秘密，只读脱敏
+```
+
+Docker 部署改完 `web/src` 后必须重建 `web` 镜像，改完 `server/src` 后必须重建 `server`；不要只重启容器期待镜像内静态产物自动变化。
+
+### 8.8 Docker 部署（Nginx + 后端 + Chroma + ASR + Postgres）
 
 彩排与上线同一份 `docker-compose.yml`。
 
@@ -372,7 +413,7 @@ ls data/work/                                                # 主页「归档�
 
 上线到服务器还差三步：① 阿里云安全组放行 443；② 域名 A 记录指向服务器 IP；③ 加 certbot 证书段。
 
-### 8.8 视频转写（F13）
+### 8.9 视频转写（F13）
 
 来源查询使用与主站相同的资料存储：配库查数据库，未配库查 Markdown。保留原始 URL，按 URL 与明确 `part` 一起查重；旧档案缺少分 P 时保持 null，不推断成 P1。已有资料会提前结束任务，日志显示「查看归档资料」。查询失败和字幕归档失败会明确标记 failed，只有字幕抓取失败才回落转写。
 
@@ -440,7 +481,7 @@ ASR 服务的 5 个端点：`POST /v1/transcribe`（`wait_seconds=0` 立即返�
 | 想重跑一次 | `failed→todo` 合法迁移 | `PATCH /api/tasks/:id {"status":"todo"}`，轮询器自动重提交 |
 
 
-### 8.9 链接收敛（F14）
+### 8.10 链接收敛（F14）
 
 归档页 `/archive` 默认停在「收敛」：贴一个链接（可选分类）→ 查询已有资料 → 后端抓网页 → 提取正文 → LLM 整理 → 再次查重归档。已有资料直接返回实际档案引用；网页链路不依赖 ASR。等价 curl：
 
@@ -478,7 +519,7 @@ node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 
 测试专用开关：`ORGANIZE_ALLOW_LOOPBACK=1` 时**只放行回环地址**（127.0.0.1 / localhost / ::1，仅供 `link-selftest.mjs` 与本地冒烟打假服务器）；
 内网网段（10./172.16-31./192.168.）与云元数据地址（169.254.169.254）**无论如何都拦**。上线与日常开发一律不要开。
 
-### 8.10 ima 云端知识库 + 笔记只读视图（F15 / F15b）
+### 8.11 ima 云端知识库 + 笔记只读视图（F15 / F15b）
 
 在 `/notes` 页「云端」标签看你 ima（ima.qq.com）里的**知识库**和**笔记**：知识库卡片后面还有一张「笔记」卡片，点进列表，再点进详情（`/notes/ima/:docid`，跟档案详情页同款版式）。**只读**：不写 `data/`、不进向量库、不落缓存文件；Key 只在 `server/.env`。
 
@@ -502,7 +543,7 @@ node server/scripts/link-selftest.mjs      # SSRF 拦截矩阵 / 正文提取 / 
 
 测试（不烧真 Key）：`SMOKE_FAKE_IMA_PORT=8097` + 后端 `IMA_BASE_URL=http://127.0.0.1:8097 IMA_OPENAPI_CLIENTID=fake-cid IMA_OPENAPI_APIKEY=fake-key` → `smoke.mjs` 会自动拉起 `scripts/fake-ima.mjs` 桩并跑 im①–im⑪（知识库 7 条：字段映射/混排/校验/上游错误透传/高亮剥标签+截断/缓存命中/隐私未登录 401；笔记 4 条：列表字段映射/详情 meta+Markdown 且 `<mark>` 已剥/404/隐私未登录 401）。
 
-### 8.11 agent 对话（F12，2026-10-09 上线；2026-10-10 前端重构）
+### 8.12 agent 对话（F12，2026-10-09 上线；2026-10-10 前端重构）
 
 **接口**：`POST /api/agent/chat`（SSE）/ `GET /api/agent/runs` / `GET /api/agent/tools`（清单）/ `GET /api/agent/sessions/:id`（读回消息流，切页/刷新恢复）。整体挂在 `requireAuth` 后。
 
@@ -548,7 +589,7 @@ curl -X PATCH http://localhost:3210/api/tasks/<task_id> -d '{"decision":"approve
 - `routes/kb.js` 的 `/api/kb/stream` 存在同型 `req.on('close')` 误用 bug（SSE 提前判断开），待修；
 - 4B 级模型偶发编造 `source_url`——system prompt 已压「不要编造」，仍建议抽查。
 
-### 8.12 关于页 × GitHub 动态（F16，2026-10-10）
+### 8.13 关于页 × GitHub 动态（F16，2026-10-10）
 
 `/about` 页签接 GitHub：研究动态页签变成「资料热力图（上）+ GitHub 一年贡献热力图（下）」+ 混排时间线（GitHub 事件与资料更新按日期穿插，徽章区分来源）；自我介绍页签在「个人简介」下方渲染 GitHub 资料卡。
 

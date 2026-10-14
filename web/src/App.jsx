@@ -197,6 +197,7 @@ function DesktopNav({ authEnabled }) {
 function MobileTabBar() {
   return (
     <nav
+      data-mobile-nav="true"
       className="fixed inset-x-0 bottom-0 z-50 flex h-16 items-stretch justify-around
                  border-t border-white/20 bg-white/55 backdrop-blur-xl
                  dark:border-white/5 dark:bg-slate-900/55 md:hidden"
@@ -225,15 +226,65 @@ function MobileTabBar() {
   )
 }
 
+// 移动端品牌栏：只保留站点身份，不复制桌面主导航。
+function MobileBrandBar() {
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 h-[52px] border-b border-white/20 bg-white/55 backdrop-blur-xl dark:border-white/5 dark:bg-slate-900/55 md:hidden">
+      <NavLink
+        to="/"
+        aria-label="返回 buddy 主页"
+        className="mx-auto flex h-full w-full max-w-6xl items-center gap-2 px-4 font-sans text-base font-black text-slate-900 dark:text-slate-100 sm:px-6"
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 text-sm text-white" aria-hidden="true">
+          b
+        </span>
+        buddy
+      </NavLink>
+    </header>
+  )
+}
+
 export default function App() {
   const { pathname } = useLocation()
   const isAdmin = /^\/admin(?:\/|$)/.test(pathname)
   const isAgent = /^\/agent(?:\/|$)/.test(pathname)
+  const mainSpacing = isAdmin
+    ? 'pt-20 pb-20 md:pt-24 md:pb-12'
+    : 'pt-[calc(52px+1rem)] pb-[calc(4rem+env(safe-area-inset-bottom))] md:pt-24 md:pb-12'
   // 隐私模块默认关闭：读 /api/health 的 auth_enabled，决定是否显示「退出」与登录页
   const [authEnabled, setAuthEnabled] = useState(false)
   // L0 背景 + 站点视觉配置（site.json）
   const [site, setSite] = useState(null)
   const [theme, setTheme] = useState('light')
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
+
+  useEffect(() => {
+    if (isAdmin || !window.visualViewport) return undefined
+    const mobile = window.matchMedia('(max-width: 767px)')
+    const viewport = window.visualViewport
+    const syncViewport = () => {
+      if (!mobile.matches) {
+        setKeyboardOpen(false)
+        return
+      }
+      const height = Math.round(viewport.height)
+      const focusedTextField = document.activeElement?.matches('input, textarea, [contenteditable="true"]')
+      const open = window.innerHeight - viewport.height > 120 && focusedTextField
+      document.documentElement.style.setProperty('--app-visual-height', `${height}px`)
+      setKeyboardOpen(Boolean(open && isAgent))
+    }
+    syncViewport()
+    viewport.addEventListener('resize', syncViewport)
+    viewport.addEventListener('scroll', syncViewport)
+    mobile.addEventListener?.('change', syncViewport)
+    return () => {
+      viewport.removeEventListener('resize', syncViewport)
+      viewport.removeEventListener('scroll', syncViewport)
+      mobile.removeEventListener?.('change', syncViewport)
+      document.documentElement.style.removeProperty('--app-visual-height')
+      setKeyboardOpen(false)
+    }
+  }, [isAdmin, isAgent])
 
   useEffect(() => {
     request('/api/health')
@@ -254,13 +305,14 @@ export default function App() {
   }, [])
 
   return (
-    <div className="app font-serif text-slate-900 dark:text-slate-100">
+    <div className="app font-serif text-slate-900 dark:text-slate-100" data-keyboard-open={keyboardOpen ? 'true' : undefined}>
       <BackgroundLayer site={site} theme={theme} effectsEnabled={!isAdmin && !isAgent} />
+      {!isAdmin ? <MobileBrandBar /> : null}
       <DesktopNav authEnabled={authEnabled} />
       <MobileTabBar />
 
-      {/* 内容区：桌面顶出导航高(16*4=64px→pt-20 留余量)，移动底出 tab bar(16*4=64→pb-20) */}
-      <main className={`${isAdmin ? '' : 'site-main '}relative z-10 mx-auto w-full max-w-6xl px-4 pb-20 pt-20 sm:px-6 md:pb-12 md:pt-24 lg:px-10`}>
+      {/* 主站移动端只保留 16px 顶部呼吸空间；底部为 tab bar 高度 + 安全区。桌面维持原间距，admin 维持原规则。 */}
+      <main className={`${isAdmin ? '' : 'site-main '}relative z-10 mx-auto w-full max-w-6xl px-4 ${mainSpacing} sm:px-6 lg:px-10`}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/notes" element={<NoteListPage />} />
