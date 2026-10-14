@@ -27,14 +27,23 @@ export function hashOf(title, content) {
   return createHash('sha256').update(`${String(title).trim()}\n${String(content).trim()}`, 'utf8').digest('hex')
 }
 
-/** 由标题生成文件名用的 slug：保留中文与字母数字，其余归一为连字符 */
+/**
+ * 由标题生成文件名用的 slug：保留中文与字母数字，其余归一为连字符。
+ *
+ * ⚠️ 顺序有讲究（Day 24 修复）：**必须先 `.slice()` 截断，再收尾去连字符**。
+ * 原写法是「先去连字符 → 再 slice(0,40)」，当第 40 个字符恰好是连字符时，
+ * 截断会把一个连字符留在末尾，产出 `...aaaa-` 这种 id（进而落成 `...aaaa-.md`）。
+ * 危害不止「不好看」：`storage/files.js` 的重名兜底是 `id = ${note.id}-${suffix}`，
+ * 于是第二个同名条目会变成 `...aaaa--2`（双连字符），id 形态越滚越脏。
+ * 改为「先截断、后收尾」后，两处都干净，且**其余输入产出完全不变**（已逐例比对）。
+ */
 export function slugify(title) {
   const slug = String(title)
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
-    .replace(/^-+|-+$/g, '')
     .slice(0, SLUG_MAX)
+    .replace(/^-+|-+$/g, '')
   return slug || 'note'
 }
 

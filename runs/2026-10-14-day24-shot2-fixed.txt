@@ -1,0 +1,55 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║  Day 24 证据②  修复后 —— 同样输入，id 与落盘文件名都干净            ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+验证脚本：server/scripts/day24-verify.mjs（20 项断言，单元 + 真实 HTTP）
+
+──────────────────────────────────────────────────────────────────────
+▶ 同样的魔鬼标题，修复后的返回
+──────────────────────────────────────────────────────────────────────
+HTTP/1.1 201 Created
+{ "ok": true, "data": {
+    "id":   "2026-10-14-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",      ← 尾连字符没了
+    "path": "learning/2026-10-14-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.md"
+} }
+
+▶ 重名兜底（同名不同内容），修复后：
+   "2026-10-14-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-2"              ← 单连字符，不再是 --2
+
+══════════════════════════════════════════════════════════════════════
+ 实跑输出
+══════════════════════════════════════════════════════════════════════
+  【① 单元】slugify 边界输入
+  PASS  尾连字符检查：截断点落在连字符  — slug="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  PASS  尾连字符检查：截断点落在空格归一后的连字符  — slug="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  PASS  尾连字符检查：截断点落在多个连字符  — slug="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  PASS  尾连字符检查：截断点落在字母（对照）  — slug="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  
+  【② 单元】slugify 常规输入（应与修复前一致）
+  PASS  常规产出不变："正常标题"  — 得到 "正常标题"，期望 "正常标题"
+  PASS  常规产出不变："Hello World!"  — 得到 "hello-world"，期望 "hello-world"
+  PASS  常规产出不变："a/b/c"  — 得到 "a-b-c"，期望 "a-b-c"
+  PASS  常规产出不变："../../etc/passwd"  — 得到 "etc-passwd"，期望 "etc-passwd"
+  PASS  常规产出不变："!!!"  — 得到 "note"，期望 "note"
+  PASS  常规产出不变："  空白标题  "  — 得到 "空白标题"，期望 "空白标题"
+  PASS  常规产出不变："《高等数学》同济版 p15"  — 得到 "高等数学-同济版-p15"，期望 "高等数学-同济版-p15"
+  
+  【③ 集成】真实 HTTP 创建（走完整链路）
+  PASS  创建成功（201）  — status=201
+  PASS  id 无尾连字符  — id="2026-10-14-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  PASS  id 不以连字符开头
+  PASS  重名兜底 id 无双连字符  — id="2026-10-14-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-2"
+  PASS  落盘文件名全部干净  — 脏文件名 []
+  PASS  落盘文件数 = 2  — 实际 2: ["2026-10-14-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-2.md","2026-10-14-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.md"]
+  PASS  新建资料可按 id 取回（200）  — status=200
+  PASS  删除返回 200  — status=200
+  PASS  删后查询 404  — status=404
+  
+  20/20 通过
+══════════════════════════════════════════════════════════════════════
+ 回归（确认没改坏别的）
+══════════════════════════════════════════════════════════════════════
+  Day 23 错误处理断言：  19/19 通过
+  Day 22 增删改查断言：  【Day 22 验证完毕】共 12 项断言通过；DELETE 实际状态码 = 200
+  链接链路自测：        结果：38 通过 / 0 失败
+══════════════════════════════════════════════════════════════════════
