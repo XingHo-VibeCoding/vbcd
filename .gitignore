@@ -4,13 +4,22 @@
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*.crt
 *secret*
 credentials*.json
 token*.json
+service-account*.json
+auth*.json
+.npmrc
+.netrc
 
 # ===== 依赖目录与构建产物 =====
 node_modules/
 __pycache__/
+.pytest_cache/
 .venv/
 venv/
 dist/
@@ -33,6 +42,10 @@ drafts/
 
 # ===== 本地 AI 助手数据 =====
 .workbuddy/
+# .pi/：项目级 AI 助手配置（agent 定义 + skills 挂载）。属本机工具配置，不进公开仓；
+# 文件保留在本地磁盘照常工作，只是不再被 git 跟踪。
+.pi/
+.pi.bak-*
 
 # ===== 编辑器与系统文件 =====
 .vscode/
@@ -40,6 +53,14 @@ drafts/
 .DS_Store
 Thumbs.db
 desktop.ini
+*.swp
+*.swo
+*~
+.history/
+.Trash-0/
+
+# ===== 本地编排覆盖（常含本机端口/路径/临时口令）=====
+docker-compose.override.yml
 
 # ===== 日志与临时文件 =====
 *.log
