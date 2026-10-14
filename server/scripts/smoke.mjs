@@ -430,6 +430,39 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
       await verify('原始 URL 精确比较，不擅自认定别名相同', async () => {
         assert.equal(await store.findBySource(origin + '?alias=1', 1), null)
       })
+      // ── D10 修复专项（2026-10-14）：来源 URL 归一化 ──
+      // 归一规则：去 fragment + 去路径尾斜杠（含根路径）；**保留 query**。
+      // 故 '?alias=1' 与原名仍视为不同（上一条断言不变），但尾斜杠/fragment 变化应命中同一份。
+      await verify('D10 尾斜杠变化命中同一份档案（不再重复入库）', async () => {
+        const hit = await store.findBySource(origin + '/', 1)
+        assert(hit, '带尾斜杠的同一 URL 应命中已归档档案')
+        assert.equal(hit.id, first.note_id)
+        assert.equal((await store.findBySource(origin, 1)).id, first.note_id)
+      })
+      await verify('D10 fragment 变化命中同一份档案', async () => {
+        const hit = await store.findBySource(origin + '#section', 1)
+        assert(hit, '仅 fragment 不同的 URL 应命中同一份档案')
+        assert.equal(hit.id, first.note_id)
+      })
+      await verify('D10 归一化不误合 query 串（?t= 仍独立）', async () => {
+        assert.equal(await store.findBySource(origin + '?t=9.7', 1), null)
+        assert.equal(await store.findBySource(origin + '?t=10.1', 1), null)
+      })
+      await verify('D10 归一化后重复转写走「已归档过」而非新增', async () => {
+        const before = (await query('SELECT count(*)::int AS n FROM notes'))[0].n
+        const again = await submitTranscribeTask(makeTask(origin + '/', 1))
+        assert.equal(again.status, 'done')
+        assert.equal(again.note_id, first.note_id)
+        assert.equal((await query('SELECT count(*)::int AS n FROM notes'))[0].n, before)
+      })
+      await verify('D10 库内已存带尾斜杠的老写法也能被不带斜杠的入参命中', async () => {
+        // 模拟历史数据：直接改库让某条档案存成带尾斜杠形态，再用不带斜杠的 URL 查
+        const legacy = await createNote({ title: '老写法档案', content: '历史尾斜杠数据', category: 'learning', source_url: 'https://source-test.invalid/legacy/' })
+        await query('UPDATE notes SET source_url=$2 WHERE id=$1', [legacy.id, 'https://source-test.invalid/legacy/'])
+        const hit = await store.findBySource('https://source-test.invalid/legacy', null)
+        assert(hit, '库内带尾斜杠的老数据应被不带斜杠的入参命中（双向归一）')
+        assert.equal(hit.id, legacy.id)
+      })
       await verify('终态归档复查数据库，返回已有档案且不新增', async () => {
         const before = (await query('SELECT count(*)::int AS n FROM notes'))[0].n
         const archived = await archiveTranscript(makeTask(origin, 2), { text: '新的处理结果' })

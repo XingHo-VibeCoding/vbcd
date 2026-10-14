@@ -13,6 +13,7 @@
 // 未配库时由 db 层自己抛 DB_NOT_CONFIGURED，不静默退文件。
 import * as files from './files.js'
 import { dbConfigured } from '../db/pool.js'
+import { normalizeSourceUrl } from '../services/notes.js'
 import { listDbNotes, listAllDbNotes, getDbNote, findDbNoteByHash, findDbNoteBySource, insertDbNote, updateDbNote, removeDbNote } from '../db/notes.js'
 
 export async function list() {
@@ -68,11 +69,18 @@ export async function getDb(id) {
   return await getDbNote(id)
 }
 
-/** 与主站同源；数据库错误直接上抛，不降级读文件。 */
+/**
+ * 与主站同源；数据库错误直接上抛，不降级读文件。
+ *
+ * D10 修复（2026-10-14）：入参 URL 与库内/文件内已存 URL **双向归一**后再比对，
+ * 否则只归一入参会漏掉「库里存的是带尾斜杠的老写法」（现网真实资料即为此形态）。
+ * 归一规则见 services/notes.js 的 normalizeSourceUrl（去 fragment + 去尾斜杠，保留 query）。
+ */
 export async function findBySource(url, part = null) {
   if (!url) return null
-  if (dbConfigured()) return findDbNoteBySource(url, part)
+  const key = normalizeSourceUrl(url)
+  if (dbConfigured()) return findDbNoteBySource(key, part)
   const { items } = await files.list()
-  return items.filter(item => item.source_url === url && (item.source_part ?? null) === part)
+  return items.filter(item => normalizeSourceUrl(item.source_url) === key && (item.source_part ?? null) === part)
     .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || a.id.localeCompare(b.id))[0] ?? null
 }

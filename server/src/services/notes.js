@@ -38,6 +38,38 @@ export function slugify(title) {
   return slug || 'note'
 }
 
+/**
+ * 来源链接归一化（D10 修复，2026-10-14）：把「指向同一资源的不同写法」折叠成同一个 key。
+ *
+ * 只做两条**明确、可解释**的折叠，不擅自猜别名：
+ *   ① 去掉 fragment（`#...`）——纯客户端锚点，不改变服务端资源；
+ *   ② 去掉路径末尾的 `/`（含根路径）——`.../BV1N2pc6gErK/` 与 `.../BV1N2pc6gErK`
+ *      是同一视频，这正是 D10 重复入库的成因（见 runs/2026-10-14-day21.md §1.3 D10）。
+ *
+ * **刻意保留 query 串**：`?t=9.7` 与 `?t=10.1` 在本库内是两条不同资料，
+ * query 确实承载区分度；笼统合并会把不同资源误判为同一份。
+ * 故 `.../subok?alias=1` 与 `.../subok` 仍视为**不同**（smoke「不擅自认定别名相同」断言不变）。
+ *
+ * ⚠️ **等价性约束**：本函数产出必须与 db/notes.js 的 `NORMALIZED_SOURCE` 表达式
+ * **逐字符相同**，否则「库里存 A 写法、查 B 写法」会漏命中。故**不使用 `new URL()` 序列化**
+ * （它会把 `https://host` 自动补成 `https://host/`，与 SQL 侧 rtrim 结果不一致），
+ * 改为手工拼接 scheme/host/path(+query)，行为与 SQL 的 `rtrim(split_part(col,'#',1),'/')` 完全对齐。
+ *
+ * 非 http(s) 或解析失败时原样返回，绝不因归一化抛错。
+ */
+const URL_SHAPE = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?(?:#[\s\S]*)?$/
+
+export function normalizeSourceUrl(raw) {
+  const url = String(raw ?? '').trim()
+  if (!url) return ''
+  const m = URL_SHAPE.exec(url)
+  if (!m) return url
+  const [, scheme, host, path, query = ''] = m
+  if (!/^https?$/i.test(scheme)) return url
+  const trimmedPath = path.replace(/\/+$/, '')   // 去 fragment；去路径尾部所有 '/'（含根路径）
+  return `${scheme}://${host}${trimmedPath}${query}`
+}
+
 /** 字段校验；不通过直接抛带 code 的错误（由统一错误中间件转成响应） */
 export function validate(input) {
   const title = String(input?.title ?? '').trim()

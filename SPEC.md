@@ -141,7 +141,7 @@ vbcd/
 | `category` | string | ✅ | 分类目录名（`learning` / `life` / `work`） |
 | `date` | date | ✅ | 资料归属日期（可与创建时间不同） |
 | `tags` | string[] | ⬜ | 标签，检索用 |
-| `source_url` | string | ⬜ | 保留提交时的原始来源链接 |
+| `source_url` | string | ⬜ | 保留提交时的原始来源链接（**存储时原样保留**；查重时按 `normalizeSourceUrl` 归一后比对，见 §3.4） |
 | `source_part` | integer / null | ⬜ | 明确请求的分 P 序号（≥1）；未指定及旧档案为 null，不推断回填 |
 | `created_at` / `updated_at` | datetime | ✅ | 创建 / 更新时间 |
 | `hash` | string | ✅ | 正文哈希（查重） |
@@ -281,7 +281,12 @@ vbcd/
 
 **payload 校验**：`url` 必须 http/https（否则 400，不落任务）；`category` 默认 `learning` 且必须是 `learning|life|work|essay`；`part` 为 B 站分 P 序号（≥1 整数）；`tags` ≤10 个；`prefer_subtitles` 为布尔（显式 `true` 才启用「先字幕」，默认 `false` 纯转写）；`formats` 为 `text|segments|srt` 子集（含 `srt` 时资料正文附带 srt 代码块）。
 
-**来源查询**：通过 `storage/note-store.js` 与主站共用权威资料源。精确比较原始 `source_url` 与显式 `source_part`；null 只匹配 null，不视为 P1。字幕/ASR 之前先查，命中直接 `done` 并返回 `note_id`；归档前再次查询，保留已有档案。配库但查询失败时写明失败，不回退文件、不当作不存在继续处理。字幕抓取失败可回落转写，字幕归档失败则终止。原始 URL 不做别名归一，不推断历史分 P；当前复查不保证跨进程并发唯一。
+**来源查询**：通过 `storage/note-store.js` 与主站共用权威资料源。按**归一化后**的 `source_url` 与显式 `source_part` 精确比较；null 只匹配 null，不视为 P1。字幕/ASR 之前先查，命中直接 `done` 并返回 `note_id`；归档前再次查询，保留已有档案。配库但查询失败时写明失败，不回退文件、不当作不存在继续处理。字幕抓取失败可回落转写，字幕归档失败则终止。
+
+**来源 URL 归一化**（2026-10-14 起，修 D10 重复入库）：查重前对入参与库内/文件内已存 URL **双向归一**后再比对，规则见 `services/notes.js` 的 `normalizeSourceUrl`——
+① 去 fragment（`#...`）；② 去路径末尾所有 `/`（含根路径）；③ **保留 query 串**（`?t=9.7` 与 `?t=10.1` 视为不同资源，不合并；`?alias=1` 亦不视为同一份）。仅 `http(s)://` 开头的 URL 参与归一，其余原样返回。
+⚠️ **DB 侧等价性约束**：`db/notes.js` 的 `NORMALIZED_SOURCE` SQL 表达式必须与上述 JS 函数**逐字符等价**（否则「库存 A 写法、查 B 写法」漏命中），改动其一时必须同步另一侧并跑 `--source-selftest` 的 D10 用例。
+仍**不推断**历史分 P；当前复查不保证跨进程并发唯一。
 
 **时序**：
 1. **提前查重**：字幕/ASR 前按原始 URL + 明确分 P 查询权威资料源；命中则 `done`、返回实际 `note_id` 与档案路径，跳过后续网络处理。查询故障则明确 `failed`，绝不回退文件存储或假装未命中；

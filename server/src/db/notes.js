@@ -168,13 +168,36 @@ export async function insertDbNote(note) {
   throw fail('DB_UNAVAILABLE', '生成资料编号失败，请稍后再试', 503)
 }
 
-/** 精确来源查询：未知分 P（null）不匹配任何明确分 P。 */
+/**
+ * 精确来源查询：未知分 P（null）不匹配任何明确分 P。
+ *
+ * D10 修复（2026-10-14）：库内已存 URL 与入参 URL **双向归一**后比对，
+ * 以兼容历史数据里的带尾斜杠/带 fragment 写法（现网真实资料即 `.../BV1N2pc6gErK/`）。
+ *
+ * ⚠️ **等价性约束**：本表达式必须与 services/notes.js 的 `normalizeSourceUrl` **逐字符等价**，
+ * 否则「库里存 A 写法、查 B 写法」会漏命中。两边规则统一为：
+ *   ① 仅当形如 `http(s)://...` 才归一（非 http(s) **原样返回**，与 JS 侧一致；否则 `ftp://x/y/`
+ *      会被 SQL 的 rtrim 误改而 JS 不改 —— 虽 `validate()` 已挡在入库前，仍保持严格等价）
+ *   ② 去 fragment（`split_part(col, '#', 1)` 取 '#' 前段）
+ *   ③ 去路径末尾所有 '/'（`rtrim(..., '/')`，含根路径）
+ *   ④ **保留 query 串**（`?t=9.7` 在本库承载区分度，不得合并）
+ * 因库内数据量小（本期 ≤1000），表达式比对即可，无需生成列或迁移。
+ */
+const NORMALIZED_SOURCE = (col) => `(
+  CASE WHEN ${col} ~* '^https?://'
+       THEN rtrim(split_part(${col}, '#', 1), '/')
+       ELSE ${col}
+  END
+)`
+
 export async function findDbNoteBySource(url, part = null) {
   const rows = await query(
     `SELECT id, title, category, source_url, source_part,
             category || '/' || id || '.md' AS path
-       FROM notes WHERE source_url = $1 AND source_part IS NOT DISTINCT FROM $2::integer
-       ORDER BY created_at, id LIMIT 1`, [url, part],
+       FROM notes
+      WHERE ${NORMALIZED_SOURCE('source_url')} = ${NORMALIZED_SOURCE('$1::text')}
+        AND source_part IS NOT DISTINCT FROM $2::integer
+      ORDER BY created_at, id LIMIT 1`, [url, part],
   )
   return rows[0] ?? null
 }
