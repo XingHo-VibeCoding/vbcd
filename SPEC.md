@@ -268,7 +268,7 @@ vbcd/
 |---|---|---|---|---|---|
 | S1 | `GET /api/health` | 健康检查（部署探针、`RUN.md` 8.7 用） | — | `200 {ok:true, ...}` | — |
 | S2 | `PATCH /api/notes/:id` | 编辑资料（改标题/分类/标签/正文） | `title?, category?, content?, tags?` | `200 {id, path, hash}` | `VALIDATION_FAILED`、`NOT_FOUND` |
-| S3 | `DELETE /api/notes/:id` | 删除资料（后台直删口；页面入口走任务链路 3.3 确认流） | — | `204` | `NOT_FOUND` |
+| S3 | `DELETE /api/notes/:id` | 删除资料（后台直删口；页面入口走任务链路 3.3 确认流） | — | `200 {id, path}` | `NOT_FOUND` |
 | S4 | `GET /api/agent/tools` | agent 工具清单与可用状态（供前端灰显） | — | `200 {items[]}` | `INTERNAL` |
 | S5 | `GET /api/github/projects` | GitHub 仓库列表聚合（关于页项目卡片） | — | `200 {items[]}` | `GITHUB_UPSTREAM` |
 | S6 | `GET /api/home` | 站点首页聚合数据（首页卡片所需） | — | `200 {...}` | `INTERNAL` |
