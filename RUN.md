@@ -360,6 +360,7 @@ ls data/work/                                                # 主页「归档�
 | 线上 `:80` 页面少了刚提交的文案（如「发散 / 收敛」搜不到），接口却是新的 | `web` 镜像是**多阶段构建**：静态产物在 `docker build` 时就固化进镜像，改完 `web/src` 不重建就永远是旧的（2026-09-29 实测：镜像 09-28 18:44 构建，而前端提交在 09-29 06:54 之后） | `docker compose up -d --build web`（会连带重启依赖服务，`asr`/`server` 会重启）。核对：`docker exec vbcd-web-1 ls -l /usr/share/nginx/html/assets/*.js` 的文件名与字节数应与 `web/dist/assets/` **完全一致** |
 | `docker compose up` 报 `required variable PG_PASSWORD is missing`，但 `server/.env` 里明明写了 | **`docker compose` 的 `${VAR}` 插值只认项目根 `.env`**，`env_file` 是容器运行时的变量、不参与编排插值 | `PG_PASSWORD` 放项目根 `.env`（gitignore 已覆盖）；`server/.env` 里不必重复写 |
 | web 容器还在但接口 502，`docker compose logs server` 显示 `health -> 200` | nginx 在 `server` 容器重建前启动，把 `server` 主机名解析成了旧 IP | `docker compose restart web`（重启重新解析）即可；根治法是给 nginx.conf 加 `resolver 127.0.0.11 valid=5s` + 变量代理，本期未改 |
+| `git push` 报 `Bad owner or permissions on /etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf`，紧接着 `fatal: 无法读取远程仓库` | 本机该系统配置文件属主/权限不合规，OpenSSH 拒绝加载后直接退出；`git` 用 ssh 远程（`origin` = `git@github.com:…`）走的是同一个通道，`ssh fel` 也报同一句 | 用 `-F` 指定用户配置绕开系统 `ssh_config`（**只本次生效，不改任何持久配置**）：`GIT_SSH_COMMAND="ssh -F ~/.ssh/config" git push origin HEAD:main`；连服务器同理 `ssh -F ~/.ssh/config fel`。2026-10-14 实测 |
 
 上线到服务器还差三步：① 阿里云安全组放行 443；② 域名 A 记录指向服务器 IP；③ 加 certbot 证书段。
 
