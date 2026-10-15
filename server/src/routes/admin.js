@@ -8,6 +8,7 @@ import * as noteStore from '../storage/note-store.js'
 import { listEnv } from '../services/env.js'
 import { getSettings, patchSettings } from '../services/settings.js'
 import { listImages, getImage } from '../services/images.js'
+import { getSiteProfile, patchSiteProfile } from '../services/site-profile.js'
 
 const router = Router()
 
@@ -133,6 +134,23 @@ router.get('/settings', async (req, res, next) => {
 router.patch('/settings', async (req, res, next) => {
   try {
     res.json({ ok: true, data: await patchSettings(req.body ?? {}) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// 站点信息与个人信息：统一后台表单，底层分别写 site.json/profile.md。
+router.get('/site', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await getSiteProfile() })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.patch('/site', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await patchSiteProfile(req.body ?? {}) })
   } catch (err) {
     next(err)
   }

@@ -17,7 +17,8 @@ import NoteBrowse from './pages/NoteBrowse.jsx'
 import EnvManager from './pages/EnvManager.jsx'
 import SiteSettings from './pages/SiteSettings.jsx'
 import ImageAssets from './pages/ImageAssets.jsx'
-import { UnorderedListOutlined, RobotOutlined, ToolOutlined, FileTextOutlined, SettingOutlined, ControlOutlined, PictureOutlined } from '@ant-design/icons'
+import SiteProfileSettings from './pages/SiteProfileSettings.jsx'
+import { UnorderedListOutlined, RobotOutlined, ToolOutlined, FileTextOutlined, SettingOutlined, ControlOutlined, PictureOutlined, UserOutlined } from '@ant-design/icons'
 
 export default function AdminApp() {
   return (
@@ -58,6 +59,11 @@ export default function AdminApp() {
               name: 'settings',
               list: '/admin/settings',
               meta: { label: '站点设置', icon: <ControlOutlined /> },
+            },
+            {
+              name: 'site-profile',
+              list: '/admin/site',
+              meta: { label: '站点与个人', icon: <UserOutlined /> },
             },
             {
               name: 'env',
@@ -118,6 +124,14 @@ export default function AdminApp() {
               element={
                 <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
                   <SiteSettings />
+                </ThemedLayout>
+              }
+            />
+            <Route
+              path="site"
+              element={
+                <ThemedLayout Title={({ collapsed }) => <ThemedTitle collapsed={collapsed} text="buddy 后台" />}>
+                  <SiteProfileSettings />
                 </ThemedLayout>
               }
             />
