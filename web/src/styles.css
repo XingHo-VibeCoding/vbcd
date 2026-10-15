@@ -221,6 +221,16 @@ body {
   overflow-x: clip; /* Day 9 · P5：横向滚动兜底 */
 }
 
+html {
+  /* 防头部漂移 + 隐藏滚动条：滚动条不渲染也不占位（宽度恒为 0），
+     切换页面（长页↔短页）时布局宽度不变，头部不再左右抖动。
+     滚动功能不受影响：滚轮 / 触控板 / 键盘 / 触摸均可正常滚动。 */
+  scrollbar-width: none;      /* Firefox */
+}
+html::-webkit-scrollbar {
+  display: none;              /* Chrome / Safari / Edge */
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -2418,4 +2428,87 @@ body {
   .background-atmosphere :is(.waterlight, .firefly) { animation: none; will-change: auto; }
   .background-atmosphere .waterlight { transform: none; opacity: .38; }
   .background-atmosphere .firefly { transform: none; opacity: .8; }
+}
+
+/* ============================================================
+   主导航英文字体方案（2026-10-15 设计版图 v3 定稿）
+   常态：Lobster 灰字 · 悬停：品牌蓝 · 选中：Great Vibes 花体
+   （品牌蓝、微旋落入）+ 底部 CC0 书法衬线展开，无背景药丸。
+   字体与衬线均自托管（public/fonts + public/images），无外链。
+   ============================================================ */
+@font-face {
+  font-family: "Lobster";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/lobster-latin-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Great Vibes";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/great-vibes-latin-400.woff2") format("woff2");
+}
+
+:root { --nav-ease: cubic-bezier(.4, 0, .2, 1); }
+
+/* 桌面顶栏标签：双层文字交叉淡入（Lobster ↔ Great Vibes） */
+.nav-tab {
+  position: relative;
+  font-family: "Lobster", cursive;
+  font-weight: 400;
+  font-size: 15px;
+  letter-spacing: .2px;
+}
+.nav-tab .nav-l1 {
+  display: inline-block;
+  transition: opacity .38s var(--nav-ease), transform .38s var(--nav-ease), color .2s;
+}
+.nav-tab .nav-l2 {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Great Vibes", cursive;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-brand);
+  opacity: 0;
+  transform: translateY(7px) rotate(-3deg);
+  pointer-events: none;
+  transition: opacity .38s var(--nav-ease), transform .38s var(--nav-ease);
+}
+.dark .nav-tab .nav-l2 { color: var(--color-brand-dark-text); }
+.nav-tab:hover .nav-l1 { color: var(--color-brand); }
+.dark .nav-tab:hover .nav-l1 { color: var(--color-brand-dark-text); }
+.nav-tab.nav-tab-active .nav-l1 { opacity: 0; transform: translateY(-4px); }
+.nav-tab.nav-tab-active .nav-l2 { opacity: 1; transform: translateY(1px) rotate(0); }
+
+/* 底部书法衬线：currentColor 跟随文字色，mask 渲染 SVG 形状 */
+.nav-swash {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 2px;
+  height: 8px;
+  background-color: currentColor;
+  -webkit-mask: url("/nav-swash.svg") 50% / 100% 100% no-repeat;
+  mask: url("/nav-swash.svg") 50% / 100% 100% no-repeat;
+  opacity: 0;
+  transform: scaleX(.25);
+  transform-origin: center;
+  pointer-events: none;
+  transition: opacity .45s var(--nav-ease) .1s, transform .45s var(--nav-ease) .1s;
+}
+.nav-tab.nav-tab-active .nav-swash { opacity: 1; transform: scaleX(1); }
+.nav-tab.nav-tab-active .nav-swash { color: var(--color-brand); }
+.dark .nav-tab.nav-tab-active .nav-swash { color: var(--color-brand-dark-text); }
+
+/* 移动端 tab bar 标签：只换字体，不做双层动效（小尺寸下可读性优先） */
+.tabbar-en { font-family: "Lobster", cursive; font-weight: 400; font-size: 12.5px; letter-spacing: .3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-tab .nav-l1, .nav-tab .nav-l2, .nav-swash { transition: none; transform: none; }
 }

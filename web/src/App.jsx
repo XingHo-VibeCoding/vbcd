@@ -21,12 +21,12 @@ const AdminApp = lazy(() => import('./admin/AdminApp.jsx'))
 
 // 主导航项（桌面顶栏 + 移动 tab bar 共用同一份，保证两处一致）
 const NAV_ITEMS = [
-  { to: '/', label: '主页', icon: '🏠', end: true },
-  { to: '/notes', label: '档案', icon: '📁' },
-  { to: '/planning', label: '规划', icon: '🧭' },
-  { to: '/log', label: '日志', icon: '📋' },
-  { to: '/agent', label: 'agent', icon: '✨' },
-  { to: '/about', label: '关于', icon: '👤' },
+  { to: '/', label: 'Home', icon: '🏠', end: true },
+  { to: '/notes', label: 'Archive', icon: '📁' },
+  { to: '/planning', label: 'Planner', icon: '🧭' },
+  { to: '/log', label: 'Journal', icon: '📋' },
+  { to: '/agent', label: 'Agent', icon: '✨' },
+  { to: '/about', label: 'About', icon: '👤' },
 ]
 
 function LogoutButton({ className = '' }) {
@@ -153,7 +153,29 @@ function BackgroundLayer({ site, theme, effectsEnabled }) {
 }
 
 // 桌面顶部玻璃导航（>=768px）：fixed top-0，半透明 + backdrop-blur
-function DesktopNav({ authEnabled }) {
+// 品牌名读站点配置（site.site.title 双层兼容），admin 改站名后此处与标签页同步变化
+// 导航品牌 logo：admin 配置了头像（profile.avatar）时显示头像图，加载失败回退品牌名首字母。
+function BrandMark({ brand, avatar }) {
+  const [broken, setBroken] = useState(false)
+  const showAvatar = avatar && !broken
+  return (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-brand to-purple-500 text-sm text-white" aria-hidden="true">
+      {showAvatar ? (
+        <img
+          className="h-full w-full object-cover"
+          src={avatar}
+          alt=""
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        brand.trim().charAt(0).toLowerCase() || 'b'
+      )}
+    </span>
+  )
+}
+
+function DesktopNav({ authEnabled, site, avatar }) {
+  const brand = site?.site?.title || site?.title || 'buddy'
   return (
     <header
       className="fixed inset-x-0 top-0 z-50 hidden md:block
@@ -162,10 +184,8 @@ function DesktopNav({ authEnabled }) {
     >
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-10">
         <NavLink to="/" className="flex items-center gap-2 text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 text-sm text-white">
-            b
-          </span>
-          buddy
+          <BrandMark brand={brand} avatar={avatar} />
+          {brand}
         </NavLink>
         <nav className="flex items-center gap-1" aria-label="主导航">
           {NAV_ITEMS.map((item) => (
@@ -174,14 +194,12 @@ function DesktopNav({ authEnabled }) {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `inline-flex h-11 shrink-0 items-center rounded-xl px-3 font-sans text-sm font-semibold transition-all duration-200 ${
-                  isActive
-                    ? 'bg-brand text-white shadow-lg shadow-brand-glow'
-                    : 'text-slate-500 hover:bg-brand/10 hover:text-brand dark:text-slate-400 dark:hover:text-brand-dark-text'
-                }`
+                `nav-tab inline-flex h-11 shrink-0 items-center rounded-xl px-3.5 text-slate-500 hover:text-brand dark:text-slate-400 dark:hover:text-brand-dark-text${isActive ? ' nav-tab-active' : ''}`
               }
             >
-              {item.label}
+              <span className="nav-l1">{item.label}</span>
+              <span className="nav-l2" aria-hidden="true">{item.label}</span>
+              <span className="nav-swash" aria-hidden="true" />
             </NavLink>
           ))}
           {authEnabled ? (
@@ -219,7 +237,7 @@ function MobileTabBar() {
           <span className="text-lg leading-none" aria-hidden="true">
             {item.icon}
           </span>
-          {item.label}
+          <span className="tabbar-en">{item.label}</span>
         </NavLink>
       ))}
     </nav>
@@ -227,7 +245,9 @@ function MobileTabBar() {
 }
 
 // 移动端品牌栏：只保留站点身份，不复制桌面主导航。
-function MobileBrandBar() {
+// 品牌名与桌面导航同源：读站点配置 site.title，回退 buddy
+function MobileBrandBar({ site, avatar }) {
+  const brand = site?.site?.title || site?.title || 'buddy'
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-[52px] border-b border-white/20 bg-white/55 backdrop-blur-xl dark:border-white/5 dark:bg-slate-900/55 md:hidden">
       <NavLink
@@ -235,10 +255,8 @@ function MobileBrandBar() {
         aria-label="返回 buddy 主页"
         className="mx-auto flex h-full w-full max-w-6xl items-center gap-2 px-4 font-sans text-base font-black text-slate-900 dark:text-slate-100 sm:px-6"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-purple-500 text-sm text-white" aria-hidden="true">
-          b
-        </span>
-        buddy
+        <BrandMark brand={brand} avatar={avatar} />
+        {brand}
       </NavLink>
     </header>
   )
@@ -255,6 +273,7 @@ export default function App() {
   const [authEnabled, setAuthEnabled] = useState(false)
   // L0 背景 + 站点视觉配置（site.json）
   const [site, setSite] = useState(null)
+  const [avatar, setAvatar] = useState(null)
   const [theme, setTheme] = useState('light')
   const [keyboardOpen, setKeyboardOpen] = useState(false)
 
@@ -290,10 +309,16 @@ export default function App() {
     request('/api/health')
       .then((data) => setAuthEnabled(Boolean(data?.auth_enabled)))
       .catch(() => setAuthEnabled(false))
-    // site.json（含 background/social/hotspots/projects）；失败不阻塞
+    // site.json（含 background/social/hotspots/projects）；profile.avatar 供导航 logo 使用；失败不阻塞
     request('/api/me')
-      .then((d) => setSite(d?.site ?? null))
-      .catch(() => setSite(null))
+      .then((d) => {
+        setSite(d?.site ?? null)
+        setAvatar(d?.profile?.avatar || null)
+      })
+      .catch(() => {
+        setSite(null)
+        setAvatar(null)
+      })
     // 背景图跟随当前主题：直接读 <html> 的 data-theme（首屏脚本已写）
     setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
     // 监听主题切换：切换时换背景图
@@ -304,11 +329,22 @@ export default function App() {
     return () => observer.disconnect()
   }, [])
 
+  // 站名/副标题 → 浏览器标签标题。
+  // 背景：admin 可配置 site.title/subtitle，但主站此前没有任何渲染点消费站名，
+  // 标签页永远是 index.html 里硬编码的「buddy — 会成长的个人助手」。
+  // site.json 存储格式分裂：title/subtitle 在嵌套 site 键下（site.site.title），
+  // 取值做双层兼容；读不到时回退 index.html 的默认标题。
+  useEffect(() => {
+    const title = site?.site?.title || site?.title || ''
+    const subtitle = site?.site?.subtitle || site?.subtitle || ''
+    document.title = title ? `${title}${subtitle ? ` — ${subtitle}` : ''}` : 'buddy — 会成长的个人助手'
+  }, [site])
+
   return (
     <div className="app font-serif text-slate-900 dark:text-slate-100" data-keyboard-open={keyboardOpen ? 'true' : undefined}>
       <BackgroundLayer site={site} theme={theme} effectsEnabled={!isAdmin && !isAgent} />
-      {!isAdmin ? <MobileBrandBar /> : null}
-      <DesktopNav authEnabled={authEnabled} />
+      {!isAdmin ? <MobileBrandBar site={site} avatar={avatar} /> : null}
+      <DesktopNav authEnabled={authEnabled} site={site} avatar={avatar} />
       <MobileTabBar />
 
       {/* 主站移动端只保留 16px 顶部呼吸空间；底部为 tab bar 高度 + 安全区。桌面维持原间距，admin 维持原规则。 */}
