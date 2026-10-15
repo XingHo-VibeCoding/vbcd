@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { DATA_DIR } from '../storage/files.js'
 import { fail } from './errors.js'
+import { validateCurated } from './curated.js'
 
 const SITE_FILE = path.join(DATA_DIR, 'site.json')
 const PROFILE_FILE = path.join(DATA_DIR, 'profile.md')
@@ -150,6 +151,7 @@ function validatePatch(input = {}) {
   const site = {}
   const profile = {}
 
+  if (Object.prototype.hasOwnProperty.call(siteInput, 'curated')) site.curated = validateCurated(siteInput.curated)
   if (Object.prototype.hasOwnProperty.call(siteInput, 'title')) site.title = validateString(siteInput.title, 'site.title', 80, true)
   if (Object.prototype.hasOwnProperty.call(siteInput, 'subtitle')) site.subtitle = validateString(siteInput.subtitle, 'site.subtitle', 160)
   if (Object.prototype.hasOwnProperty.call(siteInput, 'social')) site.social = validateSocial(siteInput.social)
@@ -167,7 +169,7 @@ function validatePatch(input = {}) {
 
   const allowedTop = new Set(['site', 'profile'])
   for (const key of Object.keys(input)) if (!allowedTop.has(key)) throw fail('VALIDATION_FAILED', `不认识的配置段「${key}」`)
-  for (const key of Object.keys(siteInput)) if (!['title', 'subtitle', 'social', 'background', 'hotspots', 'projects'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的站点字段「${key}」`)
+  for (const key of Object.keys(siteInput)) if (!['title', 'subtitle', 'social', 'background', 'hotspots', 'projects', 'curated'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的站点字段「${key}」`)
   for (const key of Object.keys(profileInput)) if (!['nickname', 'avatar', 'bio', 'github'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的个人字段「${key}」`)
 
   return { site, profile }
@@ -201,6 +203,7 @@ export async function getSiteProfile() {
   try { site = siteRaw.trim() ? JSON.parse(siteRaw) : {} } catch (err) { throw fail('SITE_PROFILE_CORRUPT', 'data/site.json 不是合法 JSON', 500, err) }
   return {
     site: {
+      curated: site.site?.curated ?? null,
       title: site.site?.title || '', subtitle: site.site?.subtitle || '',
       social: Array.isArray(site.social) ? site.social : [], background: site.background || {},
       hotspots: Array.isArray(site.hotspots) ? site.hotspots : [], projects: Array.isArray(site.projects) ? site.projects : [],

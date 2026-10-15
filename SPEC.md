@@ -285,6 +285,32 @@ vbcd/
 - `/api/notes` 与 `/api/db/notes` 在迁移期并存：部署环境 `POST /api/notes` 配置数据库后只写 `notes` 表，但后台现有列表仍调用 `/api/notes`，这是待收敛的技术债，不得在文档中宣称两者已经完全统一。
 - `data/site.json` 是站点业务配置，`.env` 是基础设施配置和秘密；后台 settings 可写前者，env 页面只读脱敏。
 
+### 3.0.5 站点来源精选契约（PLAN-admin §12）
+
+复用 `GET/PATCH /api/admin/site`，不新增路由：读取返回 `data.site.curated`（旧配置为 `null`），PATCH 使用 `site.curated`；实际持久化位置为 `data/site.json → site.curated`。未提交 curated 字段时保留原配置。
+
+```json
+{
+  "site": {
+    "curated": {
+      "hotspots": {
+        "enabled": true,
+        "items": [{"source":"note","id":"档案ID","image":"/images/cover.png","visible":true,"order":1}]
+      },
+      "projects": {"enabled":false,"items":[]}
+    }
+  }
+}
+```
+
+- 提交精选时完整提交两组。仅允许这些字段；`source` 为 `note/github`，项目只接受 `github`；ID 必须是非空字符串，GitHub ID 为十进制仓库 ID 字符串。
+- `enabled/visible` 为布尔值，`order` 为正整数，保存前排序并连续编号；image 可空，否则只允许 `/images/<文件名>`。不接受标题、简介、链接等来源内容副本。
+- 热点最多4项（含隐藏），项目不设数量硬上限但仍受既有 JSON 请求体上限约束；开启空列表、同组重复、跨组重复等返回 `400 VALIDATION_FAILED`，写入前校验。
+- 普通站点 PATCH 不自动开启精选；关闭/未配置时保留旧展示行为。旧根级热点、项目数组不迁移、不覆盖。精选开启后不自动补位；来源不存在时保留配置、主站跳过。保存不强依赖实时 GitHub 可用性，不自动清除失效引用。
+- `GET /api/home` 的 `focus` 增加 `mode: automatic|curated`。精选模式直接从来源解析，按选择顺序展示，最多4项；旧模式保持原来源配额，但排除已启用项目精选中的仓库。来源状态沿用现有接口语义。
+- 关于页通过已有 `/api/me` 中 `site.site.curated.projects` 和未经筛选的 `/api/github/projects` 派生项目精选；关闭时显示原项目清单。精选顺序跨已归档/未归档统一生效。
+- 身份和权限仍沿用现有 `requireAuth`，本次不新增权限层。
+
 ### 3.1 知识库问答（F9）
 
 **索引（`POST /api/kb/index` 触发）**：

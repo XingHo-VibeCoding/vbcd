@@ -1,9 +1,10 @@
-// 首页是业务数据的派生视图，不读旧热点、项目清单或手填统计。
+// 首页是业务数据的派生视图；精选开启时解析来源引用，关闭时兼容旧焦点聚合。
 import { getMe } from './me.js'
 import { getGithubProjects } from './github.js'
 import { listAllDbNotes } from '../db/notes.js'
 import { planningSnapshot } from '../db/planning.js'
 import { fail } from './errors.js'
+import { resolveSelections } from './curated.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const TZ = 'Asia/Shanghai'
@@ -91,7 +92,10 @@ export function buildHome({ me, notes, planning, github, date, now, sources }) {
   const window = dayWindow(date)
   const statsWindow = dayWindow(shanghaiDate(now))
   const recentFrom = new Date(new Date(statsWindow.from).getTime() - 6 * DAY)
-  const focus = sortFocus([
+  const curated = me.site?.site?.curated
+  const selectedProjects = new Set(curated?.projects?.enabled ? curated.projects.items.map(item => `github:${item.id}`) : [])
+  const projectUrls = new Set((github?.items || []).filter(repo => selectedProjects.has(`github:${repo.id}`)).map(repo => repo.htmlUrl))
+  const focus = curated?.hotspots?.enabled ? resolveSelections(curated.hotspots, notes, github?.items) : sortFocus([
     ...(notes || []).filter(note => note.category !== 'essay' && note.tags?.includes('焦点')).map(note => ({ ...noteView(note), key: `note:${note.id}` })),
     ...(github?.items || []).filter(repo => repo.topics.includes('focus')).map(repo => ({
       key: `github:${repo.id}`, id: `github:${repo.id}`, title: repo.fullName,
@@ -101,7 +105,9 @@ export function buildHome({ me, notes, planning, github, date, now, sources }) {
     })),
     ...(me.site?.hotspots || []).map((item, index) => siteFocusView(item, 'hotspot', index)),
     ...(me.site?.projects || []).map((item, index) => siteFocusView(item, 'project', index)),
-  ])
+  ]).filter(item => !selectedProjects.has(item.key || item.id) && !projectUrls.has(item.url))
+  const needsNotes = !curated?.hotspots?.enabled || curated.hotspots.items.some(item => item.visible !== false && item.source === 'note')
+  const needsGithub = !curated?.hotspots?.enabled || curated.hotspots.items.some(item => item.visible !== false && item.source === 'github')
   const essays = notes === null ? null : notes.filter(note => note.category === 'essay')
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || a.id.localeCompare(b.id))
     .slice(0, 3).map(noteView)
@@ -128,7 +134,7 @@ export function buildHome({ me, notes, planning, github, date, now, sources }) {
       notes_added_7d: notes.filter(note => new Date(note.created_at) >= recentFrom && new Date(note.created_at) < new Date(statsWindow.to)).length,
       from: recentFrom.toISOString(), to: statsWindow.to,
     },
-    focus: { total: focus.length, items: selectFocus(focus), partial: notes === null || ['unavailable', 'stale', 'unconfigured'].includes(github?.state) },
+    focus: { total: focus.length, items: curated?.hotspots?.enabled ? focus.slice(0, 4) : selectFocus(focus), mode: curated?.hotspots?.enabled ? 'curated' : 'automatic', partial: (needsNotes && notes === null) || (needsGithub && ['unavailable', 'stale', 'unconfigured'].includes(github?.state)) },
     today: { date, ...window, items: schedules, read_at: planning ? now.toISOString() : null },
     plans: plans === null ? null : { total: plans.length, items: plans.slice(0, 5), read_at: now.toISOString() },
     essays, sources,

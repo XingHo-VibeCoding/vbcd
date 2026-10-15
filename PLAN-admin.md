@@ -395,9 +395,9 @@ Agent 活跃会话 / 待确认动作 / 失败运行
 
 ### 9.4 与当前主站信息流的待对齐点
 
-当前 `GET /api/home` 从 PostgreSQL 资料（如「焦点」标签）、规划与 GitHub 项目派生首页内容，`services/home.js` 明确不把旧 `site.json.stats/hotspots/projects` 作为首页业务数据。故上面的「首页卡片/热点内容后台管理」**只是设计目标，不等于当前首页能消费这些字段**。进入实现前必须由使用者裁定：热点/卡片要继续作为独立站点配置，还是映射到现有资料/GitHub 聚合流；不得为方便做后台而直接恢复旧的手填首页内容源。
+当前 `GET /api/home` 从 PostgreSQL 档案、规划、GitHub 和站点配置派生首页内容。**热点/项目的现行实现以 §12 为准**：后台通过来源引用选择，热点精选开启时不消费旧手填卡片；关闭时保留此前焦点聚合（含旧站点卡片）作为兼容回退，不把旧手填统计作为业务真相源。
 
-同样，当前 `server/src/services/settings.js` 的 PATCH 白名单只覆盖 `llm/site/limits` 的少数字段，不支持 `background/social/hotspots/projects/assets`；`profile.md` 也没有后台写接口。先对齐读取源、字段归属和写入契约，再开放对应控制项。这里保留未决项，不伪称后台已经可以控制背景轮播、卡片或联系方式。
+历史边界：`server/src/services/settings.js` 的 PATCH 白名单只覆盖 `llm/site/limits` 的少数字段，不支持 `background/social/hotspots/projects/assets`；站点和个人信息现已通过独立的 `/api/admin/site` 管理，精选写入及读取归属见 §12。这里保留未决项，不伪称后台已经可以控制背景轮播、卡片或联系方式。
 
 ### 9.5 长期任务、项目子任务与日程（已记录，暂不实现）
 
@@ -943,3 +943,24 @@ profile → data/profile.md
 - 不修改 `background`、`hotspots`、`projects` 等未授权配置。
 
 本节状态：**已记录，当前不实现。**
+
+## 12. 来源精选：热点与 GitHub 项目（已确认并实现）
+
+本节取代 §9 中手填热点/项目作为目标方案的描述。档案与 GitHub 继续是内容真相源，后台只选择来源与控制展示；不迁移 PostgreSQL，不新增数据库表、资源清单或 API 路由。
+
+| 区域 | 来源 | 管理与展示规则 |
+|---|---|---|
+| 首页热点/焦点 | PostgreSQL 档案、现有 GitHub 项目接口返回的公开非 Fork 仓库 | 最多选择4项（含隐藏项）；开启后完全按选择展示，不受旧档案2条/GitHub1条配额限制，不自动补位 |
+| 关于页项目 | 同一 GitHub 项目接口 | 不设项目数量硬上限；开启后只显示所选且可用的项目，包含已归档项目，统一遵循后台排序 |
+
+- 配置位于 `data/site.json` 的 `site.curated`。`hotspots/projects` 各自包含 `enabled` 和 `items`；每项只存 `source/id/image/visible/order`。档案 ID 为现有资料 ID，GitHub ID 为仓库稳定 ID 字符串；标题、简介与链接从来源读取，禁止保存内容覆盖副本。
+- 两组来源互斥，包括隐藏项和暂未启用的选择；前端隐藏已选候选项，后端再次校验。项目精选启用时，所选仓库（含隐藏项）也从旧首页自动发现候选中排除。
+- 开启精选必须至少选择一项；清空已启用列表前需先关闭。全部隐藏或来源失效时展示空状态，不自动补位。
+- 初始配置缺失或开关关闭时保持旧逻辑：热点回退原焦点聚合，关于页回退全部公开非 Fork 项目。两组开关独立；普通设置保存不会自动开启精选。旧根级 `hotspots/projects` 原样保留，不自动转换或删除。
+- 来源选择器复用 `GET /api/db/notes`（每页500条、逐页读完）和 `GET /api/github/projects`，支持搜索标题、仓库名、Topic（包括 focus）。来源加载独立失败不阻塞设置编辑，未核实的来源标记待核实。
+- 来源已删除/不可见：引用保留，后台标记不可用并允许移除、重新选择，主站跳过。GitHub 临时失败保留现有缓存语义；缓存不持久化，服务重启后无缓存会暂时跳过 GitHub 项目，不写内容快照到站点配置。
+- 封面从统一图片池选择；`site.json` 的递归引用扫描已覆盖 `site.curated.*.items[*].image`，隐藏和禁用配置中的图片引用仍受删除保护。笔记 Markdown 插图继续排除。
+
+实现：`services/curated.js` 负责校验和热点来源解析，`services/home.js` 派生首页，后台 `CuratedSettings.jsx` 管理选择，关于页从原始仓库列表派生精选视图。现有原始 GitHub 接口不受过滤，确保后台仍能选择所有候选。
+
+验证：`node server/scripts/curated-selftest.mjs`，临时目录隔离，覆盖22项来源、排序、去重、兼容、接口和图片保护断言；前端 `npm run build`。完成代码与本地验证不代表 Docker 已部署或浏览器已验收。

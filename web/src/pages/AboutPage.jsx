@@ -6,12 +6,13 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { getMe } from '../api/me.js'
 import { listNotes } from '../api/notes.js'
 import { getGithubActivity, getGithubProjects } from '../api/github.js'
+import { selectAboutProjects } from '../lib/curated-projects.js'
 
 const WEEKDAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', '']
 const TIMELINE_COUNT = 8
 
 /** 项目与贡献日历分开加载：仓库列表无需贡献日历成功，也不从静态配置补位。 */
-function GitHubProjects() {
+function GitHubProjects({ curated }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [retry, setRetry] = useState(0)
@@ -21,22 +22,24 @@ function GitHubProjects() {
     getGithubProjects().then(value => { if (alive) setData(value) }).catch(err => { if (alive) setError(err.message || 'GitHub 项目暂不可用') })
     return () => { alive = false }
   }, [retry])
+  const enabled = curated?.projects?.enabled === true
+  const selected = selectAboutProjects(curated?.projects, data?.items || [])
   const format = iso => iso ? new Date(iso).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '暂无记录'
   return (
     <section id="projects" className="mt-6 border-t border-brand/15 pt-5">
       <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">GitHub 项目</h2><button type="button" className="min-h-11 rounded-xl px-3 text-sm text-brand" onClick={() => setRetry(value => value + 1)}>重新检查</button></div>
-      <p className="mt-1 text-xs text-slate-500">公开、非 Fork 仓库 · 按最近推送时间排序</p>
+      <p className="mt-1 text-xs text-slate-500">{enabled ? '后台精选项目 · 按设置顺序展示' : '公开、非 Fork 仓库 · 按最近推送时间排序'}</p>
       {error ? <p role="alert" className="error-bar">{error} · 已有列表如仍显示，则是上次读取的数据。</p> : null}
       {!data && !error ? <p className="loading">项目载入中…</p> : null}
       {data?.state === 'unconfigured' ? <p className="activity-empty">GitHub 项目来源尚未配置</p> : null}
       {data?.state === 'unavailable' ? <p role="alert" className="activity-empty">项目暂不可用，没有可用缓存。</p> : null}
       {data?.state === 'stale' ? <p role="status" className="activity-empty">刷新失败，正在显示上次成功数据，可能已过期。</p> : null}
       {data?.synced_at ? <p className="mt-2 text-xs text-slate-400">来源：GitHub · 最后同步于 {format(data.synced_at)}（北京时间）</p> : null}
-      {data && !['unconfigured', 'unavailable'].includes(data.state) && !data.items.length ? <p className="activity-empty">没有符合条件的公开项目</p> : null}
-      {data ? [false, true].map(archived => {
-        const repos = data.items.filter(repo => repo.archived === archived)
+      {data && !['unconfigured', 'unavailable'].includes(data.state) && !selected.length ? <p className="activity-empty">{enabled ? '暂无可展示的精选项目，所选项目可能已隐藏或来源不可用' : '没有符合条件的公开项目'}</p> : null}
+      {data ? (enabled ? [null] : [false, true]).map(archived => {
+        const repos = enabled ? selected : selected.filter(repo => repo.archived === archived)
         if (!repos.length) return null
-        return <div className="mt-4" key={String(archived)}><h3 className="mb-2 text-base font-black md:text-lg">{archived ? '已归档项目' : '公开项目'}</h3><div className="grid gap-3 sm:grid-cols-2">{repos.map(repo => <a key={repo.id} className="about-project-card min-w-0 rounded-xl border border-brand/15 bg-white/30 p-4 transition hover:bg-brand/5 dark:bg-white/5" href={repo.htmlUrl} target="_blank" rel="noreferrer"><div className="flex items-start justify-between gap-2"><strong className="break-all text-base font-black md:text-lg">{repo.fullName}</strong>{repo.topics.includes('focus') ? <span className="shrink-0 rounded-full bg-brand/10 px-2 py-1 text-[11px] text-brand">焦点</span> : null}</div><p className="mt-2 text-sm leading-relaxed text-slate-500">{repo.description || '仓库未填写简介'}</p><p className="mt-2 text-xs text-slate-400">{repo.language || '未标注语言'} · 最近推送 {format(repo.pushedAt)}</p></a>)}</div></div>
+        return <div className="mt-4" key={String(archived)}><h3 className="mb-2 text-base font-black md:text-lg">{enabled ? '精选项目' : archived ? '已归档项目' : '公开项目'}</h3><div className="grid gap-3 sm:grid-cols-2">{repos.map(repo => <a key={repo.id} className="about-project-card min-w-0 rounded-xl border border-brand/15 bg-white/30 p-4 transition hover:bg-brand/5 dark:bg-white/5" href={repo.htmlUrl} target="_blank" rel="noreferrer">{repo.cover ? <img src={repo.cover} alt="" className="mb-3 h-32 w-full rounded-lg object-cover" loading="lazy" /> : null}<div className="flex items-start justify-between gap-2"><strong className="break-all text-base font-black md:text-lg">{repo.fullName}</strong>{repo.topics.includes('focus') ? <span className="shrink-0 rounded-full bg-brand/10 px-2 py-1 text-[11px] text-brand">焦点</span> : null}</div><p className="mt-2 text-sm leading-relaxed text-slate-500">{repo.description || '仓库未填写简介'}</p><p className="mt-2 text-xs text-slate-400">{repo.language || '未标注语言'} · 最近推送 {format(repo.pushedAt)}</p></a>)}</div></div>
       }) : null}
     </section>
   )
@@ -406,7 +409,7 @@ export default function AboutPage() {
               </aside>
             ) : null}
           </section>
-          <GitHubProjects />
+          <GitHubProjects curated={me?.site?.site?.curated} />
           </>
         )}
       </div>
