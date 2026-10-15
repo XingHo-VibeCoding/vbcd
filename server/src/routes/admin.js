@@ -2,15 +2,29 @@
 // 第一期板块②：GET /api/admin/overview —— 一次返回"系统总览"，
 // 供后台仪表盘渲染四服务健康灯、关键计数、最近任务，避免前端逐个接口拼。
 import { Router } from 'express'
+import multer from 'multer'
 import { listTasks } from '../services/tasks.js'
 import { dbConfigured, query as dbQuery } from '../db/pool.js'
 import * as noteStore from '../storage/note-store.js'
 import { listEnv } from '../services/env.js'
 import { getSettings, patchSettings } from '../services/settings.js'
-import { listImages, getImage } from '../services/images.js'
+import { listImages, getImage, uploadImage, deleteImage } from '../services/images.js'
 import { getSiteProfile, patchSiteProfile } from '../services/site-profile.js'
 
 const router = Router()
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+})
+
+function imageUploadMiddleware(req, res, next) {
+  imageUpload.single('file')(req, res, (err) => {
+    if (!err) return next()
+    if (err.code === 'LIMIT_FILE_SIZE') return next(Object.assign(new Error('图片不能超过 10MB'), { code: 'VALIDATION_FAILED', status: 400, expose: true }))
+    if (err.code === 'LIMIT_FILE_COUNT') return next(Object.assign(new Error('一次只能上传一张图片'), { code: 'VALIDATION_FAILED', status: 400, expose: true }))
+    return next(Object.assign(new Error('上传格式不正确，请选择图片文件'), { code: 'VALIDATION_FAILED', status: 400, expose: true, detail: err }))
+  })
+}
 
 // 单个服务探测：带超时，返回 { ok, latencyMs, ... }
 async function probe(fn, timeoutMs = 3000) {
@@ -168,6 +182,23 @@ router.get('/images', async (req, res, next) => {
 router.get('/images/:id', async (req, res, next) => {
   try {
     res.json({ ok: true, data: await getImage(req.params.id) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// 图片上传：沿用当前 requireAuth 行为；AUTH_ENABLED=1 时需登录，关闭时公开可写。
+router.post('/images', imageUploadMiddleware, async (req, res, next) => {
+  try {
+    res.status(201).json({ ok: true, data: await uploadImage(req.file?.buffer) })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.delete('/images/:id', async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await deleteImage(req.params.id) })
   } catch (err) {
     next(err)
   }
