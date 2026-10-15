@@ -114,6 +114,36 @@ function validateBackground(background) {
   return result
 }
 
+function validateCards(value, field, kind) {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > 50) throw fail('VALIDATION_FAILED', `${field}必须是最多50项的数组`)
+  const ids = new Set()
+  return value.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw fail('VALIDATION_FAILED', `${field}[${index}]必须是对象`)
+    const title = validateString(item?.title ?? item?.name, `${field}[${index}].title`, 80, true)
+    const subtitle = validateString(item?.subtitle ?? item?.desc, `${field}[${index}].subtitle`, 160)
+    const tag = validateString(item?.tag, `${field}[${index}].tag`, 30)
+    const image = validateString(item?.image, `${field}[${index}].image`, 500)
+    if (image && !/^(?:\/images\/|https?:\/\/)/i.test(image)) throw fail('VALIDATION_FAILED', `${field}[${index}].image只允许 /images/ 路径或 https URL`)
+    const url = validateString(item?.url, `${field}[${index}].url`, 500)
+    if (url && !(/^(?:https?:\/\/|mailto:)/i.test(url) || /^\/(?!\/)[^\\\s]*$/.test(url))) {
+      throw fail('VALIDATION_FAILED', `${field}[${index}].url只允许站内路径、http(s)或mailto链接`)
+    }
+    const id = validateString(item?.id || `${kind}-${index + 1}`, `${field}[${index}].id`, 100, true)
+    if (ids.has(id)) throw fail('VALIDATION_FAILED', `${field}中存在重复的卡片id`)
+    ids.add(id)
+    const order = item?.order == null ? index + 1 : Number(item.order)
+    if (!Number.isInteger(order) || order < 1) throw fail('VALIDATION_FAILED', `${field}[${index}].order必须是不小于1的整数`)
+    if (item.visible !== undefined && typeof item.visible !== 'boolean') throw fail('VALIDATION_FAILED', `${field}[${index}].visible必须是布尔值`)
+    return {
+      id, title, subtitle, tag, image, url,
+      visible: item?.visible !== false,
+      order,
+      ...(item?.icon ? { icon: validateString(item.icon, `${field}[${index}].icon`, 8) } : {}),
+    }
+  })
+}
+
 function validatePatch(input = {}) {
   const siteInput = input.site ?? {}
   const profileInput = input.profile ?? {}
@@ -124,6 +154,8 @@ function validatePatch(input = {}) {
   if (Object.prototype.hasOwnProperty.call(siteInput, 'subtitle')) site.subtitle = validateString(siteInput.subtitle, 'site.subtitle', 160)
   if (Object.prototype.hasOwnProperty.call(siteInput, 'social')) site.social = validateSocial(siteInput.social)
   if (Object.prototype.hasOwnProperty.call(siteInput, 'background')) site.background = validateBackground(siteInput.background)
+  if (Object.prototype.hasOwnProperty.call(siteInput, 'hotspots')) site.hotspots = validateCards(siteInput.hotspots, 'site.hotspots', 'hotspot')
+  if (Object.prototype.hasOwnProperty.call(siteInput, 'projects')) site.projects = validateCards(siteInput.projects, 'site.projects', 'project')
 
   if (Object.prototype.hasOwnProperty.call(profileInput, 'nickname')) profile.nickname = validateString(profileInput.nickname, 'profile.nickname', 80)
   if (Object.prototype.hasOwnProperty.call(profileInput, 'avatar')) profile.avatar = validateAvatar(profileInput.avatar)
@@ -135,7 +167,7 @@ function validatePatch(input = {}) {
 
   const allowedTop = new Set(['site', 'profile'])
   for (const key of Object.keys(input)) if (!allowedTop.has(key)) throw fail('VALIDATION_FAILED', `不认识的配置段「${key}」`)
-  for (const key of Object.keys(siteInput)) if (!['title', 'subtitle', 'social', 'background'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的站点字段「${key}」`)
+  for (const key of Object.keys(siteInput)) if (!['title', 'subtitle', 'social', 'background', 'hotspots', 'projects'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的站点字段「${key}」`)
   for (const key of Object.keys(profileInput)) if (!['nickname', 'avatar', 'bio', 'github'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的个人字段「${key}」`)
 
   return { site, profile }
@@ -168,7 +200,11 @@ export async function getSiteProfile() {
   let site = {}
   try { site = siteRaw.trim() ? JSON.parse(siteRaw) : {} } catch (err) { throw fail('SITE_PROFILE_CORRUPT', 'data/site.json 不是合法 JSON', 500, err) }
   return {
-    site: { title: site.site?.title || '', subtitle: site.site?.subtitle || '', social: Array.isArray(site.social) ? site.social : [], background: site.background || {} },
+    site: {
+      title: site.site?.title || '', subtitle: site.site?.subtitle || '',
+      social: Array.isArray(site.social) ? site.social : [], background: site.background || {},
+      hotspots: Array.isArray(site.hotspots) ? site.hotspots : [], projects: Array.isArray(site.projects) ? site.projects : [],
+    },
     profile: parseProfile(profileRaw),
     sources: { site: 'data/site.json', profile: 'data/profile.md' },
   }
@@ -184,6 +220,8 @@ export async function patchSiteProfile(input) {
   const nextSite = { ...fullSite, site: { ...(fullSite.site || {}), ...patch.site } }
   if (patch.site.social !== undefined) nextSite.social = patch.site.social
   if (patch.site.background !== undefined) nextSite.background = { ...(fullSite.background || {}), ...patch.site.background }
+  if (patch.site.hotspots !== undefined) nextSite.hotspots = patch.site.hotspots
+  if (patch.site.projects !== undefined) nextSite.projects = patch.site.projects
   const nextProfile = replaceFrontmatter(profileRaw, patch.profile)
   await atomicWrite(SITE_FILE, `${JSON.stringify(nextSite, null, 2)}\n`)
   try { await atomicWrite(PROFILE_FILE, nextProfile) } catch (err) {

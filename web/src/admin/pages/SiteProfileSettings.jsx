@@ -6,6 +6,62 @@ import { ReloadOutlined, SaveOutlined, PlusOutlined, DeleteOutlined } from '@ant
 import { request } from '../../api/client.js'
 
 const EMPTY_SOCIAL = { label: '', icon: '', url: '' }
+const EMPTY_CARD = { title: '', subtitle: '', tag: '', image: '', url: '', visible: true, icon: '' }
+
+// 联系方式 URL 归一：用户在「邮箱」栏自然填的是裸邮箱（z.x.peng@outlook.com），
+// 而白名单校验只放行 http(s)/mailto 前缀（防 javascript: 注入，不能放宽）。
+// 这里在提交前把「无协议前缀且形如邮箱」的值补成 mailto:，校验规则与服务端均不动。
+function normalizeSocialUrl(url) {
+  const value = (url || '').trim()
+  if (!value || /^[a-z][a-z0-9+.-]*:/i.test(value)) return value
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? `mailto:${value}` : value
+}
+
+function cardFields(items, kind) {
+  return (items || []).map((item, index) => ({
+    id: item.id || `${kind}-${index + 1}`,
+    title: item.title ?? item.name ?? '',
+    subtitle: item.subtitle ?? item.desc ?? '',
+    tag: item.tag || '', image: item.image || '', url: item.url || '',
+    icon: item.icon || '', visible: item.visible !== false, order: item.order ?? index + 1,
+  }))
+}
+
+function CardFields({ name, title, images }) {
+  const imageOptions = images.map((item) => ({ value: item.url, label: item.name }))
+  return <Card size="small" title={title} style={{ marginBottom: 16 }}>
+    <Form.List name={name}>
+      {(fields, { add, remove, move }) => <Space direction="vertical" style={{ width: '100%' }}>
+        {fields.map((field, index) => <Card key={field.key} size="small" title={`${title} ${index + 1}`}>
+          <Form.Item name={[field.name, 'id']} hidden><Input /></Form.Item>
+          <Form.Item name={[field.name, 'title']} label="标题" rules={[{ required: true, message: '请填写标题' }, { max: 80 }]}>
+            <Input maxLength={80} />
+          </Form.Item>
+          <Form.Item name={[field.name, 'subtitle']} label="副标题" rules={[{ max: 160 }]}>
+            <Input maxLength={160} />
+          </Form.Item>
+          <Space wrap>
+            <Form.Item name={[field.name, 'tag']} label="标签" rules={[{ max: 30 }]}><Input maxLength={30} /></Form.Item>
+            <Form.Item name={[field.name, 'icon']} label="图标（可选）" rules={[{ max: 8 }]}><Input maxLength={8} /></Form.Item>
+          </Space>
+          <Form.Item name={[field.name, 'image']} label="图片">
+            <Select allowClear showSearch optionFilterProp="label" options={imageOptions} placeholder="选择已有图片，可留空" />
+          </Form.Item>
+          <Form.Item name={[field.name, 'url']} label="链接" rules={[{ pattern: /^(?:$|https?:\/\/|mailto:|\/(?!\/)[^\\\s]*)$/i, message: '请输入 http(s)、mailto 或站内路径' }]}>
+            <Input placeholder="/notes/… 或 https://…" />
+          </Form.Item>
+          <Space wrap>
+            <Form.Item name={[field.name, 'visible']} valuePropName="checked" noStyle><Switch checkedChildren="显示" unCheckedChildren="隐藏" /></Form.Item>
+            <Button onClick={() => move(index, index - 1)} disabled={index === 0}>上移</Button>
+            <Button onClick={() => move(index, index + 1)} disabled={index === fields.length - 1}>下移</Button>
+            <Button danger onClick={() => remove(field.name)}>移除</Button>
+          </Space>
+        </Card>)}
+        <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ ...EMPTY_CARD, id: `${name}-${crypto.randomUUID()}` })}>添加{title}</Button>
+      </Space>}
+    </Form.List>
+  </Card>
+}
 
 export default function SiteProfileSettings() {
   const [form] = Form.useForm()
@@ -34,6 +90,8 @@ export default function SiteProfileSettings() {
         background_autoplay: background.autoplay !== false,
         background_light_images: background.light?.images || [],
         background_dark_images: background.dark?.images || [],
+        hotspots: cardFields(data.site?.hotspots, 'hotspot'),
+        projects: cardFields(data.site?.projects, 'project'),
       })
     } catch (err) {
       msg.error(err?.message || '站点信息加载失败')
@@ -60,7 +118,11 @@ export default function SiteProfileSettings() {
               light: { type: 'image', images: values.background_light_images || [] },
               dark: { type: 'image', images: values.background_dark_images || [] },
             },
-            social: (values.social || []).filter((item) => item?.label || item?.url),
+            social: (values.social || [])
+              .filter((item) => item?.label || item?.url)
+              .map((item) => ({ ...item, url: normalizeSocialUrl(item.url) })),
+            hotspots: (values.hotspots || []).map((item, index) => ({ ...item, order: index + 1 })),
+            projects: (values.projects || []).map((item, index) => ({ ...item, order: index + 1 })),
           },
           profile: {
             nickname: values.nickname,
@@ -87,7 +149,7 @@ export default function SiteProfileSettings() {
         showIcon
         style={{ marginBottom: 16 }}
         message="站点与个人信息"
-        description="站点信息写入 data/site.json，个人信息写入 data/profile.md。背景、热点、项目和图片上传不在本页面管理。"
+        description="站点信息、背景、热点与项目写入 data/site.json；个人信息写入 data/profile.md。这里只引用现有图片，不提供上传或删除。"
       />
       <Form form={form} layout="vertical" disabled={loading} onFinish={save}>
         <Card size="small" title="站点信息" style={{ marginBottom: 16 }}>
@@ -132,7 +194,7 @@ export default function SiteProfileSettings() {
                       <Input placeholder="图标" style={{ width: 90 }} />
                     </Form.Item>
                     <Form.Item {...field} name={[field.name, 'url']} rules={[{ pattern: /^(?:$|https?:\/\/|mailto:)/i, message: '只允许 http(s) 或 mailto' }]}>
-                      <Input placeholder="https://..." style={{ width: 260 }} />
+                      <Input placeholder="https://… 或邮箱地址" style={{ width: 260 }} />
                     </Form.Item>
                     <Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)} aria-label="删除联系方式" />
                   </Space>
@@ -165,6 +227,9 @@ export default function SiteProfileSettings() {
             <Alert type="info" showIcon message="只修改站点图片引用" description="不会上传、重命名或删除图片；资料 Markdown 正文中的图片不在本页面管理范围内。" />
           </Space>
         </Card>
+
+        <CardFields name="hotspots" title="热点卡片" images={images} />
+        <CardFields name="projects" title="项目卡片" images={images} />
 
         <Space>
           <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>保存</Button>
