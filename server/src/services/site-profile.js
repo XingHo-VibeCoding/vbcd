@@ -75,6 +75,45 @@ function validateSocial(social) {
   }))
 }
 
+function validateImageList(value, field) {
+  if (!Array.isArray(value) || value.length > 30) throw fail('VALIDATION_FAILED', `${field}必须是最多30项的数组`)
+  return value.map((item, index) => {
+    const image = validateString(item, `${field}[${index}]`, 500)
+    if (image && !/^(?:\/images\/|https?:\/\/)/i.test(image)) {
+      throw fail('VALIDATION_FAILED', `${field}[${index}]只允许 /images/ 路径或 https URL`)
+    }
+    return image
+  }).filter(Boolean)
+}
+
+function validateBackground(background) {
+  if (background === undefined) return undefined
+  if (!background || typeof background !== 'object' || Array.isArray(background)) {
+    throw fail('VALIDATION_FAILED', 'site.background必须是对象')
+  }
+  const result = {}
+  if (Object.prototype.hasOwnProperty.call(background, 'interval')) {
+    if (!Number.isInteger(background.interval) || background.interval < 1000 || background.interval > 600000) {
+      throw fail('VALIDATION_FAILED', 'site.background.interval必须是1000到600000之间的整数毫秒')
+    }
+    result.interval = background.interval
+  }
+  for (const key of ['enabled', 'autoplay']) {
+    if (Object.prototype.hasOwnProperty.call(background, key)) {
+      if (typeof background[key] !== 'boolean') throw fail('VALIDATION_FAILED', `site.background.${key}必须是布尔值`)
+      result[key] = background[key]
+    }
+  }
+  for (const theme of ['light', 'dark']) {
+    if (background[theme] === undefined) continue
+    if (!background[theme] || typeof background[theme] !== 'object' || Array.isArray(background[theme])) {
+      throw fail('VALIDATION_FAILED', `site.background.${theme}必须是对象`)
+    }
+    result[theme] = { ...(background[theme].type ? { type: String(background[theme].type) } : {}), images: validateImageList(background[theme].images ?? [], `site.background.${theme}.images`) }
+  }
+  return result
+}
+
 function validatePatch(input = {}) {
   const siteInput = input.site ?? {}
   const profileInput = input.profile ?? {}
@@ -84,6 +123,7 @@ function validatePatch(input = {}) {
   if (Object.prototype.hasOwnProperty.call(siteInput, 'title')) site.title = validateString(siteInput.title, 'site.title', 80, true)
   if (Object.prototype.hasOwnProperty.call(siteInput, 'subtitle')) site.subtitle = validateString(siteInput.subtitle, 'site.subtitle', 160)
   if (Object.prototype.hasOwnProperty.call(siteInput, 'social')) site.social = validateSocial(siteInput.social)
+  if (Object.prototype.hasOwnProperty.call(siteInput, 'background')) site.background = validateBackground(siteInput.background)
 
   if (Object.prototype.hasOwnProperty.call(profileInput, 'nickname')) profile.nickname = validateString(profileInput.nickname, 'profile.nickname', 80)
   if (Object.prototype.hasOwnProperty.call(profileInput, 'avatar')) profile.avatar = validateAvatar(profileInput.avatar)
@@ -95,7 +135,7 @@ function validatePatch(input = {}) {
 
   const allowedTop = new Set(['site', 'profile'])
   for (const key of Object.keys(input)) if (!allowedTop.has(key)) throw fail('VALIDATION_FAILED', `不认识的配置段「${key}」`)
-  for (const key of Object.keys(siteInput)) if (!['title', 'subtitle', 'social'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的站点字段「${key}」`)
+  for (const key of Object.keys(siteInput)) if (!['title', 'subtitle', 'social', 'background'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的站点字段「${key}」`)
   for (const key of Object.keys(profileInput)) if (!['nickname', 'avatar', 'bio', 'github'].includes(key)) throw fail('VALIDATION_FAILED', `不认识的个人字段「${key}」`)
 
   return { site, profile }
@@ -128,7 +168,7 @@ export async function getSiteProfile() {
   let site = {}
   try { site = siteRaw.trim() ? JSON.parse(siteRaw) : {} } catch (err) { throw fail('SITE_PROFILE_CORRUPT', 'data/site.json 不是合法 JSON', 500, err) }
   return {
-    site: { title: site.site?.title || '', subtitle: site.site?.subtitle || '', social: Array.isArray(site.social) ? site.social : [] },
+    site: { title: site.site?.title || '', subtitle: site.site?.subtitle || '', social: Array.isArray(site.social) ? site.social : [], background: site.background || {} },
     profile: parseProfile(profileRaw),
     sources: { site: 'data/site.json', profile: 'data/profile.md' },
   }
@@ -143,6 +183,7 @@ export async function patchSiteProfile(input) {
   try { fullSite = siteRaw.trim() ? JSON.parse(siteRaw) : {} } catch (err) { throw fail('SITE_PROFILE_CORRUPT', 'data/site.json 不是合法 JSON', 500, err) }
   const nextSite = { ...fullSite, site: { ...(fullSite.site || {}), ...patch.site } }
   if (patch.site.social !== undefined) nextSite.social = patch.site.social
+  if (patch.site.background !== undefined) nextSite.background = { ...(fullSite.background || {}), ...patch.site.background }
   const nextProfile = replaceFrontmatter(profileRaw, patch.profile)
   await atomicWrite(SITE_FILE, `${JSON.stringify(nextSite, null, 2)}\n`)
   try { await atomicWrite(PROFILE_FILE, nextProfile) } catch (err) {

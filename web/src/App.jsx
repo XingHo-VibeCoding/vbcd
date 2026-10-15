@@ -113,7 +113,7 @@ function BackgroundLayer({ site, theme, effectsEnabled }) {
   const images = Array.isArray(bg?.images) && bg.images.length
     ? bg.images
     : (bg?.src ? [bg.src] : [])
-  const isImage = bg?.type === 'image' && images.length > 0
+  const isImage = conf.enabled !== false && bg?.type === 'image' && images.length > 0
   const interval = conf.interval || 6000
   const [idx, setIdx] = useState(0)
 
@@ -121,10 +121,10 @@ function BackgroundLayer({ site, theme, effectsEnabled }) {
   useEffect(() => { setIdx(0) }, [theme, images.length])
   // 自动轮播：淡入淡出
   useEffect(() => {
-    if (!isImage || images.length < 2) return undefined
+    if (!isImage || conf.autoplay === false || images.length < 2) return undefined
     const t = setInterval(() => setIdx((i) => (i + 1) % images.length), interval)
     return () => clearInterval(t)
-  }, [isImage, images.length, interval])
+  }, [isImage, conf.autoplay, images.length, interval])
 
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-9 overflow-hidden">

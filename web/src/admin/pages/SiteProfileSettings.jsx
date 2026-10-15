@@ -1,7 +1,7 @@
 // 站点与个人信息管理页面。
 // 路由注册留给后续独立板块，避免与图片资产 agent 同时修改 AdminApp.jsx。
 import { useEffect, useState } from 'react'
-import { Alert, Button, Card, Form, Input, Space, message } from 'antd'
+import { Alert, AutoComplete, Button, Card, Form, Input, InputNumber, Select, Space, Switch, message } from 'antd'
 import { ReloadOutlined, SaveOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import { request } from '../../api/client.js'
 
@@ -11,12 +11,16 @@ export default function SiteProfileSettings() {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [images, setImages] = useState([])
   const [msg, msgCtx] = message.useMessage()
 
   async function load() {
     setLoading(true)
     try {
       const data = await request('/api/admin/site')
+      const assets = await request('/api/admin/images')
+      setImages(assets.items || [])
+      const background = data.site?.background || {}
       form.setFieldsValue({
         site_title: data.site?.title || '',
         site_subtitle: data.site?.subtitle || '',
@@ -25,6 +29,11 @@ export default function SiteProfileSettings() {
         avatar: data.profile?.avatar || '',
         bio: data.profile?.bio || '',
         github: data.profile?.github || '',
+        background_interval: background.interval ?? 6000,
+        background_enabled: background.enabled !== false,
+        background_autoplay: background.autoplay !== false,
+        background_light_images: background.light?.images || [],
+        background_dark_images: background.dark?.images || [],
       })
     } catch (err) {
       msg.error(err?.message || '站点信息加载失败')
@@ -44,6 +53,13 @@ export default function SiteProfileSettings() {
           site: {
             title: values.site_title,
             subtitle: values.site_subtitle,
+            background: {
+              interval: values.background_interval,
+              enabled: values.background_enabled,
+              autoplay: values.background_autoplay,
+              light: { type: 'image', images: values.background_light_images || [] },
+              dark: { type: 'image', images: values.background_dark_images || [] },
+            },
             social: (values.social || []).filter((item) => item?.label || item?.url),
           },
           profile: {
@@ -88,7 +104,12 @@ export default function SiteProfileSettings() {
             <Input showCount maxLength={80} />
           </Form.Item>
           <Form.Item name="avatar" label="头像路径" rules={[{ max: 500, message: '最多 500 字' }, { pattern: /^(?:$|\/images\/|https?:\/\/)/i, message: '只允许 /images/ 路径或 http(s) URL' }]}>
-            <Input placeholder="/images/profile-avatar.png" />
+            <AutoComplete
+              allowClear
+              options={images.map((item) => ({ value: item.url, label: item.name }))}
+              placeholder="选择图片或输入 /images/ 路径"
+              filterOption={(input, option) => String(option?.label || option?.value).toLowerCase().includes(input.toLowerCase())}
+            />
           </Form.Item>
           <Form.Item name="bio" label="个人简介" rules={[{ max: 500, message: '最多 500 字' }]}>
             <Input.TextArea rows={4} showCount maxLength={500} />
@@ -120,6 +141,29 @@ export default function SiteProfileSettings() {
               </>
             )}
           </Form.List>
+        </Card>
+
+        <Card size="small" title="背景图片轮播" style={{ marginBottom: 16 }}>
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Space>
+              <Form.Item name="background_enabled" label="启用背景图片" valuePropName="checked" noStyle>
+                <Switch checkedChildren="开" unCheckedChildren="关" />
+              </Form.Item>
+              <Form.Item name="background_autoplay" label="自动轮播" valuePropName="checked" noStyle>
+                <Switch checkedChildren="开" unCheckedChildren="关" />
+              </Form.Item>
+            </Space>
+            <Form.Item name="background_interval" label="轮播间隔（毫秒）" rules={[{ type: 'number', min: 1000, max: 600000, message: '请输入1000到600000之间的毫秒数' }]}>
+              <InputNumber min={1000} max={600000} step={1000} style={{ width: 220 }} />
+            </Form.Item>
+            <Form.Item name="background_light_images" label="浅色背景（按播放顺序）">
+              <Select mode="multiple" options={images.map((item) => ({ value: item.url, label: item.name }))} placeholder="选择图片" optionFilterProp="label" />
+            </Form.Item>
+            <Form.Item name="background_dark_images" label="深色背景（按播放顺序）">
+              <Select mode="multiple" options={images.map((item) => ({ value: item.url, label: item.name }))} placeholder="选择图片" optionFilterProp="label" />
+            </Form.Item>
+            <Alert type="info" showIcon message="只修改站点图片引用" description="不会上传、重命名或删除图片；资料 Markdown 正文中的图片不在本页面管理范围内。" />
+          </Space>
         </Card>
 
         <Space>

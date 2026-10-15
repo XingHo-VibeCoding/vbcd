@@ -321,7 +321,7 @@ Agent 活跃会话 / 待确认动作 / 失败运行
 | P1 | Agent 会话和确认中心 | 待做 |
 | P1 | 同步 SPEC / TECH_DESIGN / RUN / AGENTS | 待做 |
 | P2 | 统一 `site.json` schema 和设置表单 | 待做 |
-| P2 | 图片资产管理 | 后置 |
+| P2 | 图片资产管理 | 只读扫描已完成；上传、删除和引用修改待做 |
 | P3 | 卡片管理 | 后置 |
 | P3 | Agent 工具启停 | 后置 |
 | P4 | Prompt 管理、RBAC、二级域名、异地部署 | 暂不排期 |
@@ -380,6 +380,7 @@ Agent 活跃会话 / 待确认动作 / 失败运行
 ### 9.2 图片资源池：已确认
 
 - 图片统一放在 `data/images/`，Web 引用格式为 `/images/<文件名>`；允许同一张图被背景、热点、项目等多处复用。当前本地图片可用于验证，不能把测试等同于允许随意覆盖或删除正式资源。
+- **管理范围仅限站点资产**：扫描 `data/site.json` 的站点图片配置和 `data/profile.md` 的头像字段；不扫描、不展示、不标注、不修改、不删除资料笔记 Markdown 正文中的图片，也不管理 Obsidian 笔记附件。`profile.md` 虽是 Markdown 文件，但其中的个人头像字段属于站点身份配置，仍在范围内。
 - 图片元数据（类型、大小、尺寸、修改时间）由文件扫描得到；**不新增图片表或独立图片 manifest**。`usage` 可有多个值，按引用自动推导；`references` 是具体引用位置，如 `site.json → background.dark.images[0]`，不能靠手工标签判定是否在用。
 - 手工 `tags` 使用「预设标签 + 允许新建」；它仅用于筛选，不决定用途或删除权限。**标签持久化位置尚未拍板**：不新增 manifest 的前提下，曾建议 `site.json.assets`，但尚未得到确认；实现标签编辑前必须先决定存储位置和迁移方式。
 - 上传后由服务端生成安全唯一文件名；不持久化原始文件名。现有文件名不因这个规则自动重命名。被任何真实引用使用的图片禁止删除，显示所有引用位置；首版不提供强制删除。
@@ -727,7 +728,47 @@ Web 引用格式：
   → 删除保护
 ```
 
-图片元数据存储位置、手工标签持久化方式和引用扫描范围，启动实现前仍需单独拍板；在不新增图片表或独立 manifest 的方向下，候选方案包括纳入 `site.json.assets`，但当前不默认实施。
+图片元数据存储位置、手工标签持久化方式和引用扫描范围，启动写入实现前仍需单独拍板；在不新增图片表或独立 manifest 的方向下，候选方案包括纳入 `site.json.assets`，但当前不默认实施。
+
+### 9.6 图片资产板块当前实现状态
+
+已完成只读板块：
+
+```text
+页面：/admin/assets/images
+接口：GET /api/admin/images
+      GET /api/admin/images/:id
+服务：server/src/services/images.js
+```
+
+当前能力：
+
+- 扫描 `data/images/` 中的 png/jpg/jpeg/webp/gif 文件。
+- 返回文件名、Web URL、MIME、大小、修改时间。
+- 仅扫描 `data/site.json` 的站点图片引用和 `data/profile.md` 的头像字段；不扫描资料 Markdown 正文图片。
+- 自动推导多用途 `usage` 和具体 `references`。
+- 后台网格预览、按用途筛选、按引用状态筛选、详情抽屉。
+- 站点与个人信息页已增加背景引用控制：浅色/深色图片顺序、轮播间隔、启用/停用、自动轮播；配置写回 `data/site.json`，主站 `BackgroundLayer` 已消费 `enabled/autoplay`。
+- 已验证当前本地 12 张图片，其中 9 张已引用、3 张未引用。
+
+当前明确未做：
+
+- 上传图片。
+- 删除图片。
+- 修改头像、热点或项目引用。
+- 手工标签持久化。
+- 资料 Markdown 正文图片与 Obsidian 附件管理（明确不纳入本图片资产板块）。
+- `data/cards/` 引用扫描（独立卡片尚未实现）。
+- 图片宽高解析。
+
+实现顺序保持：
+
+```text
+只读扫描（已完成）
+  → 修改站点图片引用（待做）
+  → 上传（待做）
+  → 删除保护（待做）
+```
 
 ### 10.6 未来启动前置条件
 
@@ -741,5 +782,164 @@ Web 引用格式：
 6. 确认 `site.json`、`profile.md` 和图片资源元数据的字段归属。
 7. 更新 `SPEC.md`、`TECH_DESIGN.md`、`RUN.md` 后再写代码。
 8. 先做数据库迁移和只读验证，再开放后台写操作。
+
+本节状态：**已记录，当前不实现。**
+
+## 11. 站点信息与个人信息管理（设计记录，当前不实现）
+
+> 本节只整理管理契约，避免与当前图片资产 agent 的改动冲突。当前工作区已有 `server/src/routes/admin.js`、`server/src/services/images.js`、`web/src/admin/AdminApp.jsx` 等并行改动；开始实现前必须重新确认文件边界。站点信息与个人信息管理不包含背景轮播、热点、项目卡片、图片上传/删除、长期任务或日程。
+
+### 11.1 页面结构
+
+建议新增一个后台页面：
+
+```text
+/admin/site
+```
+
+页面内部按三个分组展示：
+
+```text
+站点信息
+  ├─ 站点名称
+  └─ 站点副标题
+
+个人信息
+  ├─ 昵称
+  ├─ 头像
+  ├─ 个人简介
+  └─ GitHub 用户名
+
+联系方式
+  └─ GitHub / 邮箱 / 主页 / 订阅等链接列表
+```
+
+后台体验统一为一个页面，但不为了页面统一而合并底层文件。
+
+### 11.2 数据源与写入边界
+
+```text
+data/site.json
+  ├─ site.title
+  ├─ site.subtitle
+  └─ social[]
+
+data/profile.md
+  ├─ nickname
+  ├─ avatar
+  ├─ bio
+  └─ github
+```
+
+当前已确认：
+
+- 站点信息写回 `data/site.json`。
+- 个人信息写回 `data/profile.md` frontmatter。
+- 联系方式写回 `data/site.json.social`。
+- 不把个人字段迁入 `site.json`。
+- 不把联系方式混入 `profile.md`。
+- `background`、`hotspots`、`projects`、`cover`、`accent`、`stats` 不属于本板块写入范围。
+
+### 11.3 接口契约草案
+
+建议使用独立语义的后台接口，不继续扩大当前偏运行配置的 `/api/admin/settings`：
+
+```text
+GET   /api/admin/site
+PATCH /api/admin/site
+```
+
+读取响应目标：
+
+```json
+{
+  "ok": true,
+  "data": {
+    "site": {
+      "title": "buddy",
+      "subtitle": "会成长的个人助手",
+      "social": []
+    },
+    "profile": {
+      "nickname": "Bird",
+      "avatar": "/images/profile-avatar.png",
+      "bio": "",
+      "github": "bird-z"
+    },
+    "sources": {
+      "site": "data/site.json",
+      "profile": "data/profile.md"
+    }
+  }
+}
+```
+
+更新请求目标：
+
+```json
+{
+  "site": {
+    "title": "buddy",
+    "subtitle": "会成长的个人助手",
+    "social": [
+      { "label": "GitHub", "icon": "🐙", "url": "https://github.com/bird-z" }
+    ]
+  },
+  "profile": {
+    "nickname": "Bird",
+    "avatar": "/images/profile-avatar.png",
+    "bio": "",
+    "github": "bird-z"
+  }
+}
+```
+
+字段校验目标：
+
+```text
+title：必填，最多 80 字
+subtitle：可空，最多 160 字
+social：最多 12 条
+social.label：必填，最多 30 字
+social.icon：可空，最多 8 字
+social.url：可空，只允许 http://、https://、mailto:
+nickname：最多 80 字
+avatar：可空，只允许 /images/ 路径或 https URL
+bio：最多 500 字
+github：可空，^[A-Za-z0-9-]{1,39}$
+```
+
+### 11.4 双文件保存原则
+
+一次点击保存，底层分别更新两个文件：
+
+```text
+site → data/site.json
+profile → data/profile.md
+```
+
+目标流程：
+
+1. 读取当前 `site.json` 和 `profile.md`。
+2. 校验请求字段。
+3. 分别生成临时文件。
+4. 两个临时文件都写成功后，再替换原文件。
+5. 任一步失败，保留原文件并清理临时文件。
+6. 返回新的站点/个人信息视图。
+
+这只能降低部分写入风险，不能宣称具备数据库级跨文件事务；若一个文件替换成功、另一个替换失败，后续需要通过备份或重试恢复。
+
+### 11.5 验收标准
+
+实现后需要由使用者亲眼验证：
+
+- `/admin/site` 能读取当前站点名称、副标题、个人信息和联系方式。
+- 保存站点名称后，`GET /api/me` 的 `site.site.title` / `site.site.subtitle` 更新。
+- 保存个人信息后，`GET /api/me` 的 `profile` 更新。
+- 保存联系方式后，`GET /api/me` 的 `site.social` 更新。
+- 关于页和主页刷新后能看到新的昵称、头像、简介和副标题。
+- 非法 URL、超长文本、非法 GitHub 用户名会被拒绝。
+- 保存失败不会留下半截 `site.json` 或 `profile.md`。
+- 不修改 `background`、`hotspots`、`projects` 等未授权配置。
 
 本节状态：**已记录，当前不实现。**

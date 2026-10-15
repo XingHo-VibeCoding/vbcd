@@ -22,10 +22,62 @@ export function dayWindow(date) {
 
 function noteView(note) {
   return {
-    id: note.id, title: note.title, summary: note.excerpt, category: note.category,
+    id: note.id, title: note.title, subtitle: note.excerpt, summary: note.excerpt, tag: note.category, image: '',
     url: `/notes/${encodeURIComponent(note.id)}`, source_type: 'note', source_label: '档案',
-    updated_at: note.updated_at, created_at: note.created_at,
+    visible: true, order: null, updated_at: note.updated_at, created_at: note.created_at,
   }
+}
+
+function siteFocusView(item, type, index) {
+  const isProject = type === 'project'
+  return {
+    id: `${type}:${item.id || item.title || item.name || index}`,
+    title: String(item.title ?? item.name ?? '').trim(),
+    subtitle: String(item.subtitle ?? item.desc ?? '').trim(),
+    summary: String(item.subtitle ?? item.desc ?? '').trim(),
+    tag: String(item.tag ?? '').trim(),
+    image: String(item.image ?? '').trim(),
+    url: String(item.url ?? '').trim(),
+    visible: item.visible !== false,
+    order: Number.isFinite(Number(item.order)) ? Number(item.order) : null,
+    icon: item.icon || '',
+    source_type: `site_${type}`,
+    source_label: isProject ? '站点项目' : '站点热点',
+    updated_at: item.updated_at || null,
+  }
+}
+
+function sortFocus(items) {
+  return items
+    .filter(item => item.visible !== false && item.title)
+    .sort((a, b) => {
+      const ao = a.order == null ? Infinity : a.order
+      const bo = b.order == null ? Infinity : b.order
+      return ao - bo || new Date(b.updated_at || 0) - new Date(a.updated_at || 0) || a.id.localeCompare(b.id)
+    })
+}
+
+function focusQuotaKey(item) {
+  if (item.source_type === 'note') return 'note'
+  if (item.source_type === 'github') return 'github'
+  if (item.source_type === 'site_hotspot' || item.source_type === 'site_project') return 'site'
+  return 'other'
+}
+
+// 首页焦点区块保持来源多样性：资料最多 2 条、GitHub 最多 1 条、站点卡片最多 1 条。
+// 配额是严格上限；某类不足时宁可少展示，也不让单一来源占满区块。
+function selectFocus(items, limit = 4) {
+  const quotas = { note: 2, github: 1, site: 1 }
+  const counts = { note: 0, github: 0, site: 0, other: 0 }
+  const selected = []
+  for (const item of items) {
+    const key = focusQuotaKey(item)
+    if (key !== 'other' && counts[key] >= quotas[key]) continue
+    selected.push(item)
+    counts[key] += 1
+    if (selected.length >= limit) break
+  }
+  return selected
 }
 
 function planGroup(plan, now) {
@@ -39,14 +91,17 @@ export function buildHome({ me, notes, planning, github, date, now, sources }) {
   const window = dayWindow(date)
   const statsWindow = dayWindow(shanghaiDate(now))
   const recentFrom = new Date(new Date(statsWindow.from).getTime() - 6 * DAY)
-  const focus = [
+  const focus = sortFocus([
     ...(notes || []).filter(note => note.category !== 'essay' && note.tags?.includes('焦点')).map(note => ({ ...noteView(note), key: `note:${note.id}` })),
     ...(github?.items || []).filter(repo => repo.topics.includes('focus')).map(repo => ({
-      key: `github:${repo.id}`, id: repo.id, title: repo.fullName, summary: repo.description,
+      key: `github:${repo.id}`, id: `github:${repo.id}`, title: repo.fullName,
+      subtitle: repo.description || '', summary: repo.description || '', tag: 'focus', image: repo.avatarUrl || '',
       source_type: 'github', source_label: 'GitHub 项目', url: repo.htmlUrl,
-      updated_at: repo.updatedAt, pushed_at: repo.pushedAt, archived: repo.archived,
+      visible: true, order: null, updated_at: repo.updatedAt, pushed_at: repo.pushedAt, archived: repo.archived,
     })),
-  ].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0) || a.key.localeCompare(b.key))
+    ...(me.site?.hotspots || []).map((item, index) => siteFocusView(item, 'hotspot', index)),
+    ...(me.site?.projects || []).map((item, index) => siteFocusView(item, 'project', index)),
+  ])
   const essays = notes === null ? null : notes.filter(note => note.category === 'essay')
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || a.id.localeCompare(b.id))
     .slice(0, 3).map(noteView)
@@ -73,7 +128,7 @@ export function buildHome({ me, notes, planning, github, date, now, sources }) {
       notes_added_7d: notes.filter(note => new Date(note.created_at) >= recentFrom && new Date(note.created_at) < new Date(statsWindow.to)).length,
       from: recentFrom.toISOString(), to: statsWindow.to,
     },
-    focus: { total: focus.length, items: focus.slice(0, 4), partial: notes === null || ['unavailable', 'stale', 'unconfigured'].includes(github?.state) },
+    focus: { total: focus.length, items: selectFocus(focus), partial: notes === null || ['unavailable', 'stale', 'unconfigured'].includes(github?.state) },
     today: { date, ...window, items: schedules, read_at: planning ? now.toISOString() : null },
     plans: plans === null ? null : { total: plans.length, items: plans.slice(0, 5), read_at: now.toISOString() },
     essays, sources,

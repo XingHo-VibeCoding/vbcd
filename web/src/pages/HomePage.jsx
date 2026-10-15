@@ -67,21 +67,27 @@ function Badge({ label, tone = 'upcoming' }) {
 }
 
 function FocusCard({ item }) {
-  const external = item.source_type === 'github'
+  const external = /^https?:\/\//i.test(item.url || '')
+  const internal = /^\//.test(item.url || '')
   const content = (
-    <div className="flex h-full flex-col justify-between rounded-xl border border-white/50 bg-white/40 p-4 transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
+    <div className="flex h-full flex-col justify-between overflow-hidden rounded-xl border border-white/50 bg-white/40 transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
+      {item.image ? <img src={item.image} alt="" className="h-28 w-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} /> : null}
+      <div className="flex flex-1 flex-col justify-between p-4">
       <div>
         <div className="flex items-center justify-between gap-2">
-          <span className="font-sans text-xs font-black tracking-widest text-brand">焦点 · {item.source_label}</span>
+          <span className="font-sans text-xs font-black tracking-widest text-brand">{item.tag || '焦点'} · {item.source_label}</span>
           {item.archived ? <Badge label="已归档" tone="ended" /> : null}
         </div>
         <h3 className="mt-2 line-clamp-2 text-base md:text-lg font-black leading-snug text-slate-900 dark:text-slate-100">{item.title}</h3>
-        <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">{item.summary || '暂无摘要'}</p>
+        <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">{item.subtitle || item.summary || '暂无摘要'}</p>
       </div>
-      <div className="mt-2 font-sans text-xs text-slate-400">{external ? 'GitHub' : '个人档案'} · 更新于 {formatDateTime(item.updated_at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{external && item.pushed_at ? <span className="block">最近推送 {formatDateTime(item.pushed_at, { year: 'numeric', month: 'numeric', day: 'numeric' })}</span> : null}</div>
+      <div className="mt-2 font-sans text-xs text-slate-400">{item.source_label || item.source_type}{item.updated_at ? <> · 更新于 {formatDateTime(item.updated_at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</> : null}{external && item.pushed_at ? <span className="block">最近推送 {formatDateTime(item.pushed_at, { year: 'numeric', month: 'numeric', day: 'numeric' })}</span> : null}</div>
+      </div>
     </div>
   )
-  return external ? <a href={item.url} target="_blank" rel="noreferrer">{content}</a> : <Link to={item.url}>{content}</Link>
+  if (external) return <a href={item.url} target="_blank" rel="noreferrer">{content}</a>
+  if (internal) return <Link to={item.url}>{content}</Link>
+  return content
 }
 
 function TodaySchedule({ today, onDateChange }) {
@@ -211,7 +217,7 @@ export default function HomePage() {
           <SourceLine source={data.sources?.notes}>统计来源：PostgreSQL 档案 · 随笔计入总数 · 近 7 天含今天</SourceLine>
           {site.social?.length ? <div className="flex flex-wrap gap-2">{site.social.map(item => item.url ? <a key={item.label} href={item.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-xl bg-brand/10 px-3 py-2 font-sans text-sm hover:bg-brand/15 text-brand">{item.icon || '↗'} {item.label}</a> : <span key={item.label} className="rounded-xl px-3 py-2 text-xs text-slate-400">{item.label}（未配置）</span>)}</div> : null}
         </section>
-        <section className={`flex flex-col p-4 ${GLASS}`}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-black text-slate-900 dark:text-slate-100">◎ 焦点</h2><Link to="/about#projects" className="min-h-11 flex shrink-0 items-center font-sans text-sm hover:underline font-semibold text-brand">GitHub 项目 →</Link></div>{data.focus.items.length ? <div className="grid flex-1 gap-2">{data.focus.items.map(item => <FocusCard item={item} key={item.key} />)}</div> : <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-brand/30 px-4 text-center text-sm text-slate-400">{data.focus.partial ? '暂无可展示焦点，部分来源尚未核实' : '没有带“焦点”标签的项目或档案'}</div>}<SourceLine source={projectsState}>GitHub Topic + 档案标签 · {data.focus.partial ? '目前可读' : '共'} {data.focus.total} 条</SourceLine>{data.sources.notes.state === 'unavailable' ? <p role="status" className="mt-2 text-xs text-amber-600">档案焦点暂不可用。</p> : null}{projectsState?.state === 'stale' ? <p role="status" className="mt-2 text-xs text-amber-600">GitHub 项目来自缓存，可能已过期。</p> : null}</section>
+        <section className={`flex flex-col p-4 ${GLASS}`}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-black text-slate-900 dark:text-slate-100">◎ 焦点</h2><Link to="/about#projects" className="min-h-11 flex shrink-0 items-center font-sans text-sm hover:underline font-semibold text-brand">GitHub 项目 →</Link></div>{data.focus.items.length ? <div className="grid flex-1 gap-2">{data.focus.items.map(item => <FocusCard item={item} key={item.key || item.id} />)}</div> : <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-brand/30 px-4 text-center text-sm text-slate-400">{data.focus.partial ? '暂无可展示焦点，部分来源尚未核实' : '没有带“焦点”标签的项目或档案'}</div>}<SourceLine source={projectsState}>GitHub Topic + 档案标签 · {data.focus.partial ? '目前可读' : '共'} {data.focus.total} 条</SourceLine>{data.sources.notes.state === 'unavailable' ? <p role="status" className="mt-2 text-xs text-amber-600">档案焦点暂不可用。</p> : null}{projectsState?.state === 'stale' ? <p role="status" className="mt-2 text-xs text-amber-600">GitHub 项目来自缓存，可能已过期。</p> : null}</section>
       </div>
       <div className="grid items-stretch gap-4 md:grid-cols-[.9fr_1.1fr]"><TodaySchedule today={data.today} onDateChange={changeDate} /><PlansCard plans={data.plans} /></div>
       <div className="grid items-stretch gap-4 md:grid-cols-[1.5fr_.5fr]"><EssaysCard essays={data.essays} /><button type="button" onClick={() => setTheme(toggleTheme())} aria-label={theme === 'dark' ? '切换到日间模式' : '切换到夜间模式'} className={`flex min-h-11 flex-col items-center justify-center gap-2 p-4 ${GLASS} hover:bg-brand/10 active:scale-95`}><span className="text-3xl" aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span><span className="font-sans text-xs font-black tracking-wider text-slate-500 dark:text-slate-400">{theme === 'dark' ? '日间模式' : '夜间模式'}</span></button></div>
