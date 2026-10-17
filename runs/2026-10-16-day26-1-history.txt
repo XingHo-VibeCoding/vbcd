@@ -1,0 +1,55 @@
+=== ① 确认可回退历史 · 证据  2026-10-16 23:09:46 CST ===
+
+--- 1) 本地 HEAD 与前 6 条历史（含提交时间）---
+1387c1c  2026-10-15 16:17:05 +0800   (HEAD -> main, origin/main, origin/HEAD) [ BIRD ] | 导航英文化（Lobster×Great Vibes 动效+CC0衬线）、站名头像贯通主站、隐藏滚动条修复头部漂移
+cc6aa14  2026-10-15 13:39:57 +0800   [ BIRD ] | 将热点与项目管理改为档案和GitHub来源精选
+bf096d4  2026-10-15 11:49:38 +0800   [ BIRD ] | 增加站点与个人信息后台管理
+a0952be  2026-10-15 11:49:38 +0800   [ BIRD ] | 完成图片资产上传与删除保护
+8b02764  2026-10-15 10:22:08 +0800   [ BIRD ] | 完成站点背景头像控制并统一首页焦点展示模型
+188ea6c  2026-10-15 09:12:43 +0800   [ BIRD ] | 增加站点与个人信息后台管理
+
+--- 2) 候选回退点可达性 ---
+1387c1c    commit  2026-10-15 16:17:05 +0800 [ BIRD ] | 导航英文化（Lobster×Great Vib
+cc6aa14    commit  2026-10-15 13:39:57 +0800 [ BIRD ] | 将热点与项目管理改为档案和GitHub来源精选
+bf096d4    commit  2026-10-15 11:49:38 +0800 [ BIRD ] | 增加站点与个人信息后台管理
+a0952be    commit  2026-10-15 11:49:38 +0800 [ BIRD ] | 完成图片资产上传与删除保护
+
+--- 3) 本地 tag ---
+  (空 = 尚无标签)
+
+--- 4) 远端同步（本地 HEAD vs origin/main）---
+  local  HEAD : 1387c1cb8efe2cac27b9cf7e516a63086b17e83f
+  origin/main : 1387c1cb8efe2cac27b9cf7e516a63086b17e83f
+  ahead/behind: 0	0
+
+--- 5) v1.0 候选 = HEAD，其前端产物指纹 ---
+d57b8707356d0af7b5e77cd6f2a52bfd  web/dist/assets/index-AshHe_0w.js
+3b39245ed60dec1e9ee6707adfeb99b8  web/dist/assets/AdminApp-BizecIhQ.js
+d57b8707356d0af7b5e77cd6f2a52bfd  web/dist/assets/index-AshHe_0w.js
+5bd7d40d90dfa639727ec856526705f0  web/dist/assets/index-rd30r1wq.css
+
+--- 6) 上一版候选 cc6aa14 与 HEAD 的差异面（前端源码）---
+ web/public/fonts/great-vibes-latin-400.woff2 | Bin 0 -> 42800 bytes
+ web/public/fonts/lobster-latin-400.woff2     | Bin 0 -> 33844 bytes
+ web/public/nav-swash.svg                     | 201 +++++++++++++++++++++++++++
+ web/src/App.jsx                              |  92 ++++++++----
+ web/src/styles.css                           |  93 +++++++++++++
+ 5 files changed, 358 insertions(+), 28 deletions(-)
+
+--- 7) 服务器侧（fel 139.224.192.94）---
+  host: iZuf6gv18zntjq0v52ycjyZ  2026-10-16 23:09:54 CST
+  git HEAD: 1387c1c  [ BIRD ] | 导航英文化（Lobster×Great Vibes 动效+CC0衬线）、站名头
+  git status（工作区改动，须保留不覆盖）:
+     M docker-compose.yml
+  web 镜像:
+c5bc0df43458  vbcd-web:latest  2026-10-15 16:28:12 +0800 CST
+1905b2120ba6  vbcd-server:latest  2026-10-15 16:27:50 +0800 CST
+  运行中容器所用镜像 ID:
+    vbcd-web-1 -> c5bc0df43458
+    vbcd-server-1 -> 1905b2120ba6
+  磁盘: 27G 可用 / 40G 总
+
+--- 8) 公网 v1.0 基线指纹（发布前）---
+  index.html 引用: assets/index-AshHe_0w.js
+  该 bundle md5 : d57b8707356d0af7b5e77cd6f2a52bfd  -
+  /api/health   : {"ok":true,"data":{"status":"ok","time":"2026-10-16T15:10:03.986Z","auth_enabled":false,"asr_configured":true,"ima_configured":true}}

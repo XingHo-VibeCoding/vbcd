@@ -170,7 +170,7 @@ router.patch('/site', async (req, res, next) => {
   }
 })
 
-// 图片资产只读扫描：文件元数据 + 实际引用位置；本阶段不提供上传/删除。
+// 图片资产：元数据与引用位置扫描（M9/M10）+ 上传（M13）/删除（M14，被引用时拒绝）。
 router.get('/images', async (req, res, next) => {
   try {
     res.json({ ok: true, data: await listImages() })

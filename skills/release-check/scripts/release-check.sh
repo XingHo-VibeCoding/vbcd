@@ -124,11 +124,17 @@ fi
 # 3.2 前端构建
 if [ -f web/package.json ]; then
   if [ -d web/node_modules ]; then
-    BUILD=$(cd web && npm run build 2>&1)
-    if echo "$BUILD" | grep -qiE "error|failed"; then
-      fail "前端构建" "$(echo "$BUILD" | grep -iE 'error|failed' | head -2 | tr '\n' ' ')"
+    # 构建到临时 outDir，不用默认 web/dist：
+    #   a) 只读原则 —— 检查不该覆盖被检查的产物；
+    #   b) 若重建 web/dist，会掩盖「线上/待发布产物引用已删文件」这类真实缺陷（实测踩过）。
+    RC_TMP=$(mktemp -d); RC_BUILD_DIR="$RC_TMP/dist"
+    BUILD=$(cd web && npx vite build --outDir "$RC_BUILD_DIR" --emptyOutDir 2>&1)
+    BRC=$?
+    # 判据用退出码：文本里出现 error/failed 不代表失败（vite 的告警、依赖里的字符串都可能含）。
+    if [ "$BRC" -ne 0 ]; then
+      fail "前端构建" "退出码 $BRC；$(echo "$BUILD" | tail -3 | tr '\n' ' ')"
     else
-      pass "前端构建" "$(echo "$BUILD" | grep -oE 'index-[A-Za-z0-9]+\.js' | head -1)"
+      pass "前端构建" "$(echo "$BUILD" | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1)（构到临时目录，未动 web/dist）"
     fi
   else
     skip "前端构建" "web/node_modules 未安装"
@@ -171,20 +177,29 @@ echo
 echo "── ④ 发布形态一致性（文档/配置 vs 实际）────────────────────────────"
 
 # 4.1 公网健康检查（可达才查）
+# ⚠️ URL 只从 README.md「## 线上地址」一节取 —— 这是发布形态的唯一真值处。
+#    不要去 RUN.md 里抓：那里全是 localhost:3000 / 127.0.0.1:8099 之类的本地示例，
+#    抓到的第一条几乎必然是本地地址，导致「公网可达与否」永远判成 WARN（本脚本的真实前科）。
 if command -v curl >/dev/null 2>&1; then
-  URL=$(grep -oE "http://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+" RUN.md 2>/dev/null | head -1)
-  if [ -n "$URL" ] && curl -s -m 8 -o /dev/null -w "%{http_code}" "$URL/api/health" 2>/dev/null | grep -q "^200$"; then
-    BODY=$(curl -s -m 8 "$URL/api/health" 2>/dev/null)
-    pass "公网 /api/health" "$(echo "$BODY" | head -c 100)"
+  URL=$(awk '/^## 线上地址/{f=1} f&&/^## /&&!/^## 线上地址/{f=0} f' README.md 2>/dev/null \
+        | grep -oE "https?://[A-Za-z0-9.-]+" | head -1)
+  if [ -n "$URL" ]; then
+    CODE=$(curl -s -m 10 -o /tmp/.rc-health.$$ -w "%{http_code}" "$URL/api/health" 2>/dev/null || echo 000)
+    if [ "$CODE" = "200" ] && grep -q '"ok":true' /tmp/.rc-health.$$ 2>/dev/null; then
+      pass "公网 /api/health" "HTTP $CODE  $URL  $(head -c 110 /tmp/.rc-health.$$)"
+    else
+      fail "公网 /api/health" "HTTP $CODE  $URL（可达但非健康响应）"
+    fi
+    rm -f /tmp/.rc-health.$$
   else
-    warn "公网 /api/health" "不可达或非 200（URL=${URL:-未从 RUN.md 解析到}）"
+    skip "公网 /api/health" "README.md「## 线上地址」未解析到 URL"
   fi
 else
   skip "公网 /api/health" "无 curl"
 fi
 
 # 4.2 SPEC 接口数与代码路由数对齐（口径漂移检查）
-# SPEC §3 的接口表分三组：纯数字（业务 24）+ S 前缀（管理 6）+ M 前缀（运维 8）= 38。
+# SPEC §3 的接口表分三组：纯数字（业务）+ S 前缀 + M 前缀（管理/运维）。
 # 正则必须同时覆盖三种前缀，否则会误报「漂移」。
 SPEC_N=$(grep -cE "^\| [A-Za-z]*[0-9]+ \| \`(GET|POST|PATCH|DELETE|PUT)" SPEC.md 2>/dev/null || echo 0)
 CODE_N=$(grep -rhoE "router\.(get|post|patch|delete|put)\('" server/src/routes/*.js 2>/dev/null | wc -l | tr -d ' ')
@@ -212,6 +227,31 @@ if [ "$UNPUSHED" -eq 0 ]; then
   pass "本地已推送" "与远端同步"
 else
   warn "本地已推送" "$UNPUSHED 个提交未推送"
+fi
+
+# 4.5 构建产物引用完整性：dist/index.html 引用的每个 /assets/* 必须真实存在
+# 事故长相：回滚 / 发版后浏览器仍用**旧 index.html**（heuristic 缓存），
+#   旧 html 指向已被删掉的 `index-<旧hash>.js` → 页面白屏、控制台 404。
+# 这里查「产物本身是否自洽」；缓存策略问题见 ROLLBACK.md §6。
+# ⚠️ 必须在 ③ 构建之后跑（构建会清空重建 dist）。另附「刚构建过」提示，
+#    否则看到 PASS 会误以为是自己手动改的产物通过了 —— 实际是构建把它覆盖了。
+if [ -f web/dist/index.html ]; then
+  MISSING=""
+  FIRST_REF=""
+  for ref in $(grep -oE '/assets/[A-Za-z0-9_.-]+\.(js|css)' web/dist/index.html | sort -u); do
+    if [ ! -f "web/dist${ref}" ]; then
+      MISSING="$MISSING $ref"
+      [ -z "$FIRST_REF" ] && FIRST_REF="$ref"
+    fi
+  done
+  if [ -z "$MISSING" ]; then
+    N=$(grep -oE '/assets/[A-Za-z0-9_.-]+\.(js|css)' web/dist/index.html | sort -u | wc -l | tr -d ' ')
+    pass "dist 引用完整" "index.html 引用的 $N 个 assets 均存在"
+  else
+    fail "dist 引用完整" "缺失:$MISSING —— 复核：ls web/dist$FIRST_REF"
+  fi
+else
+  skip "dist 引用完整" "web/dist 未构建"
 fi
 
 echo

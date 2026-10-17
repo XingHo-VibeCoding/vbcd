@@ -14,6 +14,17 @@
 
 外部操作（发邮件、提交表单、退课等）一律先展示后果再等确认；密钥与个人资料不进公开仓。
 
+## 线上地址
+
+> 这一节是**发布形态的事实源**：发布前检查脚本从这里取公网入口（见 `skills/release-check/SKILL.md` §1）。
+
+| 项 | 值 |
+|---|---|
+| 公网入口 | https://birdxp.324614917.xyz |
+| 当前版本 | **v1.0**（2026-10-16 发布，逐版说明见 `CHANGELOG.md`） |
+| 部署形态 | 阿里云上海单机 Docker Compose（Nginx 托管静态产物 + 反代 `/api`，同源），见 `RUN.md` §8.8 |
+| 发布 / 回滚 | 发布前体检 `bash skills/release-check/scripts/release-check.sh`；回滚流程见 `ROLLBACK.md` |
+
 ## 文档
 
 | 文件 | 内容 |
@@ -24,6 +35,8 @@
 | `TECH_DESIGN.md` | 技术选型、数据流 |
 | `SPEC.md` | 接口与数据结构（接口唯一事实源，见 §3） |
 | `RUN.md` | 怎么跑起来 |
+| `CHANGELOG.md` | 逐版发布说明（当前 **v1.0**） |
+| `ROLLBACK.md` | 回滚手册：什么情况必须回滚、两条回滚路径、演练耗时 |
 | `AGENT.md` | 产品 agent 化的方向备忘（动作 ↔ 接口 ↔ 页面） |
 | `PLAN.md` | 转写服务的**原始设计方案**（实现已落于 `asr/`，差异见该文顶部批注） |
 | `PLAN-admin.md` | 后台管理模块的设计方案（实现已落于 `web/src/admin/`） |

@@ -1,0 +1,35 @@
+=== Day 26 · 回滚前后对照（静态托管回退）  2026-10-17 20:32:05 CST ===
+
+--- 1) 回滚前：运行 v1.0 ---
+  web 镜像            : c5bc0df43458 (vbcd-web:v1.0)
+  index.html 引用     : /assets/index-AshHe_0w.js
+  该 bundle md5       : d57b8707356d0af7b5e77cd6f2a52bfd
+  公网(CDN)引用       : /assets/index-AshHe_0w.js
+
+--- 2) 回滚目标：上一版 cc6aa14 ---
+  源码提交            : cc6aa14 [ BIRD ] | 将热点与项目管理改为档案和GitHub来源精选
+  镜像                : ed79066f8b68 (vbcd-web:prev-cc6aa14，2026-10-17 20:28 现场构建)
+  index.html 引用     : /assets/index-COMn3COT.js
+
+--- 3) 回滚后：运行 cc6aa14 ---
+  web 镜像            : ed79066f8b68
+  index.html 引用     : /assets/index-COMn3COT.js
+  HTTP /              : 200
+  旧版 js 可访问      : 200
+  /api/health 反代    : 200
+  公网(CDN)引用       : /assets/index-COMn3COT.js（cf-cache-status: DYNAMIC）
+  源站直连引用        : /assets/index-COMn3COT.js
+
+--- 4) 两版可区分的证据（bundle 字符串特征）---
+  字符串        旧版(cc6aa14)    v1.0(1387c1c)
+  Planner    0                1
+  Journal    0                1
+  About      0                1
+  主页         5                4
+  档案         17               16
+
+--- 5) 耗时（实测）---
+  第一次尝试（WEB_IMAGE 变量）: 容器重建 2s，但镜像未变 → 失败
+  第二次尝试（+ --no-build）  : 容器重建 2s，镜像仍未变 → 失败
+  兜底方案（docker run）      : 停旧容器 1s + 起新容器 1s + 验证 2s = 3s → 成功
+  从「发出回滚命令」到「公网看到旧版」: 约 3s（不含排查失败方案的时间）

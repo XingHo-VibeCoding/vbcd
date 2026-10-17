@@ -212,7 +212,7 @@ Refine/Ant Design 只是后台交互层选型，不改变业务层的数据真�
 
 ```mermaid
 flowchart TB
-    U["手机 / 电脑浏览器"] -->|"契约 A：HTTP(S) + JSON（40 个接口，SSE 除外），前后端同源"| W["web 容器：Nginx<br/>静态产物 + SPA try_files 回退 + /api 反代"]
+    U["手机 / 电脑浏览器"] -->|"契约 A：HTTP(S) + JSON（44 个接口，SSE 除外），前后端同源"| W["web 容器：Nginx<br/>静态产物 + SPA try_files 回退 + /api 反代"]
     W -->|"proxy_pass /api"| S["server 容器：Node + Express<br/>（带 healthy 探针）"]
     S -->|"契约 B：文件 / PostgreSQL / runtime 存储"| D[("data/（绑定挂载到宿主机）<br/>*.md + .index.json + .runtime/")]
     S -->|"契约 C：Bearer + job 信封"| A["asr 容器：Python + FastAPI"]
@@ -250,7 +250,7 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    U["使用者：手机 / 电脑浏览器"] -->|"契约 A：HTTPS + JSON（40 个接口，SSE 除外）"| A["① 交互层：React 前端（呈现与收集）"]
+    U["使用者：手机 / 电脑浏览器"] -->|"契约 A：HTTPS + JSON（44 个接口，SSE 除外）"| A["① 交互层：React 前端（呈现与收集）"]
     A --> B["② 能力层：Node.js + Express（鉴权 · 校验 · 读写 · 索引 · 确认）"]
     B -->|"契约 B：文件 / PostgreSQL / runtime 存储"| C["③ 数据资源层：notes 表 + data/*.md + 可再生索引"]
     A -.->|"/admin：观察 / 控制 / 审计，不另造业务真相源"| B
@@ -265,7 +265,7 @@ flowchart TB
 | 原则 | 落地 | 好处 |
 |---|---|---|
 | 关注点分离 | 交互层只呈现、能力层是唯一守门人、后台是 control plane、资源层按对象管理存储 | 改一处不牵动全身；出错容易定位 |
-| 接口契约 | 契约 A：HTTPS + JSON（40 个接口，分组见 `SPEC.md` §3）；规划写入必须复用草案/确认事务 | 契约稳定，后台不绕过业务流程 |
+| 接口契约 | 契约 A：HTTPS + JSON（44 个接口，分组见 `SPEC.md` §3）；规划写入必须复用草案/确认事务 | 契约稳定，后台不绕过业务流程 |
 | 信息隐藏 + 真相源显式化 | 资料处于文件→PostgreSQL 迁移期；索引、Chroma、runtime 是派生/运行时数据，后台不能隐藏或复制这种分叉 | 先暴露双源边界，再逐步收敛，避免假装不存在一致性问题 |
 
 ### 5.3 可替换点（演化轴）

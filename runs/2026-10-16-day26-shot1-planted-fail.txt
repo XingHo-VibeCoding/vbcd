@@ -1,0 +1,49 @@
+=== Day 26 截图 1 · 故意留的问题被发布前检查查出  2026-10-17 20:26:32 CST ===
+
+【故意弄坏的是什么】web/dist/index.html 里引用的 JS 改成一个不存在的 hash
+  expected: /assets/index-AshHe_0w.js
+  planted : /assets/index-Deleted_old9.js
+  (这正是「回滚/发版后浏览器仍用旧 index.html → 旧 html 指向已删产物 → 白屏」的事故形态)
+
+【完整检查输出】
+════════════════════════════════════════════════════════════════════
+ buddy 发布前检查  2026-10-17 20:26:32 CST
+ 仓库：/home/bird/work/vbcd
+ HEAD：1387c1c  分支：main
+════════════════════════════════════════════════════════════════════
+
+── ① 密钥与凭据（红线，任一 FAIL 即阻断发布）────────────────────────
+[PASS] 无硬编码密钥                 0 命中（已排除占位符/测试夹具）
+[PASS] .env 已被忽略                  …gitignore:2:.env	.env
+[PASS] .env 未入库                     仓库仅有 *.env.example
+[PASS] .env.example 齐全                根 / server / asr 三份都在
+[PASS] compose 无注释掉的 env        0 命中（注释里没有伪装成赋值的行）
+
+── ② 资料与本地数据不得入库（隐私边界）──────────────────────────────
+[PASS] data 已被忽略                  …gitignore:41:/data/	data
+[PASS] memory 已被忽略                （当前不存在，规则已就位）
+[PASS] drafts 已被忽略                …gitignore:39:drafts/	drafts
+[PASS] .workbuddy 已被忽略            …gitignore:44:.workbuddy/	.workbuddy
+[PASS] .pi 已被忽略                   …gitignore:47:.pi/	.pi
+[PASS] data/ 根锚定正确              （web/src/data 不存在，跳过误伤检查）
+
+── ③ 构建与自测（任一 FAIL 即阻断发布）──────────────────────────────
+[PASS] 后端 js 语法检查             61 个文件通过
+[PASS] 前端构建                       index-AshHe_0w.js（构到临时目录，未动 web/dist）
+[PASS] day22-verify                       共 12 项断言通过
+[PASS] day23-verify                       19/19 通过
+[PASS] day24-verify                       20/20 通过
+[PASS] 链接链路自测                 结果：38 通过 / 0 失败
+
+── ④ 发布形态一致性（文档/配置 vs 实际）────────────────────────────
+[PASS] 公网 /api/health                 HTTP 200  https://birdxp.324614917.xyz  {"ok":true,"data":{"status":"ok","time":"2026-10-17T12:26:43.109Z","auth_enabled":false,"asr_configured":true,
+[PASS] SPEC 接口数 vs 代码           两侧均 44
+[WARN] 工作区干净                    6 个文件有未提交改动（发布前建议先提交）
+[PASS] 本地已推送                    与远端同步
+[FAIL] dist 引用完整                  缺失: /assets/index-Deleted_old9.js —— 复核：ls web/dist/assets/index-Deleted_old9.js
+
+════════════════════════════════════════════════════════════════════
+ 结果：20 通过  1 失败  1 警告  0 跳过
+ → 有 FAIL，阻断发布
+════════════════════════════════════════════════════════════════════
+【退出码】1

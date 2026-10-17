@@ -204,10 +204,10 @@ vbcd/
 | `created_at` / `expires_at` | 默认 30 天 |
 | `last_seen_at` | 最近活跃时间 |
 
-## 3. API 列表（全量 40 条）
+## 3. API 列表（全量 44 条）
 
 > **口径**：本节列出 `server/src/routes/` 实际注册的**全部**端点，是接口的唯一事实源；改动代码必须同步回改本节。核对命令见 §7.5 A8。
-> 分组：**业务接口**（用户/页面直接消费，24 条）｜ **管理接口**（`/api/admin`、`/api/planning`，10 条）｜ **运维与辅助接口**（健康检查、资料扩展读写、工具清单、首页聚合，6 条）。后台规划不等于再造一套业务数据；后台必须复用本节接口和已有确认/事务流程。
+> 分组：**业务接口**（用户/页面直接消费，24 条）｜ **管理接口**（`/api/admin`、`/api/planning`，14 条）｜ **运维与辅助接口**（健康检查、资料扩展读写、工具清单、首页聚合，6 条）。后台规划不等于再造一套业务数据；后台必须复用本节接口和已有确认/事务流程。
 >
 > 统一前缀 `/api`；请求与响应均为 JSON（SSE 接口除外，见 3.1）。资料接口默认公开；设 `AUTH_ENABLED=1` 后除登录外全部要求已登录（公开模式下 `requireAuth` 直通）。
 > 删除资料目前存在两条已注册路径：核心业务的 `delete_note` 任务确认流（见 §3.3），以及后台使用的 `DELETE /api/notes/:id` 直删接口（见 S3）。两者的生产数据源和权限边界尚未完全统一；后台规划不得把它们描述成同一条链路，后续需单独收敛。
@@ -245,7 +245,7 @@ vbcd/
 
 > **F12 已实现（2026-10-09 起，第 21–23 号接口）**：`POST /api/agent/chat`（SSE：发消息收流式回包，事件类型 `token`/`tool_call`/`tool_result`/`confirmation_required`/`done`/`error`）、`GET /api/agent/runs`（agent 调用审计查看，读 `data/.runtime/agent/runs.jsonl` 倒序）、`GET /api/agent/sessions/:id`（读回会话消息流，前端切页/刷新恢复用；rows 已把 langchain 消息还原成 user/assistant/tool 行）。详见 `PRD.md` §7 F12「已确认决策」与 `AGENT.md` §4。
 
-### 3.0.2 管理接口（10 条 · `/api/admin`、`/api/planning`）
+### 3.0.2 管理接口（14 条 · `/api/admin`、`/api/planning`）
 
 > 后台运维与计划模块。**不属 PRD 功能验收范围**，但代码已注册，故列全。设计意图见 `PLAN-admin.md`。
 
@@ -261,6 +261,10 @@ vbcd/
 | M8 | `PATCH /api/planning/drafts/:id` | 审批或拒绝规划草案；成功后执行确认事务并尝试同步 Agent 会话 | `decision=approved\|rejected`、`review_token?` | `200 {draft, confirmation, result, agent_sync?}`；冲突变化返回 `409 PLANNING_REVIEW_REQUIRED` | `VALIDATION_FAILED`、`NOT_FOUND`、`PLANNING_REVIEW_REQUIRED`、`DB_UNAVAILABLE` |
 | M9 | `GET /api/admin/images` | 图片资产只读扫描：`data/images/` 文件元数据 + 实际引用位置（主站配置与 Markdown 引用实时推导） | — | `200 {total, items[]}` | `INTERNAL` |
 | M10 | `GET /api/admin/images/:id` | 单张图片资产详情（含引用清单） | — | `200 {...}` | `NOT_FOUND`、`INTERNAL` |
+| M11 | `GET /api/admin/site` | 站点信息与个人信息读取：聚合 `data/site.json` 与 `data/profile.md`（存储分裂见 §3.0.5 注） | — | `200 {site, profile, sources}` | `SITE_PROFILE_CORRUPT` |
+| M12 | `PATCH /api/admin/site` | 站点/个人信息更新：`site.title/subtitle/social/background/hotspots/projects` 写 `site.json`，`profile` 写 `profile.md` frontmatter | `site?`、`profile?`（均可缺省，部分更新） | `200 {site, profile, sources}` | `VALIDATION_FAILED`、`SITE_PROFILE_CORRUPT` |
+| M13 | `POST /api/admin/images` | 上传图片到 `data/images/`（multipart，字段 `file`）；≤ 10MB，仅 JPG/PNG/WebP/GIF | `file`（multipart/form-data） | `201 {...}` | `VALIDATION_FAILED`、`IMAGE_WRITE_FAILED` |
+| M14 | `DELETE /api/admin/images/:id` | 删除图片资产；**被站点配置引用时拒绝**，引用扫描失败时放弃删除 | — | `200 {...}` | `NOT_FOUND`、`IMAGE_IN_USE`、`IMAGE_REFERENCE_SCAN_FAILED`、`IMAGE_DELETE_FAILED` |
 
 ### 3.0.3 运维与辅助接口（6 条）
 
@@ -275,7 +279,7 @@ vbcd/
 | S5 | `GET /api/github/projects` | GitHub 仓库列表聚合（关于页项目卡片） | — | `200 {items[]}` | `GITHUB_UPSTREAM` |
 | S6 | `GET /api/home` | 站点首页聚合数据（首页卡片所需） | — | `200 {...}` | `INTERNAL` |
 
-> **计数口径**：`GET /images/*`（`DATA_DIR/images` 静态服务）由 `app.js` 直接挂载、不属 `routes/`，**不计入 40 条**；`POST /api/login`、`POST /api/logout` 在 `AUTH_ENABLED=0`（默认公开）时仍注册，故计在业务接口内。
+> **计数口径**：`GET /images/*`（`DATA_DIR/images` 静态服务）由 `app.js` 直接挂载、不属 `routes/`，**不计入 44 条**；`POST /api/login`、`POST /api/logout` 在 `AUTH_ENABLED=0`（默认公开）时仍注册，故计在业务接口内。
 
 ### 3.0.4 后台与信息流边界
 
@@ -720,4 +724,4 @@ vbcd/
 | A5 | 开通 443 + certbot 证书自动化 | ⬜ 待做 |
 | A6 | 服务器安全组与 SSH 加固（改端口 / 限来源） | ⬜ 待做 |
 | A7 | F13 转写链路的三项验证（>20 分钟多片 `chunks ≥ 5`、TTL 内 `cache_hit=true`、逐句 `[mm:ss]` 归档复跑） | ✅ **已完成**（2026-09-29）：`chunks=14` / `cache_hit=true`（0.127s）/ 归档 68 段带时间戳；留证见 `runs/2026-09-29-f13-live-verify.md`（含「asr 镜像必须先重建」的前置条件），探针结论见 `asr/PROBE.md` §A4 |
-| A8 | 接口计数口径（历史遗留「19 vs 18」之争） | ✅ **已闭环**（2026-10-14）：旧争论基于当时的 19 条路由，现已过时。**新口径 = 全量计入 + 三分组**（见 §3）：业务 24 + 管理 10 + 运维 6 = **40 条**。核对命令（文档与代码必须一致）：<br>`grep -chE "router\.(get\|post\|put\|patch\|delete)\(" server/src/routes/*.js \| paste -sd+ \| bc` → 输出应为 **40**。差异即视为文档过期，须立即回改 §3。 |
+| A8 | 接口计数口径（历史遗留「19 vs 18」之争） | ✅ **已闭环**（2026-10-14）：旧争论基于当时的 19 条路由，现已过时。**新口径 = 全量计入 + 三分组**（见 §3）：业务 24 + 管理 14 + 运维 6 = **44 条**。核对命令（文档与代码必须一致）：<br>`grep -chE "router\.(get\|post\|put\|patch\|delete)\(" server/src/routes/*.js \| paste -sd+ \| bc` → 输出应为 **44**。差异即视为文档过期，须立即回改 §3。 |
