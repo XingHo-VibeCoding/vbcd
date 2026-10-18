@@ -273,13 +273,15 @@ vbcd/
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
 |---|---|---|---|---|---|
 | S1 | `GET /api/health` | 健康检查（部署探针、`RUN.md` 8.7 用） | — | `200 {ok:true, ...}` | — |
-| S2 | `PATCH /api/notes/:id` | 后台编辑资料（改标题/分类/标签/正文；当前文件存储模式专用） | `title?, category?, content?, tags?` | `200 {id, path, hash}` | `VALIDATION_FAILED`、`NOT_FOUND`、`NOT_SUPPORTED`（数据库模式） |
-| S3 | `DELETE /api/notes/:id` | 后台直删资料；与任务确认流并存，生产策略待收敛 | — | `200 {id, path}` | `NOT_FOUND`、`NOT_SUPPORTED`（数据库模式） |
+| S2 | `PATCH /api/notes/:id` | 后台编辑资料（改标题/分类/标签/正文） | `title, category, content, tags`（**content 必填**，其余可选；2026-10-18 实测修正） | `200 {id, path, hash}` | `VALIDATION_FAILED`、`NOT_FOUND` |
+| S3 | `DELETE /api/notes/:id` | 后台直删资料；与任务确认流并存，生产策略待收敛 | — | `200 {id, path}` | `NOT_FOUND` |
 | S4 | `GET /api/agent/tools` | Agent 工具清单、风险等级和可用状态 | — | `200 {tools[]}` | `INTERNAL` |
 | S5 | `GET /api/github/projects` | GitHub 仓库列表聚合（关于页项目卡片） | — | `200 {items[]}` | `GITHUB_UPSTREAM` |
 | S6 | `GET /api/home` | 站点首页聚合数据（首页卡片所需） | — | `200 {...}` | `INTERNAL` |
 
 > **计数口径**：`GET /images/*`（`DATA_DIR/images` 静态服务）由 `app.js` 直接挂载、不属 `routes/`，**不计入 44 条**；`POST /api/login`、`POST /api/logout` 在 `AUTH_ENABLED=0`（默认公开）时仍注册，故计在业务接口内。
+
+> **2026-10-18 验收修正（S2/S3）**：原标注「仅文件存储模式、数据库模式返回 `NOT_SUPPORTED`」与实现不符——数据库模式下两者均正常工作（实测 `200`），已删去该限定；S2 实测 `content` 缺省返回 `400 正文不能为空`，故改为必填标注。
 
 ### 3.0.4 后台与信息流边界
 

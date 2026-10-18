@@ -8,8 +8,10 @@ import NoteArchiveForm from '../components/NoteArchiveForm.jsx'
 import { createTask } from '../api/tasks'
 
 const MODES = [
-  { value: 'converge', label: '收敛' },
-  { value: 'diverge', label: '发散' },
+  // Day 27 试用发现：新用户看不懂「收敛/发散」术语，想手写的人卡在贴链接表单。
+  // 修法：按钮上带白话，术语保留（PRD/SPEC 的概念不变），只动展示层。
+  { value: 'converge', label: '收敛（贴链接）' },
+  { value: 'diverge', label: '发散（手动写）' },
 ]
 
 const CATEGORIES = [

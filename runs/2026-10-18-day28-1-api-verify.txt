@@ -1,0 +1,33 @@
+════════════════════════════════════════════════════════════════════
+ Day 28 · 验收官检测 · API 层四件事 + 数据库四件事
+ 采集时间：2026-10-18 18:09–18:23 CST ｜ 全部走公网 https://birdxp.324614917.xyz
+════════════════════════════════════════════════════════════════════
+
+【API 四件事】
+1) 健康    GET  /api/health  → 200  {"ok":true,...,"auth_enabled":false,"asr_configured":true,"ima_configured":true}
+2) 读取    GET  /api/notes    → 200  total=1（基线）
+3) 写入    POST /api/notes    → 201（服务端日志 [2b3a588a] POST /api/notes -> 201 (14ms)）
+4) 错误    POST /api/notes（缺正文）→ 400  {"code":"VALIDATION_FAILED","message":"正文不能为空"}
+   重复    同内容再写           → 409  {"code":"DUPLICATE",...}
+
+⚠️ 过程中把 409 误判为 bug 的教训：
+   本机沙箱对 bypass 命令会「升级重跑一次」，导致每个请求实际执行两次（日志可见
+   201 紧跟 409、400 也成对）。判定依据必须是服务端日志，不是单次 curl 的返回码。
+
+【数据库四件事（PostgreSQL · 命名卷 pg-data）】
+- 初始化  db/schema.sql 由 docker-entrypoint-initdb.d 挂载，首启自动建表（compose pg 段）
+- 真实读写  POST 201 后库中新增行；GET 返回与写入一致
+- 修改    PATCH /api/notes/:id（全量字段）→ 200；库中 updated_at > created_at（modified = t）
+- 删除    DELETE /api/notes/:id → 200；库中该行消失，回到基线 1 条
+- 持久化  docker restart vbcd-server-1 → 重启后 GET 仍返回全部数据（3 条）
+
+【实测发现的 SPEC 文档错误（两处，代码行为正确）】
+1. SPEC §3.0.1 S2/S3 说 PATCH/DELETE「数据库模式返回 NOT_SUPPORTED」—— 实测两者在数据库
+   模式下均正常工作（200）。文档描述过期，代码是对的。
+2. S2 的请求体标注 `title?, category?, content?, tags?`（均可选）—— 实测 content 缺省时
+   返回 400「正文不能为空」，PATCH 实际要求全量字段。文档描述与实现不符。
+
+【已知缺陷（记录，不在今天修）】
+- PATCH 修改 category 后，id 不变而 path 变（id 与存储路径脱钩）——
+  如 title 里的分类推断被缓存/索引依赖，需要验证一致性。今天只登记。
+

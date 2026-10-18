@@ -311,7 +311,7 @@ curl -s http://localhost:3100/api/planning
 
 规划写入不能直接改 `plans` / `schedules`：先通过 `POST /api/planning/drafts` 生成草案，再用 `PATCH /api/planning/drafts/:id` 提交批准/拒绝；若数据或冲突快照已变化，预期返回 `409 PLANNING_REVIEW_REQUIRED`，必须重新读取并审阅。
 
-资料接口处于文件→PostgreSQL 迁移期：生产环境配置 `DATABASE_URL` 时 `POST /api/notes` 只写 `notes` 表；本地裸跑未配置数据库时才落 Markdown。后台资料页当前仍走 `/api/notes`，编辑/删除在数据库模式下可能返回 `NOT_SUPPORTED`，不要把文件和数据库结果混为同一份数据。
+资料接口处于文件→PostgreSQL 迁移期：生产环境配置 `DATABASE_URL` 时 `POST /api/notes` 只写 `notes` 表；本地裸跑未配置数据库时才落 Markdown。后台资料页当前仍走 `/api/notes`，编辑/删除在两种模式下均可用（2026-10-18 验收实测，SPEC S2/S3 已同步修正）。
 
 站点设置与环境变量的边界：
 

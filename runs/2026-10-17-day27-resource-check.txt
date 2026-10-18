@@ -1,0 +1,92 @@
+════════════════════════════════════════════════════════════════════
+ Day 27 · 资源额度检查  采集时间：2026-10-17 22:30 CST
+ 采集方式：只读（ssh 查询 df/docker/psql/日志；未改任何配置、未重启容器）
+════════════════════════════════════════════════════════════════════
+
+【实例】阿里云 ECS 上海
+  instance-id   : i-uf6gv18zntjq0v52ycjy
+  region/zone   : cn-shanghai / cn-shanghai-g
+  带宽上限      : 204800 Kbps（入/出各 200 Mbps 量级，按 ECS 元数据）
+  系统内 uptime : 36 天 7 小时
+
+【磁盘】
+  Filesystem           Size   Used   Avail  Use%  
+  /dev/vda3            40G    11G    27G    29%   
+
+【内存】
+              total        used        free      shared  buff/cache   available
+Mem:          1.8Gi       1.5Gi        97Mi        22Mi       488Mi       376Mi
+
+【Swap】
+Swap:         1.0Gi       182Mi       842Mi
+
+【Docker 镜像/容器/卷/构建缓存】
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          13        5         2.025GB   1.018GB (50%)
+Containers      5         5         2.112kB   0B (0%)
+Local Volumes   3         3         66.39MB   0B (0%)
+Build Cache     62        0         513.2MB   513.2MB
+
+【运行中的容器】
+NAMES           IMAGE                    STATUS
+vbcd-web-1      vbcd-web:v1.0            Up 2 hours
+vbcd-server-1   vbcd-server              Up 2 days (healthy)
+vbcd-asr-1      vbcd-asr                 Up 3 days
+vbcd-pg-1       postgres:18-alpine       Up 4 days (healthy)
+vbcd-chroma-1   chromadb/chroma:latest   Up 4 days
+
+【业务用量（PostgreSQL）】
+  notes 行数     : 1
+
+  tasks 行数     : 0
+
+  plans 行数     : 1
+
+  schedules 行数 : 1
+
+  confirmations  : 4
+
+
+【资料目录】
+  data/ 体积     : 4.5M
+  Markdown 文件数: 1
+
+【近 24h 请求】
+  /api 总请求    : 3085
+  其中 health    : 2884
+  业务请求(非health): 201
+    └ 其中 404(扫描器): 196
+  LLM/embedding 调用日志行: 0
+
+════════════════════════════════════════════════════════════════════
+【结论】
+════════════════════════════════════════════════════════════════════
+
+一、能查到的（实测）
+  1. 磁盘：40G 用 11G，剩 27G（29%）—— 充裕。按 data/ 现 4.5M 估算，
+     存 10 万条 Markdown 也才几 GB，磁盘不是瓶颈。
+  2. 内存：1.8G 用 1.5G，available 仅 376Mi，Swap 已用 182Mi
+     —— ⚠️ 这是唯一偏紧的项。5 个容器吃掉全部内存，Swap 已在被使用。
+        后果：偶发变慢；并非立刻宕机，但没有余量应对构建/导入。
+  3. Docker：镜像 2.0G 其中 1.0G 可回收；构建缓存 513M 全可回收
+     —— 可安全释放约 1.5G，但当前磁盘不紧张，未动。
+  4. 业务用量：notes 1 / tasks 0 / plans 1 / schedules 1 / confirmations 4
+     —— 线上基本没有真实使用量，配额远未消耗。
+  5. 近 24h：/api 3085 次，其中 2884 是健康检查、196 是扫描器 404，
+     真正业务请求仅 5 次。LLM/embedding 调用日志 0 行。
+  6. 带宽：实例上限 200 Mbps 量级；当前零流量压力。
+
+二、查不到的（本次无法核实，需你本人登录控制台）
+  1. 实例到期日期 —— 实例未绑定 RAM 角色，服务器上 aliyun CLI 无有效凭证，
+     无法调 DescribeInstances 获取 ExpiredTime。
+  2. 账户余额 / 欠费状态。
+  3. DashScope（qwen-plus / text-embedding-v3）的额度余量：
+     百炼控制台的「模型调用」与免费额度，API 不提供余额查询。
+  4. 云盘（40G ESSD）与带宽的计费方式（包年包月 or 按量）——
+     决定「到期日」到底该盯哪个。
+
+三、风险判断
+  - 磁盘：低风险
+  - 内存：中风险（无余量；换镜像/构建时可能触发 OOM 或严重 Swap）
+  - 到期/欠费：未知风险 —— 这类风险的特点是「不是慢慢变差，是某天突然全站挂掉」
+  - LLM 额度：低风险（当前几乎未消耗）

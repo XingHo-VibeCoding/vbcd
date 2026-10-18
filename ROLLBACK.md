@@ -149,20 +149,33 @@ location /assets/ {
 - 回退**不连带数据**：函数版本回退后，若新版已写过新结构数据，旧函数可能读不了——先确认 schema 是否向后兼容；
 - **未演练**，接入云函数当天须补一次演练并更新本节。
 
-### 7.2 数据恢复
+### 7.2 数据恢复（2026-10-18 已实测备份 + 恢复核验）
 
 - 数据在服务器 `~/vbcd/data/`（绑定挂载）+ Postgres 命名卷 `vbcd_pg-data`，**镜像回滚不覆盖它们**；
-- 现状：**没有定时备份**（技术债）。最低限度的手工备份：
+- 现状：**没有定时备份**（技术债，仍在 §9 待办）。手工备份两条命令：
 
 ```bash
-# 文件型资料
-tar czf ~/backup-data-$(date +%F).tgz -C ~/vbcd data
-# 数据库
-docker compose exec -T pg pg_dump -U buddy buddy | gzip > ~/backup-db-$(date +%F).sql.gz
+# 数据库（主数据源，生产环境 DATABASE_URL 已配）
+docker exec vbcd-pg-1 pg_dump -U buddy -d buddy | gzip > ~/vbcd-backups/buddy-$(date +%Y%m%d-%H%M%S).sql.gz
+# 文件型资料（images 等非库资产）
+tar czf ~/vbcd-backups/data-$(date +%F).tgz -C ~/vbcd data
 ```
 
-- 恢复 = 解包覆盖 `data/` + `psql` 回灌；**顺序是先停 server 再恢复**（否则正在写的请求会把恢复结果又写乱）；
-- **未演练**。下次有备份后再演练一次「删一条真笔记 → 恢复 → 核验」。
+**备份实测（2026-10-18 18:51）**：产出 `buddy-20261018-185147.sql.gz`（7.9K，7 张 CREATE TABLE 全在：
+confirmations / notes / planning_changes / planning_drafts / plans / schedules / tasks）。
+
+**恢复实测（同日 18:53）**：不碰生产库，先建临时库导入再核对——
+
+```bash
+docker exec vbcd-pg-1 psql -U buddy -d postgres -c "CREATE DATABASE buddy_restore_test;"
+gunzip -c <备份文件> | docker exec -i vbcd-pg-1 psql -U buddy -d buddy_restore_test
+# 核对行数：notes 1 / plans 1 / schedules 1 —— 与生产库逐项一致
+docker exec vbcd-pg-1 psql -U buddy -d postgres -c "DROP DATABASE buddy_restore_test;"
+```
+
+> **恢复真实生产时的顺序**：先 `docker stop vbcd-server-1`（否则正在写的请求会把恢复结果又写乱）
+> → 回灌 → 起 server → 跑 `GET /api/health` 与 `GET /api/notes` 核对。
+> 上面演练用的是**临时库**，所以不需要停服务——这是安全的验证方式，**以后每次改数据前都该先这样验一遍备份可用**。
 
 ## 8. 禁止事项
 
