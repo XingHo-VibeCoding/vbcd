@@ -186,6 +186,102 @@ node scripts/hash-password.js "你的口令"
 | `PASSWORD_HASH` | bcrypt 哈希 | 模式②或③都需要 |
 | `SESSION_TTL_HOURS` | `720` | 会话有效期 30 天，可省 |
 
+### 8.2.1 可选 Key 获取向导（人操作 · 不做不跑也能用）
+
+buddy 的可选能力各有自己的 Key。**不配对应 Key 也能跑**，只是该功能显示空态或降级（详见各小节「三档降级」）。要解锁时需要你自己去对应平台拿 Key——本节集中列步骤，避免每次翻文档。
+
+| 功能 | 需要的 env | 拿不到时的表现 |
+|---|---|---|
+| 登录（模式②/③） | `PASSWORD_HASH` | 无人能写（模式②）或无人能进（模式③） |
+| ima 云端知识库/笔记（F15/F15b） | `IMA_OPENAPI_CLIENTID` + `IMA_OPENAPI_APIKEY` | 云端页空态、`/api/ima/*` → `503 IMA_NOT_CONFIGURED` |
+| GitHub 热力图（F16） | `GITHUB_USERNAME`（必需）+ `GITHUB_TOKEN`（可选） | 未配 → `configured:false` 灰条；只配用户名 → 资料卡/事件可见，热力图显示「需配置 GITHUB_TOKEN」 |
+| RAG 问答 / agent `ask_kb` | `OPENAI_API_KEY` + `CHROMA_URL` | `POST /api/kb/*` → `503 KB_NOT_CONFIGURED`；agent 清单里 `ask_kb` `enabled=false` |
+| 视频转写（F13） | `ASR_SERVICE_URL` + `ASR_SERVICE_TOKEN` | `type=transcribe_url` 任务 → `failed` |
+| 链接收敛 / agent 归档（F14） | `OPENAI_API_KEY`（可选） | 缺 Key → 仍能归档，但资料只有「原文节选」无模型整理 |
+
+#### A. `PASSWORD_HASH`（模式②/③必配）
+
+本机执行：
+
+```bash
+cd server
+node scripts/hash-password.js "你的口令"
+# 输出形如 $2b$10$xxxxxxxx...，整串粘到 .env 的 PASSWORD_HASH=
+```
+
+⚠️ 口令明文**不要**写进 `.env`，只写哈希；`server/.env` 已在 `.gitignore`。
+
+#### B. ima OpenAPI Key（F15/F15b）
+
+1. 浏览器登录 **ima.qq.com**（腾讯 QQ/微信扫码）
+2. 打开 **https://ima.qq.com/agent-interface** → 「开放平台」/「自建应用」
+3. 创建应用 → 拿到 **ClientID** 与 **ApiKey** 两串
+4. 粘到 `server/.env`：
+
+```bash
+IMA_OPENAPI_CLIENTID=<ClientID>
+IMA_OPENAPI_APIKEY=<ApiKey>
+```
+
+⚠️ ApiKey 泄露 = 你的整个 ima 知识库内容泄露。不进 git、不截图发群、不提交到任何聊天记录。
+⚠️ 重启 `server` 才生效（改 `.env` 不热载）。
+
+#### C. GitHub Personal Access Token（F16 可选）
+
+只要展示 profile + events 不需要 token；**热力图（contributionsCalendar）必须 token**。
+
+1. 打开 **https://github.com/settings/tokens**
+2. 「Generate new token (classic)」
+3. Note 填 `buddy-f16`、Expiration 按需、**勾选 `read:user` 一个 scope 即可**
+4. Generate → 立刻复制（关掉页面就再也看不到）
+5. 粘到 `server/.env`：
+
+```bash
+GITHUB_USERNAME=bird-z         # 你的 GitHub 用户名
+GITHUB_TOKEN=ghp_xxxx...       # 刚生成的 PAT
+```
+
+#### D. OpenAI 兼容 Key（F9 / F14 / agent `ask_kb`）
+
+buddy 用 OpenAI 兼容端点，任选其一：
+
+| 端点 | `OPENAI_BASE_URL` | 模型建议 |
+|---|---|---|
+| OpenAI 官方 | `https://api.openai.com/v1` | `gpt-4o-mini` + `text-embedding-3-small` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` + **另配 `EMBED_BASE_URL`**（DeepSeek 无 embeddings） |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` + `text-embedding-v3` |
+| Ollama 本地 | `http://localhost:11434/v1` | `qwen2.5` 系列 |
+
+`.env` 三行核心：
+
+```bash
+OPENAI_API_KEY=<key>
+OPENAI_BASE_URL=<端点>
+LLM_MODEL=<模型>
+```
+
+#### E. ASR 微服务 Token（F13）
+
+`ASR_SERVICE_TOKEN` 是**你自己起 fun-asr 服务时自己定的一串字符串**——不是从任何平台拿，两端配置一致即可：
+
+```bash
+# server/.env
+ASR_SERVICE_URL=http://localhost:8000    # 或 http://asr:8000（compose 内）
+ASR_SERVICE_TOKEN=<任意随机串>
+# asr/.env
+SERVICE_TOKEN=<同一串>
+```
+
+#### 常见踩坑
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 改了 `.env` 接口还是报「未配置」 | 没重启 server（`.env` 不热载） | `docker compose up -d --build server` 或本地重启 |
+| 容器内改了 `.env` 还是旧值 | compose 的 `env_file` 只在值非空时剥注释；值留空 = 注释吃进值里 | `.env` 里空值写法是 `KEY=`（等号后什么都不写），**不是** `KEY=  # 注释` |
+| `docker compose` 报「变量未定义」 | compose 的 `${VAR}` 只认**仓库根 `.env`**，不认 `server/.env` | 把 compose 用到的变量（如 `PG_PASSWORD`）放根 `.env` |
+| GitHub PAT 创建后忘复制 | GitHub 只显示一次 | 只能重新生成；旧 token 可在 settings/tokens 吊销 |
+| ima ApiKey 截图发群了 | 等于把知识库交出去 | 立刻去 ima 后台吊销并重置 |
+
 ### 8.3 验证
 
 ```bash
