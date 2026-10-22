@@ -607,6 +607,146 @@ vbcd/
 - 每条含 `request_id`、时间、路径、状态码、耗时、错误码；
 - 错误额外记录堆栈（仅服务端可见）。
 
+### 5.6 鉴权与权限模型（2026-10-22 · 板块① 落地）
+
+buddy 是**单用户个人助手**：只有一个「登录用户」（你本人），其余访客均为游客。鉴权不是「多用户分级」，而是「游客 / 登录」二元切换，靠三个独立闸门组合出不同运行模式。
+
+#### 5.6.1 三个闸门（middleware/auth.js）
+
+| 中间件 | 行为 | 用途 |
+|---|---|---|
+| `optionalAuth` | 永不拦截；只把 `req.session` 填上（无 sid 或过期 → `null`） | 挂游客可达的路由 |
+| `requireAuth` | `AUTH_ENABLED=1` 时要求有效 session，否则 `401 AUTH_REQUIRED` | 隐私模式的全站闸 |
+| `requireAuthForWrite` | `AUTH_WRITE_REQUIRED=1` 时要求有效 session，否则 `401 AUTH_WRITE_REQUIRED` | 公开模式下保护写接口 |
+
+挂载原则：**路由整体挂一个 `optionalAuth` 或 `requireAuth` 决定基础门槛，路由内部按需再加 `requireAuthForWrite`**。
+
+#### 5.6.2 三种运行模式
+
+| 模式 | `AUTH_ENABLED` | `AUTH_WRITE_REQUIRED` | 行为 | 适用 |
+|---|---|---|---|---|
+| ① 完全公开 | `0` | `0` | 全部直通 | 本地 dev |
+| ② 读写分离 | `0` | `1` | 读公开 / 写要登录 / agent 读工具游客可用 | **公网生产（推荐）** |
+| ③ 全站鉴权 | `1` | * | 一切要登录 | 隐私模式 |
+
+`AUTH_ENABLED=1` 时 `AUTH_WRITE_REQUIRED` 的值无意义（读已被挡）。
+
+#### 5.6.3 角色能力矩阵（模式②）
+
+| 能力 | 游客 | 登录 |
+|---|---|---|
+| `GET /api/health` | ✅ | ✅ |
+| `GET /api/home` `/api/me` `/api/planning` | ✅ | ✅ |
+| `GET /api/notes` `/api/notes/:id` `/api/db/notes*` | ✅ | ✅ |
+| `GET /api/github/*` | ✅ | ✅ |
+| `GET /api/agent/tools` | ✅ | ✅ |
+| `POST /api/agent/chat`（游客 LLM 只出 readonly 工具） | ✅ | ✅ |
+| `GET /api/agent/runs` `/api/agent/sessions/:id` | ❌ 401 | ✅ |
+| `GET /api/ima/*` | ❌ 401 | ✅ |
+| `GET /api/confirmations` | ❌ 401 | ✅ |
+| `POST /api/notes` `PATCH/DELETE /api/notes/:id` | ❌ 401 | ✅ |
+| `POST /api/tasks` `PATCH /api/tasks/:id` | ❌ 401 | ✅ |
+| `POST /api/kb/query` `POST /api/kb/index` `GET /api/kb/stream` | ❌ 401 | ✅ |
+| `POST/PATCH/DELETE /api/planning/drafts*` | ❌ 401 | ✅ |
+| `* /api/admin/*` | ❌ 401 | ✅ |
+| `POST /api/auth/login` `POST /api/auth/logout` | ✅ | ✅ |
+| `/images/*` 静态 | ✅ | ✅ |
+| 前端 `/login` 路由 | 可访问（不挂导航链接，URL 直达） | 同 |
+
+#### 5.6.4 Agent 工具权限（三层闸）
+
+agent 工具权限由**三层独立机制**叠加：
+
+```
+闸① HTTP 入口：POST /api/agent/chat 游客可达（optionalAuth）
+                 ↓
+闸② registry 白名单：manifest 里的 authFields 未配置 → 工具不进 registry
+                 ↓
+闸③ risk 字段：
+       readonly      → LLM 可直接调
+       needs-confirm → 生成草案挂起等 /api/confirmations 批准
+                 ↓
+本次新增 readOnly 过滤：req.session 为空（游客）→ buildRegistry 跳过 risk!=='readonly' 的条目
+```
+
+**结果**：游客的 LLM 在 `bindTools` 时**根本看不到** `archive_note` / `propose_planning`，因此无法生成写草案；前端 `GET /api/agent/tools` 则仍返回全部工具 + `enabled` / `requiresAuth` 字段用于灰显。
+
+#### 5.6.5 Agent 工具清单的灰显协议
+
+`GET /api/agent/tools` 响应：
+
+```json
+{
+  "ok": true,
+  "data": {
+    "tools": [
+      { "name": "search_notes",   "risk": "readonly",      "enabled": true,  "requiresAuth": false },
+      { "name": "archive_note",   "risk": "needs-confirm", "enabled": false, "requiresAuth": true  }
+    ]
+  }
+}
+```
+
+字段口径：
+
+- `enabled`：该工具当前**实际可被 LLM 调用**（受白名单 + authFields + readOnly 三重过滤）
+- `requiresAuth`：`risk === 'needs-confirm'` 的标记，前端用于显示「登录后可用」灰显样式
+- `risk` / `authFields` 原样透出，便于调试
+
+#### 5.6.6 登录页策略
+
+- `/login` 前端路由**存在**，但**不在导航/首页挂入口链接**
+- 你本人记 URL `https://<domain>/login` 直达
+- 登录成功跳 `?next=<原路径>`（未带 → `/`）
+- `/api/auth/login` 本就公开（登录本身是入口），保留密码失败限流（同 IP 10 分钟 5 次）
+
+> 备注：这是「不显眼」而非「不可达」——依赖**入口不可知**而非**入口不存在**。真要硬挡需 IP 白名单或额外密钥，**本期不做**。
+
+#### 5.6.7 错误码（新增）
+
+| 码 | HTTP | 触发场景 | 中文文案 |
+|---|---|---|---|
+| `AUTH_REQUIRED` | 401 | `AUTH_ENABLED=1` 无 session | 「请先登录」 |
+| `AUTH_WRITE_REQUIRED` | 401 | `AUTH_WRITE_REQUIRED=1` 无 session 调写 | 「登录后可操作」 |
+
+前端 `client.js` 对 `AUTH_WRITE_REQUIRED` 的处理：**不自动跳登录**（登录页不公开，跳了无意义），改成 toast 提示 + 存 `?next=` 供登录后回跳。
+
+#### 5.6.8 环境变量（新增项）
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `AUTH_WRITE_REQUIRED` | `0` | `1` 时非 GET 接口与部分 GET（`/ima/*` `/admin/*` `/agent/runs|sessions` `/confirmations` `/kb/*`）要 session |
+
+`AUTH_ENABLED` / `SESSION_TTL_HOURS` 已在 §6 登记，此处不重复。
+
+#### 5.6.9 部署口径
+
+| 环境 | 推荐配置 | 理由 |
+|---|---|---|
+| 本地 dev | `AUTH_ENABLED=0` `AUTH_WRITE_REQUIRED=0` | 不打断调试 |
+| 公网（fel） | `AUTH_ENABLED=0` `AUTH_WRITE_REQUIRED=1` | 个人博客形态 + 写保护 |
+| 隐私模式 | `AUTH_ENABLED=1` | 已有能力不变 |
+
+#### 5.6.10 冒烟验收断言
+
+`server/scripts/smoke.mjs` 新增板块 `authw①–authw④`（**仅在 `AUTH_WRITE_REQUIRED=1` 时运行**）：
+
+| # | 断言 |
+|---|---|
+| authw① | `POST /api/notes` 无 cookie → `401 AUTH_WRITE_REQUIRED` |
+| authw② | `GET /api/agent/tools` 无 cookie → `200`，`needs-confirm` 工具 `enabled=false` 且 `requiresAuth=true` |
+| authw③ | `GET /api/agent/runs` 无 cookie → `401` |
+| authw④ | `GET /api/ima/kbs` 无 cookie → `401` |
+
+公开模式（`AUTH_WRITE_REQUIRED=0`）下这组断言自动跳过（与现有 `AUTH_ENABLED` 自适应口径一致）。
+
+#### 5.6.11 边界与不做
+
+- **游客调 `POST /agent/chat` 会烧 LLM token**：每条消息约 1 次主决策 + 至多 `AGENT_MAX_STEPS`（默认 8）次工具循环。这是有意开放给游客体验 agent 读功能的代价；**本期不加限流**，超量再说。
+- **Session 单用户**：`sessions.js` 的 session 对象无 `userId` / `role` 字段——登录者就是你。未来若要细分（如「只读用户」「管理员」），需先改 session 模型。
+- **登录页「不公开」仅是前端不挂链接**：路由本身可达，依赖入口不可知。IP 白名单 / 额外密钥属后续。
+- **needs-confirm 工具的人工闸不变**：登录用户也要走 `/api/confirmations` 批准，本权限模型不改变铁律 §1。
+
 ## 6. 环境变量
 
 `.env` 不入库；仓库里只放 `.env.example`。
