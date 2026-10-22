@@ -1,4 +1,7 @@
+// SPEC §5.6：GET / 聚合视图公开；POST/PATCH/drafts GET 均挂 requireAuthForWrite
+//（草案内容可能含敏感中间产物 + 写操作必须登录）。
 import { Router } from 'express'
+import { requireAuthForWrite } from '../middleware/auth.js'
 import { getPlanning, getDraft, decideDraft, proposePlanning } from '../services/planning.js'
 import { resumeAfterDecision } from '../services/agent/loop.js'
 
@@ -8,11 +11,11 @@ router.get('/', async (req, res, next) => {
   try { res.json({ ok: true, data: await getPlanning({ from: req.query.from, to: req.query.to, planStatus: req.query.plan_status, scheduleStatus: req.query.schedule_status, q: req.query.q, type: req.query.type, id: req.query.id }) }) } catch (err) { next(err) }
 })
 
-router.post('/drafts', async (req, res, next) => {
+router.post('/drafts', requireAuthForWrite, async (req, res, next) => {
   try { res.status(201).json({ ok: true, data: await proposePlanning(req.body ?? {}) }) } catch (err) { next(err) }
 })
 
-router.get('/drafts/:id', async (req, res, next) => {
+router.get('/drafts/:id', requireAuthForWrite, async (req, res, next) => {
   try {
     const data = await getDraft(req.params.id)
     if (!data) return res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: '这个规划草案不存在' } })
@@ -20,7 +23,7 @@ router.get('/drafts/:id', async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-router.patch('/drafts/:id', async (req, res, next) => {
+router.patch('/drafts/:id', requireAuthForWrite, async (req, res, next) => {
   try {
     const data = await decideDraft(req.params.id, req.body?.decision, req.body?.review_token)
     if (data.needs_review) {

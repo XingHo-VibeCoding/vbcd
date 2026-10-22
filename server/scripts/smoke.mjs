@@ -1292,6 +1292,27 @@ if (authEnabled) {
   check('② 公开模式：无 Cookie 访问 /api/notes → 200', openList.status === 200 && openList.json?.ok === true, `total=${openList.json?.data?.total}`)
 }
 
+// 写侧闸门（SPEC §5.6 模式②）：AUTH_WRITE_REQUIRED=1 时 smoke 需先登录再跑写断言。
+// 未配 SMOKE_PASSWORD → 写断言跑不通也无意义 → 提前退出并明确告知。
+const authWrite = Boolean(health.json?.data?.auth_write_required)
+if (!authEnabled && authWrite && !cookie) {
+  if (!PASSWORD) {
+    console.error('')
+    console.error('⚠️  写侧闸门模式（AUTH_WRITE_REQUIRED=1）但未配 SMOKE_PASSWORD。')
+    console.error('    后续的 ⑤–㉑ 写断言将一律 401；为给出可信结果，本 smoke 提前退出。')
+    console.error('    修复：SMOKE_PASSWORD=<对应 PASSWORD_HASH 的口令> 复跑，或在 .env 配 PASSWORD_HASH。')
+    process.exit(2)
+  }
+  const login = await req('POST', '/api/login', { body: { password: PASSWORD } })
+  const sid = sidFrom(login.setCookie)
+  check('④w 写侧模式登录 → 200 + Set-Cookie(sid)', login.status === 200 && !!sid, sid ? `sid=${sid.slice(0, 8)}…` : `status=${login.status}`)
+  if (!sid) {
+    console.error('写侧模式登录失败：请确认 SMOKE_PASSWORD 与后端 PASSWORD_HASH 对应。')
+    process.exit(1)
+  }
+  cookie = `sid=${sid}`
+}
+
 // ⑤ 新建 → 201 {id,path,hash}
 const created = await req('POST', '/api/notes', { body: payload, cookie })
 check('⑤ 新建 → 201 {id,path,hash}', created.status === 201 && created.json?.data?.id && created.json?.data?.path && created.json?.data?.hash, created.json?.data?.path)
@@ -1864,6 +1885,56 @@ if (FAKE_ASR_PORT) {
     const noAuth = await fetch(`${BASE}/api/agent/tools`)
     check('ag⑤ 隐私模式未登录 /api/agent/tools → 401', noAuth.status === 401, `status=${noAuth.status}`)
   }
+}
+
+// ===== 写侧闸门（SPEC §5.6 · 模式② AUTH_WRITE_REQUIRED=1）=====
+// 仅在服务端报告 auth_write_required=true 时运行；公开模式（0）整段跳过。
+if (authWrite && !authEnabled) {
+  // authw① 游客写资料 → 401 AUTH_WRITE_REQUIRED
+  const w1 = await req('POST', '/api/notes', { body: { title: 'x', category: 'work', content: 'x' } })
+  check(
+    'authw① 游客 POST /api/notes → 401 AUTH_WRITE_REQUIRED',
+    w1.status === 401 && w1.json?.error?.code === 'AUTH_WRITE_REQUIRED',
+    `status=${w1.status} code=${w1.json?.error?.code}`,
+  )
+
+  // authw② 游客 GET /api/agent/tools → 200，needs-confirm 工具 enabled=false + requiresAuth=true
+  const w2 = await req('GET', '/api/agent/tools')
+  const tools2 = w2.json?.data?.tools ?? []
+  const needsConfirm = tools2.filter((x) => x.risk === 'needs-confirm')
+  const allDisabled = needsConfirm.every((x) => x.enabled === false && x.requiresAuth === true)
+  const readonlyStillOn = tools2.filter((x) => x.risk === 'readonly').some((x) => x.enabled === true)
+  check(
+    'authw② 游客 /api/agent/tools → needs-confirm 灰显，readonly 可用',
+    w2.status === 200 && needsConfirm.length > 0 && allDisabled && readonlyStillOn,
+    `tools=${tools2.map((x) => `${x.name}:${x.enabled}`).join(',')}`,
+  )
+
+  // authw③ 游客 GET /api/agent/runs → 401
+  const w3 = await req('GET', '/api/agent/runs?limit=1')
+  check(
+    'authw③ 游客 /api/agent/runs → 401',
+    w3.status === 401 && w3.json?.error?.code === 'AUTH_WRITE_REQUIRED',
+    `status=${w3.status}`,
+  )
+
+  // authw④ 游客 GET /api/ima/kbs → 401（ima 不公开读）
+  const w4 = await req('GET', '/api/ima/kbs')
+  check(
+    'authw④ 游客 /api/ima/kbs → 401',
+    w4.status === 401 && w4.json?.error?.code === 'AUTH_WRITE_REQUIRED',
+    `status=${w4.status}`,
+  )
+
+  // authw⑤ 游客 GET /api/notes → 200（读仍公开）
+  const w5 = await req('GET', '/api/notes?limit=1')
+  check(
+    'authw⑤ 游客 /api/notes 读仍公开 → 200',
+    w5.status === 200,
+    `status=${w5.status}`,
+  )
+} else if (!authEnabled) {
+  console.log('   ⏭️  AUTH_WRITE_REQUIRED=0（公开模式），跳过 authw①–⑤')
 }
 
 // ===== GitHub 聚合（F16）=====

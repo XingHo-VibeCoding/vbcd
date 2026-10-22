@@ -20,14 +20,17 @@ function authSatisfied(entry) {
   return entry.authFields.every((k) => Boolean(env(k)))
 }
 
-/** 构建当前可用工具集：返回 { tools: Map<name, langchainTool>, meta: Map<name, manifestEntry> } */
-export function buildRegistry(context = {}) {
+/** 构建当前可用工具集：返回 { tools: Map<name, langchainTool>, meta: Map<name, manifestEntry> }
+ *  SPEC §5.6.4：readOnly=true 时跳过 risk!=='readonly'（游客 LLM 看不到 needs-confirm 工具）。
+ */
+export function buildRegistry(context = {}, { readOnly = false } = {}) {
   const wl = whitelist()
   const tools = new Map()
   const meta = new Map()
   for (const entry of TOOL_MANIFEST) {
     if (wl && !wl.has(entry.name)) continue
     if (!authSatisfied(entry)) continue
+    if (readOnly && entry.risk !== 'readonly') continue
     tools.set(entry.name, entry.build(context))
     meta.set(entry.name, entry)
   }

@@ -149,11 +149,30 @@ npm run dev                 # node --watch src/index.js，默认 :3000（本机�
 
 > 下文 curl 示例里统一写 `:3000`（后端默认端口）。本机要是改了 `PORT`，把 `:3000` 换成实际端口（本机为 `:3100`）即可。
 
-不设 `AUTH_ENABLED` 即公开免登录。启用隐私模块：
+**三种运行模式**（SPEC §5.6）：
+
+| 模式 | `AUTH_ENABLED` | `AUTH_WRITE_REQUIRED` | 适用 |
+|---|---|---|---|
+| ① 完全公开（本地 dev） | `0` | `0` | 默认；一切直通 |
+| ② 读写分离（公网推荐） | `0` | `1` | 游客读公开 / 写 + 敏感读要登录 |
+| ③ 全站鉴权（隐私） | `1` | 任意 | 未登录一律 401 |
+
+模式②（公网推荐）配置：
 
 ```bash
 node scripts/hash-password.js "你的口令"     # 哈希粘到 .env 的 PASSWORD_HASH=
-# 再加一行 AUTH_ENABLED=1
+# .env 加一行：AUTH_WRITE_REQUIRED=1
+```
+
+- 游客：可读公开数据 + 用 agent readonly 工具（chat 入口开放，LLM 看不到写工具）
+- 登录后：全部权限（含 agent needs-confirm 工具、/admin、/ima、写操作）
+- 登录页：`/login` 可达但不挂导航链接（你记 URL 直达；不是真正的隐藏，依赖入口不可知）
+
+模式③（全站鉴权）配置：
+
+```bash
+node scripts/hash-password.js "你的口令"
+# .env 加一行：AUTH_ENABLED=1
 ```
 
 `server/.env` 常用项（不入库）：
@@ -163,7 +182,8 @@ node scripts/hash-password.js "你的口令"     # 哈希粘到 .env 的 PASSWOR
 | `PORT` | `3000` | 端口 |
 | `NODE_ENV` | `development` | `production` 时 Cookie 加 `Secure` |
 | `AUTH_ENABLED` | `1` | 可选；不设 = 公开免登录 |
-| `PASSWORD_HASH` | bcrypt 哈希 | 仅启用隐私时需要 |
+| `AUTH_WRITE_REQUIRED` | `1` | 可选；不设 = 公开模式写也免登录；设 1 时**必须配 `PASSWORD_HASH`**，否则无人能写 |
+| `PASSWORD_HASH` | bcrypt 哈希 | 模式②或③都需要 |
 | `SESSION_TTL_HOURS` | `720` | 会话有效期 30 天，可省 |
 
 ### 8.3 验证

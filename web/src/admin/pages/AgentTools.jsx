@@ -1,5 +1,6 @@
 // 板块④ agent 工具清单：GET /api/agent/tools 只读卡片。
-// 工具条目：{name, description, risk:'readonly'|'needs-confirm'}
+// 工具条目：{name, description, risk, enabled, requiresAuth}
+// SPEC §5.6.5：游客（无 session）→ needs-confirm 工具 enabled=false + requiresAuth=true
 import { useEffect, useState } from 'react'
 import { Card, Col, Row, Tag, Alert, Spin, Button, Space } from 'antd'
 import { ReloadOutlined, SafetyOutlined, WarningOutlined } from '@ant-design/icons'
@@ -35,10 +36,24 @@ export default function AgentTools() {
       <Row gutter={[12, 12]}>
         {tools.map((t) => (
           <Col key={t.name} xs={24} sm={12} md={8}>
-            <Card size="small" title={<Space>{t.risk === 'needs-confirm' ? <WarningOutlined style={{ color: '#fa8c16' }} /> : <SafetyOutlined style={{ color: '#52c41a' }} />}{t.name}</Space>}>
-              <Tag color={t.risk === 'needs-confirm' ? 'orange' : 'green'}>
-                {t.risk === 'needs-confirm' ? '需确认' : '只读'}
-              </Tag>
+            <Card
+              size="small"
+              style={{ opacity: t.enabled === false ? 0.55 : 1 }}
+              title={<Space>{t.risk === 'needs-confirm' ? <WarningOutlined style={{ color: '#fa8c16' }} /> : <SafetyOutlined style={{ color: '#52c41a' }} />}{t.name}</Space>}
+            >
+              <Space size={4} wrap>
+                <Tag color={t.risk === 'needs-confirm' ? 'orange' : 'green'}>
+                  {t.risk === 'needs-confirm' ? '需确认' : '只读'}
+                </Tag>
+                {t.requiresAuth && (
+                  <Tag color={t.enabled ? 'blue' : 'default'}>
+                    {t.enabled ? '已解锁' : '登录可用'}
+                  </Tag>
+                )}
+                {t.enabled === false && !t.requiresAuth && (
+                  <Tag color="default">未启用</Tag>
+                )}
+              </Space>
               <p style={{ marginTop: 8, color: '#555', minHeight: 40 }}>{t.description || '—'}</p>
             </Card>
           </Col>

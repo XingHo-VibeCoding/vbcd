@@ -216,6 +216,8 @@
 - **Day 27（2026-10-17，第 4 周 · 资源核查 + 试用任务卡）**：✅ **产出给朋友 5 分钟试用任务卡**（`runs/2026-10-17-day27-trial-card.md`，可直接转发：写入一句话 → 截图 → 搜「新工具」→ 再截图 → 回三问）；✅ **服务器资源额度核查**落 `runs/2026-10-17-day27-resource-check.txt` + 截图 `day27-shot-resource-check.png`；✅ 试用反馈揪出一个真实卡点——归档页「收敛/发散」按钮用户看不懂 → 已修（Day 28 提交里补白话文案，术语保留只动展示层，`web/src/pages/ArchivePage.jsx`）。⚠️ **当日无独立 `Day 27` 提交**——产物随 Day 28 `eb9c022` 一并入库，如实登记。
 - **Day 28（2026-10-18，第 4 周 · 结营交付）**：✅ **28 天完结，验收 95/100**（`ACCEPTANCE.md` 附录 J 逐项打分 + 能力底线映射 + 交付清单，扣分项如实标注）；✅ **三轮核心流程 18/18**（录入→检索→详情 / 收敛→归档 / 转写→归档，原始输出 `runs/2026-10-18-day28-2-coreflow.txt`）；✅ **API + 数据库四件事实测**（`day28-1-api-verify.txt`）；✅ **验收过程挖出 SPEC 两处文档错并修正**（PATCH/DELETE 在数据库模式也可用、S2 的 `content` 实为必填），`RUN.md` / `SPEC.md` 同步；✅ `ROLLBACK.md` §7.2 数据恢复由「未演练」改已实测（pg_dump + 临时库导入行数核验一致）；✅ 结营复盘 `runs/2026-10-18-day28-retro.md`（四次打脸 → 「把验证权攥在自己手里」）+ 结营总结 `day28-summary.md` + 截图 ×2。提交 `eb9c022`。⚠️ **§4.1 待办表 D1（Day 14/15 留证缺口）等仍未结**，按要求不补造，留待使用者裁决。
 
+- **板块① 读/写鉴权闸门拆分（2026-10-22，buddy 项目内部改动，非训练营清单）**：✅ **SPEC §5.6 鉴权与权限模型落地**——三闸门（`optionalAuth` / `requireAuth` / `requireAuthForWrite`）× 三模式（公开 / 读写分离 / 全鉴权），公网推荐 `AUTH_WRITE_REQUIRED=1`；✅ 权限矩阵定案（游客：读公开 + agent readonly 工具 / 登录：全权限；`/ima/*` `/admin/*` `/agent/runs|sessions` `/confirmations` `kb/*` 写均不公开）；✅ 后端 8 文件改动（`auth.js` 拆三闸、`errors.js` +`AUTH_WRITE_REQUIRED`、`app.js` 重挂 12 路由、`notes/planning/agent` 内部按需挂写闸、`registry.js`/`loop.js` 加 `readOnly` 过滤）；✅ agent 工具三层闸 + `enabled`/`requiresAuth` 灰显协议；✅ smoke `authw①–⑤` 新断言全过（游客写 401 / `agent/tools` needs-confirm `enabled=false`+`requiresAuth=true` / `/agent/runs` 401 / `/ima/kbs` 401 / `notes` 读 200）；✅ 前端 `client.js` 错误码注释 + `admin/AgentTools.jsx` 灰显徽章；✅ 文档：`.env.example` 三模式配置 / `RUN.md` §8.2 部署口径 / `SPEC.md` §5.6（已提交 `fd2b86f`）；⚠️ **未做（需使用者）**：fel 公网部署 `.env` 加 `AUTH_WRITE_REQUIRED=1` + `PASSWORD_HASH` + `docker compose up -d --build server`；⚠️ 已知边界：登录页仅是「不挂链接」非真隐藏、游客 `POST /agent/chat` 会烧 LLM（未加限流）、smoke 在 `AUTH_WRITE_REQUIRED=1` 未配 `PASSWORD_HASH` 时早退提示需 `SMOKE_PASSWORD`。
+
 ### 4.1 后续待办（Day 21 周验收遗留，2026-10-14 登记）
 
 > **证据源**：`runs/2026-10-14-day21.md` §1.3（逐条判定 + 原始输出见 §1.3.1 / §1.4）。**本表只登记处置去向，不重复证据**，避免口径双份漂移。
@@ -225,7 +227,7 @@
 |---|---|---|---|
 | D1 | Day 14 / Day 15 无独立留证（部署现实成立，但无当次痕迹） | 留证缺口 | **待使用者裁决**：是否「事后补记 + 标注为补记」，或直接判为已知缺口不补（依 §2 诚实原则**不补造**） |
 | D3 | F15「文件夹可下钻」现网不可验 + 文档与代码不一致 | 待复核 | **配齐 ima Key 后复验**；复验前先对齐 `TECH_DESIGN`/`AGENTS.md` 记述与 `server/src/services/ima.js:153` 现值判据（`folder_id`），消除口径不一致 |
-| D4 | 公开模式 API 裸露（无鉴权即可读写） | **安全** | **待使用者决定**是否对公网开启鉴权（`AUTH_ENABLED=1`）或加写操作门禁；公网已被第三方扫描（nginx 日志实证） |
+| D4 | 公开模式 API 裸露（无鉴权即可读写） | **安全** | ✅ **代码已修**（2026-10-22 板块①：SPEC §5.6 三闸门 + `AUTH_WRITE_REQUIRED=1`）；**待使用者部署**：fel 服务器 `.env` 加 `AUTH_WRITE_REQUIRED=1` + `PASSWORD_HASH` + `docker compose up -d --build server` |
 | D6 | F12 三项未勾（多轮追问实测 / `resumeAfterDecision` / `create_task`·`advance_task`） | 功能续做 | 属 F12 后续期数，**等使用者发清单**再动 |
 | D7 | F15 / F15b 现网未配 ima Key（`503 IMA_NOT_CONFIGURED`） | 配置动作 | **待使用者配置**（代码已就绪，配 Key 即可验 5 条验收） |
 | D8 | F16 现网未配 GitHub（`{"configured":false}`） | 配置动作 | **待使用者配置** `GITHUB_TOKEN`（代码已就绪，配齐后 `calendar` 才非空） |

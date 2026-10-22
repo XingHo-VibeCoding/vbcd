@@ -1,5 +1,10 @@
 // 统一 HTTP 出口：所有接口请求都走这里。
 // 成功时返回后端响应的 data 字段；失败时抛出带 code/status 的 Error，页面据此提示或跳登录。
+//
+// 鉴权错误码（SPEC §5.6.7）：
+//   AUTH_REQUIRED        → 隐私模式未登录；页面可跳 /login?next=<路径>
+//   AUTH_WRITE_REQUIRED  → 写侧闸门未登录（模式②游客调写/敏感读）；提示「登录后可操作」，不跳登录页
+//                          （登录页不公开入口，跳了无意义；你本人记 URL 直达）
 export async function request(path, { method = 'GET', body } = {}) {
   let res
   try {

@@ -53,11 +53,12 @@ function dictToMsg(d) {
  * @param {string|null} opts.sessionId  既有会话 id；null/找不到 → 新建
  * @param {string} opts.message         用户这条消息
  * @param {(event:string, data:object)=>void} opts.emit  SSE 事件推送（token/tool_call/tool_result/confirmation_required/done/error）
+ * @param {boolean} [opts.readOnly]    游客=true → 工具注册表只含 readonly（SPEC §5.6.4）
  * @param {object} [opts.registry]      测试可注入假 registry
  * @param {object} [opts.model]         测试可注入假模型
  * @returns {Promise<{sessionId:string, suspended:boolean}>}
  */
-export async function runTurn({ sessionId, message, emit, registry: injectedRegistry, model: injectedModel }) {
+export async function runTurn({ sessionId, message, emit, readOnly = false, registry: injectedRegistry, model: injectedModel }) {
   const text = String(message ?? '').trim()
   if (!text) throw fail('VALIDATION_FAILED', '消息不能为空')
   if ([...text].length > 2000) throw fail('VALIDATION_FAILED', '单条消息最多 2000 字')
@@ -73,7 +74,7 @@ export async function runTurn({ sessionId, message, emit, registry: injectedRegi
     return { sessionId: session.id, suspended: true }
   }
 
-  const registry = injectedRegistry ?? buildRegistry({ sessionId: session.id })
+  const registry = injectedRegistry ?? buildRegistry({ sessionId: session.id }, { readOnly })
   const tools = toolArray(registry)
   const model = injectedModel ?? getChatModel().bindTools(tools)
 

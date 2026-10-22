@@ -3,8 +3,11 @@
 //                          token* → tool_call/tool_result* → confirmation_required? → done / error
 //   GET  /api/agent/runs   审计留痕查看：?limit= → { items[] }（读 runs.jsonl 倒序）
 //   GET  /api/agent/tools  工具清单与可用状态（前端灰显用）
-// 本路由整体挂在 requireAuth 之后（见 app.js）：隐私模块启用时未登录一律 401。
+// 本路由挂 optionalAuth（chat/tools 游客可达，SPEC §5.6）；
+// runs/sessions 属敏感读，内部挂 requireAuthForWrite。
+// chat 按 req.session 透传 readOnly 给 runTurn：游客 LLM 只见 readonly 工具。
 import { Router } from 'express'
+import { requireAuthForWrite } from '../middleware/auth.js'
 import { runTurn } from '../services/agent/loop.js'
 import { listRuns } from '../services/agent/audit.js'
 import { loadSession, sessionToView } from '../services/agent/state.js'
@@ -37,6 +40,7 @@ router.post('/chat', async (req, res) => {
       sessionId: req.body?.session_id ?? null,
       message: req.body?.message,
       emit: send,
+      readOnly: !req.session,
     })
   } catch (err) {
     // runTurn 入口参数校验错误（VALIDATION_FAILED / NOT_FOUND）走这里。
@@ -53,7 +57,7 @@ router.post('/chat', async (req, res) => {
 
 
 // 读回已有会话的展示数据：页面刷新/切换后恢复消息流用
-router.get('/sessions/:id', async (req, res, next) => {
+router.get('/sessions/:id', requireAuthForWrite, async (req, res, next) => {
   try {
     const session = await loadSession(req.params.id)
     if (!session) throw fail('NOT_FOUND', `会话不存在：${req.params.id}`, 404)
@@ -63,7 +67,7 @@ router.get('/sessions/:id', async (req, res, next) => {
   }
 })
 
-router.get('/runs', async (req, res, next) => {
+router.get('/runs', requireAuthForWrite, async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(1, Number(req.query.limit) || 100), 500)
     const items = await listRuns(limit)
@@ -74,7 +78,13 @@ router.get('/runs', async (req, res, next) => {
 })
 
 router.get('/tools', async (req, res) => {
-  res.json({ ok: true, data: { tools: manifestStatus() } })
+  const readOnly = !req.session
+  const tools = manifestStatus().map((t) => ({
+    ...t,
+    enabled: t.enabled && (!readOnly || t.risk === 'readonly'),
+    requiresAuth: t.risk === 'needs-confirm',
+  }))
+  res.json({ ok: true, data: { tools } })
 })
 
 export default router
