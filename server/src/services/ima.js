@@ -142,8 +142,10 @@ function required(value, label, max = Q_MAX) {
 
 // ---------- 字段规整 ----------
 
-// highlight_content 可能带 HTML 标记：默认剥离成纯文本（永不注入前端 DOM）。
-// TODO(板块1实调定案)：若确认上游只用 <em>/<mark>，可改为白名单高亮，并同步 SPEC。
+// highlight_content（search_knowledge_base）实测为 <em> 包裹关键词；
+// get_doc_content 笔记正文为 <mark>（见下方 stripMark 的注释）。
+// 前端无对应高亮 UI，且白名单化有 XSS 风险 → 剥成纯文本（保守策略）。
+// 若日后要做高亮展示：另加白名单过滤函数（仅保 <em>/<mark>）+ 前端 CSS，不是在这里改。
 function stripTags(html) {
   return String(html).replace(/<[^>]+>/g, '').trim()
 }
