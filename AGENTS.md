@@ -184,7 +184,7 @@
   - ✅ **文档同步（本轮唯一入库的代码仓改动）**：`asr/.env.example` 改为「注释一律在键的上一行」并写明原因与一行排查命令（24 键、顺序与默认值逐项未变，仅原先被污染的 4 个空值键恢复为空）；`RUN.md` 8.7 纠正旧口径 + 新增 1 行，8.8 重写 401 行并新增 412 行与 `scp` 权限行；留证 `runs/2026-10-14-f13-cookies-on-fel.md`。
   - ⚠️ **未做**：真实转写任务**不由 AI 触发**（等使用者在 UI 把 `failed` 任务退回待办重试，会花 DashScope 额度）；`YTDLP_PROXY` 住宅出口方案未上（作为 cookies 之外的叠加手段备用）；`youtube.txt` 未配；拆分方案的契约冻结（asr 单副本 + 4 端点不变 + 隧道地址写法）**仅口头给出，未落地**。
   - 勘误：`fel:docker-compose.yml` 有一处**使用者未提交**的改动（去掉硬钉的 `OPENAI_BASE_URL`，改由 `server/.env` 提供 DashScope 兼容模式）——重建 server 时**顺带生效**，已当面告知。
-- **Day 14 / Day 15（留证缺口；2026-10-14 经 Day 21 周验收复核确认）**：⚠️ **如实标缺口，不补造**——全仓**无** `Day 14` / `Day 15` 打卡提交，本文件 §4 **亦无**该两条目（`git log` 全历史 + grep 双向复核，见 `runs/2026-10-14-day21.md` §1.3 D1 与 §1.3.1）。手册 Day 15 议程为「公网部署」，**部署现实成立**（`http://139.224.192.94` 上 compose 五容器在跑、`GET /api/health` → 200 · 0.17s），但**没有当次独立留证**；Day 14 同样零留证。依 §2 诚实原则**不补造**；是否闭环（如「事后补记 + 标注为补记」）由使用者决定。
+- **Day 14 / Day 15（留证缺口，已补记 · 补记于 2026-10-22）**：⚠️ **全仓无独立 `Day 14` / `Day 15` 打卡提交**——工作在那两天实际进行（证据：2026-10-05 ~ 10-07 区间 30+ 条 `[ BIRD ]` / `Day 16/17/18` 提交，含 ima F15/F15b 全链路、Day 16 建表、asr cookies 加固），但**未以「Day 14」「Day 15」名义单独留证**。Day 15 手册议程为「公网部署」，**部署现实成立**（`http://139.224.192.94` compose 在跑、`GET /api/health` → 200），但无当次独立留证。依 §2 诚实原则**不补造**具体内容；本条为**事后补记**（使用者 2026-10-22 裁定选项 B），证据锚点 `runs/2026-10-14-day21.md` §1.3 D1 与 §1.3.1。
 - **Day 19（2026-10-08，第 3 周 · 数据访问层）**：✅ 把「落点判定」收进统一存储入口——新建 `server/src/storage/note-store.js`（`dbConfigured()` 判定 + 统一读写入口），`routes/db.js` 与 `services/notes.js` **不再直接 import `db/`**；services 层补 `listNotesFromDb` / `getNoteFromDb` 封装。提交 `df0fc0f`（4 文件，+107/−37），**全接口回归通过**。⚠️ 当次无独立 `runs/` 留证（证据为提交正文）；本条目为 Day 21 周验收时回溯补记。
 - **buddy 内部改动汇总（2026-10-10 ~ 10-14，非打卡日；主站改版 + 站长后台 + agent 重构 + 尺度统一）**：这段无训练营 Day 打卡，工作全为 `[ BIRD ]` 内部改动；§4 此前未记，此处补一条汇总（截至 `2e3d94f`，10-10 的 F16 另有独立条目）：
   - **① 前端设计改版基建 + 设计真值**（`c888aaf`，10-11）：接入 **Tailwind v4**；建 `web/DESIGN.md`（设计真值）与 `skills/frontend-rules` 审计脚本 + `references/tokens.md`；`styles.css` 顶部加 `@theme` token 层；`index.html` + `theme.js` **双写 `.dark` 类**（供 Tailwind `dark:` 变体）并保留 `<html data-theme>`（旧手写 token）→ **两套主题需同步维护**；引入 Noto Serif SC / Geist 字体；`/api/me` 透传 `data/site.json`。
@@ -225,7 +225,7 @@
 
 | # | 缺项 | 类别 | 处置去向（谁做 / 何时） |
 |---|---|---|---|
-| D1 | Day 14 / Day 15 无独立留证（部署现实成立，但无当次痕迹） | 留证缺口 | **待使用者裁决**：是否「事后补记 + 标注为补记」，或直接判为已知缺口不补（依 §2 诚实原则**不补造**） |
+| D1 | Day 14 / Day 15 无独立留证（部署现实成立，但无当次痕迹） | 留证缺口 | ✅ **已闭环**（2026-10-22 使用者裁定选项 B「事后补记 + 标注为补记」；§4 条目已更新） |
 | D3 | F15「文件夹可下钻」现网不可验 + 文档与代码不一致 | 待复核 | **配齐 ima Key 后复验**；复验前先对齐 `TECH_DESIGN`/`AGENTS.md` 记述与 `server/src/services/ima.js:153` 现值判据（`folder_id`），消除口径不一致 |
 | D4 | 公开模式 API 裸露（无鉴权即可读写） | **安全** | ✅ **代码已修**（2026-10-22 板块①：SPEC §5.6 三闸门 + `AUTH_WRITE_REQUIRED=1`）；**待使用者部署**：fel 服务器 `.env` 加 `AUTH_WRITE_REQUIRED=1` + `PASSWORD_HASH` + `docker compose up -d --build server` |
 | D6 | F12 三项未勾（多轮追问实测 / `resumeAfterDecision` / `create_task`·`advance_task`） | 功能续做 | 属 F12 后续期数，**等使用者发清单**再动 |
