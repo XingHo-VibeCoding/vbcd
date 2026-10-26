@@ -174,7 +174,7 @@ function BrandMark({ brand, avatar }) {
   )
 }
 
-function DesktopNav({ authEnabled, site, avatar }) {
+function DesktopNav({ authRequired, site, avatar }) {
   const brand = site?.site?.title || site?.title || 'buddy'
   return (
     <header
@@ -202,7 +202,7 @@ function DesktopNav({ authEnabled, site, avatar }) {
               <span className="nav-swash" aria-hidden="true" />
             </NavLink>
           ))}
-          {authEnabled ? (
+          {authRequired ? (
             <LogoutButton className="ml-1 inline-flex h-11 shrink-0 items-center rounded-xl px-3 font-sans text-sm font-semibold text-slate-500 transition-colors hover:text-danger dark:text-slate-400 dark:hover:text-danger" />
           ) : null}
         </nav>
@@ -269,8 +269,9 @@ export default function App() {
   const mainSpacing = isAdmin
     ? 'pt-20 pb-20 md:pt-24 md:pb-12'
     : 'pt-[calc(52px+1rem)] pb-[calc(4rem+env(safe-area-inset-bottom))] md:pt-24 md:pb-12'
-  // 隐私模块默认关闭：读 /api/health 的 auth_enabled，决定是否显示「退出」与登录页
-  const [authEnabled, setAuthEnabled] = useState(false)
+  // 两种鉴权模式都开放登录页：全站隐私模式或公开读/登录写模式。
+  // null 表示健康检查尚未完成，避免直接打开 /login 时误跳回首页。
+  const [authRequired, setAuthRequired] = useState(null)
   // L0 背景 + 站点视觉配置（site.json）
   const [site, setSite] = useState(null)
   const [avatar, setAvatar] = useState(null)
@@ -307,8 +308,8 @@ export default function App() {
 
   useEffect(() => {
     request('/api/health')
-      .then((data) => setAuthEnabled(Boolean(data?.auth_enabled)))
-      .catch(() => setAuthEnabled(false))
+      .then((data) => setAuthRequired(Boolean(data?.auth_enabled || data?.auth_write_required)))
+      .catch(() => setAuthRequired(false))
     // site.json（含 background/social/hotspots/projects）；profile.avatar 供导航 logo 使用；失败不阻塞
     request('/api/me')
       .then((d) => {
@@ -344,7 +345,7 @@ export default function App() {
     <div className="app font-serif text-slate-900 dark:text-slate-100" data-keyboard-open={keyboardOpen ? 'true' : undefined}>
       <BackgroundLayer site={site} theme={theme} effectsEnabled={!isAdmin && !isAgent} />
       {!isAdmin ? <MobileBrandBar site={site} avatar={avatar} /> : null}
-      <DesktopNav authEnabled={authEnabled} site={site} avatar={avatar} />
+      <DesktopNav authRequired={authRequired} site={site} avatar={avatar} />
       <MobileTabBar />
 
       {/* 主站移动端只保留 16px 顶部呼吸空间；底部为 tab bar 高度 + 安全区。桌面维持原间距，admin 维持原规则。 */}
@@ -369,7 +370,12 @@ export default function App() {
           <Route path="/agent-v2" element={<Navigate to="/agent" replace />} />
           <Route path="/ask" element={<Navigate to="/agent" replace />} />
           <Route path="/about" element={<AboutPage />} />
-          <Route path="/login" element={authEnabled ? <LoginPage /> : <Navigate to="/" replace />} />
+          <Route
+            path="/login"
+            element={authRequired === null
+              ? <div role="status" className="hint">正在检查登录状态…</div>
+              : authRequired ? <LoginPage /> : <Navigate to="/" replace />}
+          />
           {/* 后台控制台：/admin 及子路径全部交给 Refine 的 AdminApp */}
           <Route
             path="/admin/*"
