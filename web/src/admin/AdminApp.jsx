@@ -1,8 +1,8 @@
 // AdminApp：Refine 后台实例。挂在 /admin/* 下，独立于主站布局。
 // 板块①只搭骨架：Refine + AntD 主题 + 侧边栏 + 占位仪表盘；资源页后续板块再加。
-import { Refine } from '@refinedev/core'
+import { Authenticated, Refine } from '@refinedev/core'
 import { ThemedLayout, ThemedTitle, useNotificationProvider } from '@refinedev/antd'
-import routerProvider from '@refinedev/react-router'
+import routerProvider, { CatchAllNavigate } from '@refinedev/react-router'
 import { ConfigProvider, App as AntdApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN.js'
 import { DashboardOutlined } from '@ant-design/icons'
@@ -78,6 +78,11 @@ export default function AdminApp() {
           ]}
           options={{ syncWithLocation: true }}
         >
+          <Authenticated
+            key="admin-authenticated"
+            fallback={<CatchAllNavigate to="/login" />}
+            loading={<div style={{ padding: 24 }}>检查登录状态…</div>}
+          >
           <Routes>
             <Route
               index
@@ -152,6 +157,7 @@ export default function AdminApp() {
               }
             />
           </Routes>
+          </Authenticated>
         </Refine>
       </AntdApp>
     </ConfigProvider>

@@ -9,7 +9,8 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const from = searchParams.get('from') || '/'
+  const requestedPath = searchParams.get('from') || searchParams.get('to') || '/'
+  const from = requestedPath.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/'
 
   async function handleSubmit(e) {
     e.preventDefault()
