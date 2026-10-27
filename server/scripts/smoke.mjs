@@ -1853,16 +1853,34 @@ if (FAKE_ASR_PORT) {
   })
   const seedText = await seed.text()
   const sid = /"session_id":"([a-f0-9-]+)"/.exec(seedText)?.[1]
+  const guestId = /(?:^|,\s*)agent_guest=([^;,]+)/.exec(seed.headers.get('set-cookie') || '')?.[1]
+  const sessionCookie = cookie || (guestId ? `agent_guest=${guestId}` : '')
   if (!sid) {
     check('ag⑥ POST /api/agent/chat → SSE done 含 session_id', false, seedText.slice(0, 100).replace(/\n/g, ' '))
   } else {
-    const view = await req('GET', `/api/agent/sessions/${sid}`, { cookie })
+    const view = await req('GET', `/api/agent/sessions/${sid}`, { cookie: sessionCookie })
     const rows = view.json?.data?.rows
     check(
       'ag⑥ GET /api/agent/sessions/:id → 200 且 rows 含 user 消息',
       view.status === 200 && Array.isArray(rows) && rows.some((r) => r.role === 'user' && r.text === 'smoke-恢复测试'),
       `rows=${rows?.length}`,
     )
+
+    if (!authEnabled && guestId) {
+      const foreign = await req('GET', `/api/agent/sessions/${sid}`, { cookie: `agent_guest=${'f'.repeat(64)}` })
+      check(
+        'ag⑧ 其他游客读取该会话 → 404 且不泄露消息',
+        foreign.status === 404 && !JSON.stringify(foreign.json).includes('smoke-恢复测试'),
+        `status=${foreign.status}`,
+      )
+    } else if (authEnabled) {
+      const guest = await req('GET', `/api/agent/sessions/${sid}`)
+      check(
+        'ag⑧ 游客读取登录用户会话 → 401',
+        guest.status === 401 && guest.json?.error?.code === 'AUTH_REQUIRED',
+        `status=${guest.status}`,
+      )
+    }
   }
 
   // ag⑦ 读不存在的会话 → 404 NOT_FOUND

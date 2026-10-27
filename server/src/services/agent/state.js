@@ -28,10 +28,11 @@ function sessionPath(id) {
 }
 
 /** 新会话骨架 */
-export function newSession(id = randomBytes(8).toString('hex')) {
+export function newSession({ id = randomBytes(8).toString('hex'), owner = null } = {}) {
   const now = new Date().toISOString()
   return {
     id,
+    ...(owner ? { owner } : {}),
     messages: [],          // langchain 消息序列化后的普通对象（role/content/tool_calls/tool_call_id/name）
     step: 0,
     pendingConfirmationId: null,

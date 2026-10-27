@@ -87,8 +87,8 @@ export function useBuddyAgentRuntime() {
         applyView(res)
       })
       .catch((err) => {
-        // 仅 404（会话文件真没了）才清 sessionId；
-        // 网络抖动/502/超时保留 id——下次进页面还能再试，不丢历史
+        // 404 表示会话不存在或当前浏览器无权访问（例如退出后旧登录会话）；
+        // 网络抖动/502/超时保留 id——下次进页面还能再试，不丢历史。
         if (err?.status === 404 || err?.code === 'NOT_FOUND') setSessionId(null)
       })
   }, [sessionId, setSessionId, applyView])
@@ -164,6 +164,10 @@ export function useBuddyAgentRuntime() {
           }
         },
         onError: (err) => {
+          if (err?.status === 404 || err?.code === 'NOT_FOUND') {
+            setSessionId(null)
+            setPendingConfirmation(null)
+          }
           patchAssistant(assistantId, (c) => [
             ...c,
             { type: 'text', text: `\n\n⚠️ ${err.message || '对话失败'}` },

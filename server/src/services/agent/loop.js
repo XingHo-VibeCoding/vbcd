@@ -16,6 +16,7 @@ import { getChatModel } from '../llm.js'
 import { fail } from '../errors.js'
 import { buildRegistry, toolArray } from './registry.js'
 import { loadSession, newSession, saveSession, pendingConfirmationView } from './state.js'
+import { canAccessAgentSession, claimAgentSession } from './session-access.js'
 import { audit } from './audit.js'
 
 function env(name, fallback = '') {
@@ -58,14 +59,18 @@ function dictToMsg(d) {
  * @param {object} [opts.model]         测试可注入假模型
  * @returns {Promise<{sessionId:string, suspended:boolean}>}
  */
-export async function runTurn({ sessionId, message, emit, readOnly = false, registry: injectedRegistry, model: injectedModel }) {
+export async function runTurn({ sessionId, message, emit, readOnly = false, sessionOwner = null, registry: injectedRegistry, model: injectedModel }) {
   const text = String(message ?? '').trim()
   if (!text) throw fail('VALIDATION_FAILED', '消息不能为空')
   if ([...text].length > 2000) throw fail('VALIDATION_FAILED', '单条消息最多 2000 字')
 
   let session = sessionId ? await loadSession(sessionId) : null
   if (sessionId && !session) throw fail('NOT_FOUND', `会话不存在：${sessionId}`, 404)
-  if (!session) session = newSession()
+  if (session && sessionOwner && !canAccessAgentSession(session, sessionOwner)) {
+    throw fail('NOT_FOUND', `会话不存在：${sessionId}`, 404)
+  }
+  if (!session) session = newSession({ owner: sessionOwner })
+  else if (sessionOwner) claimAgentSession(session, sessionOwner)
 
   if (session.pendingConfirmationId) {
     // 上一轮的写操作还没被决定——新消息先不混入，提示用户去确认

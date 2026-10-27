@@ -642,7 +642,8 @@ buddy 是**单用户个人助手**：只有一个「登录用户」（你本人�
 | `GET /api/agent/tools` | ✅ | ✅ |
 | 主导航「Journal」与 `/log` | 游客不显示；直接访问跳登录（鉴权开启时）或首页（公开模式） | ✅ 显示并可访问 |
 | `POST /api/agent/chat`（游客 LLM 只出 readonly 工具） | ✅ | ✅ |
-| `GET /api/agent/runs` `/api/agent/sessions/:id` | ❌ 401 | ✅ |
+| `GET /api/agent/runs` | ❌ 401 | ✅ |
+| `GET /api/agent/sessions/:id` | 仅可读本浏览器匿名身份创建的游客会话；其他会话统一 `404` | ✅（单用户登录态） |
 | `GET /api/ima/*` | ❌ 401 | ✅ |
 | `GET /api/confirmations` | ❌ 401 | ✅ |
 | `POST /api/notes` `PATCH/DELETE /api/notes/:id` | ❌ 401 | ✅ |
@@ -671,6 +672,8 @@ agent 工具权限由**三层独立机制**叠加：
 ```
 
 **结果**：游客的 LLM 在 `bindTools` 时**根本看不到** `archive_note` / `propose_planning`，因此无法生成写草案；前端 `GET /api/agent/tools` 则仍返回全部工具 + `enabled` / `requiresAuth` 字段用于灰显。
+
+**会话归属与隔离**：匿名浏览器首次使用 Agent 时获得 `agent_guest` HttpOnly Cookie；会话只保存该随机 Cookie 的 SHA-256 摘要，不保存原始 Cookie。游客只能读取/继续持有同一匿名 Cookie 创建的会话；不同游客互不可读。游客访问已登录会话或其他游客会话时，`GET /sessions/:id` 与 `POST /chat` 统一返回 `404 NOT_FOUND`，不泄露会话是否存在。单用户模型下登录用户可接续会话；登出时清除 `sid` 与 `agent_guest` Cookie。旧会话无 owner 标记时按登录用户会话处理，游客拒绝访问。
 
 #### 5.6.5 Agent 工具清单的灰显协议
 
@@ -716,7 +719,7 @@ agent 工具权限由**三层独立机制**叠加：
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `AUTH_WRITE_REQUIRED` | `0` | `1` 时非 GET 接口与部分 GET（`/ima/*` `/admin/*` `/agent/runs|sessions` `/confirmations` `/kb/*`）要 session |
+| `AUTH_WRITE_REQUIRED` | `0` | `1` 时非 GET 接口与敏感 GET（`/ima/*` `/admin/*` `/agent/runs` `/confirmations` `/kb/*`）要 session；`/api/agent/sessions/:id` 另按会话 owner 校验 |
 
 `AUTH_ENABLED` / `SESSION_TTL_HOURS` 已在 §6 登记，此处不重复。
 

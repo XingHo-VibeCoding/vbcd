@@ -4,7 +4,7 @@
 //   GET  /api/agent/runs   审计留痕查看：?limit= → { items[] }（读 runs.jsonl 倒序）
 //   GET  /api/agent/tools  工具清单与可用状态（前端灰显用）
 // 本路由挂 optionalAuth（chat/tools 游客可达，SPEC §5.6）；
-// runs/sessions 属敏感读，内部挂 requireAuthForWrite。
+// runs 属敏感读；sessions 按登录态或 HttpOnly 游客 Cookie 校验会话归属。
 // chat 按 req.session 透传 readOnly 给 runTurn：游客 LLM 只见 readonly 工具。
 import { Router } from 'express'
 import { requireAuthForWrite } from '../middleware/auth.js'
@@ -14,10 +14,20 @@ import { loadSession, sessionToView } from '../services/agent/state.js'
 import { fail } from '../services/errors.js'
 import { userMessage, STATUS_BY_CODE } from '../middleware/errors.js'
 import { manifestStatus } from '../services/agent/registry.js'
+import { canAccessAgentSession, resolveAgentOwner } from '../services/agent/session-access.js'
 
 const router = Router()
 
 router.post('/chat', async (req, res) => {
+  const sessionOwner = resolveAgentOwner(req, res)
+  const requestedSessionId = req.body?.session_id ?? null
+  if (requestedSessionId) {
+    const existing = await loadSession(requestedSessionId).catch(() => null)
+    if (!existing || !canAccessAgentSession(existing, sessionOwner)) {
+      return res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: '会话不存在' } })
+    }
+  }
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -41,6 +51,7 @@ router.post('/chat', async (req, res) => {
       message: req.body?.message,
       emit: send,
       readOnly: !req.session,
+      sessionOwner,
     })
   } catch (err) {
     // runTurn 入口参数校验错误（VALIDATION_FAILED / NOT_FOUND）走这里。
@@ -57,10 +68,11 @@ router.post('/chat', async (req, res) => {
 
 
 // 读回已有会话的展示数据：页面刷新/切换后恢复消息流用
-router.get('/sessions/:id', requireAuthForWrite, async (req, res, next) => {
+router.get('/sessions/:id', async (req, res, next) => {
   try {
+    const owner = resolveAgentOwner(req, res)
     const session = await loadSession(req.params.id)
-    if (!session) throw fail('NOT_FOUND', `会话不存在：${req.params.id}`, 404)
+    if (!session || !canAccessAgentSession(session, owner)) throw fail('NOT_FOUND', `会话不存在：${req.params.id}`, 404)
     res.json({ ok: true, data: sessionToView(session) })
   } catch (err) {
     next(err)

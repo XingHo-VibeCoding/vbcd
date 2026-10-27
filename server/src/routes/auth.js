@@ -79,6 +79,12 @@ router.post('/login', async (req, res, next) => {
 router.post('/logout', (req, res) => {
   destroySession(req.cookies?.sid)
   res.clearCookie('sid')
+  res.clearCookie('agent_guest', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  })
   res.status(204).end()
 })
 
