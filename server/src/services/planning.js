@@ -167,7 +167,13 @@ export async function getPlanning({ from, to, planStatus = 'active', scheduleSta
     if (!['plan','schedule'].includes(type) || !id) throw fail('VALIDATION_FAILED', '按 id 查询需同时提供 type 和 id')
     const item = await getPlanningRecord(type, String(id))
     if (!item) throw fail('NOT_FOUND', '这条规划记录不存在', 404)
-    return { timezone: TZ, item: { ...item, version: recordVersion(item) }, plans: type === 'plan' ? [item] : [], schedules: type === 'schedule' ? [{ ...item, time_state: scheduleState(item) }] : [] }
+    const relatedPlan = type === 'schedule' && item.plan_id ? await getPlanningRecord('plan', item.plan_id) : null
+    return {
+      timezone: TZ,
+      item: { ...item, version: recordVersion(item) },
+      plans: type === 'plan' ? [item] : relatedPlan ? [relatedPlan] : [],
+      schedules: type === 'schedule' ? [{ ...item, time_state: scheduleState(item) }] : [],
+    }
   }
   if (!['active','all','todo','doing','done','cancelled'].includes(planStatus)) throw fail('VALIDATION_FAILED', '无效的计划状态筛选')
   if (!['all','scheduled','completed','cancelled'].includes(scheduleStatus)) throw fail('VALIDATION_FAILED', '无效的日程状态筛选')

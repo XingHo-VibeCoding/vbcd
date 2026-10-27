@@ -563,7 +563,7 @@ B. 焦点 / 项目卡片 / 热点 / 图片资源
                               Plan 1 ───────────── * Schedule（允许不绑定子任务）
 ```
 
-**当前已经实现的基础**：`plans` 是长期目标/项目容器；`schedules.plan_id` 外键关联 `plans.id`，删除 Plan 时 `ON DELETE SET NULL`，因此日程可独立存在；一个 Plan 可关联多条 Schedule。创建草案时可同时提交 Plan 和多条 Schedule，服务端在确认事务中把这些 Schedule 默认关联到新建 Plan；也允许仅创建 Schedule，或创建未关联 Plan 的 Schedule。现有查询分别返回 `plans[]` 与 `schedules[]`，Schedule 通过 `plan_id` 与 Plan 对应，未提供嵌套的 `plan.schedules[]` 响应；按日程标题筛选时，响应仍附带匹配日程所关联的 Plan，供前端/Agent 显示关系上下文。
+**当前已经实现的基础**：`plans` 是长期目标/项目容器；`schedules.plan_id` 外键关联 `plans.id`，删除 Plan 时 `ON DELETE SET NULL`，因此日程可独立存在；一个 Plan 可关联多条 Schedule。创建草案时可同时提交 Plan 和多条 Schedule，服务端在确认事务中把这些 Schedule 默认关联到新建 Plan；也允许仅创建 Schedule，或创建未关联 Plan 的 Schedule。现有列表查询分别返回 `plans[]` 与 `schedules[]`，按日程标题筛选时仍附带匹配日程所关联的 Plan；按 ID 查询 Schedule 时也返回所属 Plan 的 `plans[]` 上下文，独立日程则返回空 `plans[]`。未提供嵌套的 `plan.schedules[]` 响应。
 
 当前状态语义保持解耦：完成 Plan 不自动完成其 Schedule；完成 Schedule 不自动完成 Plan；取消 Plan 不自动取消其 Schedule。日程冲突按时间段检查，不因是否关联同一个 Plan 而豁免。现有实现与专项测试见 `db/migrations/002_planning.sql`、`server/src/services/planning.js`、`server/src/db/planning.js`、`server/scripts/smoke.mjs --planning-lifecycle-selftest`。
 
@@ -575,7 +575,7 @@ B. 焦点 / 项目卡片 / 热点 / 图片资源
 4. 明确时间约束：现有实现检查结束时间晚于开始时间及 Schedule-Schedule 时间重叠，但尚未要求 Schedule 必须位于 Plan 的 `start_at` / `due_at` 范围内。若要增加此约束，须作为独立决策加入草案冲突/复核契约，不能在实现中静默拒绝。
 5. Agent 的 `get_planning` 已可同时返回 Plan 与 Schedule 数据；工具说明要求使用实际 `plan_id`，不根据标题猜关联。`propose_planning` 的写入仍只走 `planning_drafts` → 冲突检查 → Confirmation → 事务。
 
-阶段 A 验收：独立 PostgreSQL 专项测试覆盖「新建 Plan + 多条默认关联 Schedule」「Schedule 单独创建/无 Plan」「显式关联既有 Plan」「计划与日程状态互不级联」「删除 Plan 后 Schedule 保留且 `plan_id` 置空」「Agent 查询可识别关联」「拒绝/冲突不写入」。完成阶段 A 后再评估是否需要嵌套响应或页面改版，不预先增加接口。
+阶段 A 验收：独立 PostgreSQL 专项测试覆盖「新建 Plan + 多条默认关联 Schedule」「Schedule 单独创建/无 Plan」「显式关联既有 Plan」「计划与日程状态互不级联」「删除 Plan 后 Schedule 保留且 `plan_id` 置空」「详情及 Agent 查询可识别关联」「拒绝/冲突不写入」。以上契约与关联验收由 `server/scripts/smoke.mjs --planning-lifecycle-selftest` 覆盖；完成阶段 A 后再评估是否需要嵌套响应或页面改版，不预先增加接口。
 
 **阶段 B：引入 ProjectTask 实体**（单独数据库设计与迁移板块）：
 
@@ -595,7 +595,9 @@ B. 焦点 / 项目卡片 / 热点 / 图片资源
 
 阶段 C 验收：进度结果可由数据库状态复算；日程调整草案展示前后差异和冲突；拒绝无写入；并发或草案过期时要求重新审阅；不重复生成或重复应用调整。
 
-**当前推荐的下一项实现范围**：只做阶段 A 的契约/关联验收补齐，不新增 `project_tasks` 表、不增加 `schedules.task_id`、不做自动进度或 AI 自动改期。阶段 A 完成并经使用者复核后，再单独决定是否启动阶段 B。
+**阶段 A 验收状态（2026-10-28）**：✅ 契约与关联验收已由独立 PostgreSQL 专项测试覆盖（`server/scripts/smoke.mjs --planning-lifecycle-selftest`，25/25）；日程详情及 Agent 查询会返回所属 Plan 上下文，独立日程返回空 `plans[]`；删除 Plan 后 Schedule 保留且 `plan_id` 置空。未新增表或字段。
+
+**下一项建议**：先单独设计阶段 B 的 `ProjectTask` 数据模型与迁移边界，列清字段、状态迁移、排序、进度/依赖语义、删除策略、审计快照、索引及旧数据兼容；设计经使用者确认前不写迁移或业务代码。阶段 C 的自动进度与 AI 日程建议仍不在本阶段范围内。
 
 目标领域模型：
 

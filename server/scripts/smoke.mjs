@@ -211,6 +211,10 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
         assert.equal(second.plan_id, plan.id)
         const found = JSON.parse(await getPlanningTool().invoke({ type: 'schedule', id: first.id }))
         assert.equal(found.item.plan_id, plan.id)
+        assert.equal(found.plans.length, 1)
+        assert.equal(found.plans[0].id, plan.id)
+        const detail = (await api('GET', `/api/planning?type=schedule&id=${encodeURIComponent(first.id)}`)).data
+        assert.equal(detail.plans[0].title, plan.title)
       })
       await verify('按日程标题搜索时仍返回关联 Plan 作为上下文', async () => {
         const result = (await api('GET', '/api/planning?plan_status=all&q=第一条日程')).data
@@ -226,6 +230,23 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
         const records = (await api('GET', '/api/planning?plan_status=all')).data.schedules
         assert.equal(records.find(item => item.title === '显式关联日程').plan_id, plan.id)
         assert.equal(records.find(item => item.title === '独立日程').plan_id, null)
+        const independent = records.find(item => item.title === '独立日程')
+        const detail = (await api('GET', `/api/planning?type=schedule&id=${encodeURIComponent(independent.id)}`)).data
+        assert.equal(detail.plans.length, 0)
+      })
+      await verify('删除 Plan 后 Schedule 保留且详情明确显示无关联', async () => {
+        const draft = await proposePlanning({ plan: { title: '删除后保留的计划' }, schedules: [{ title: '删除计划后保留的日程', ...slot() }] })
+        assert.equal((await send(draft)).data.status, 'approved')
+        const records = (await api('GET', '/api/planning?plan_status=all')).data
+        const deletedPlan = records.plans.find(record => record.title === '删除后保留的计划')
+        const retainedSchedule = records.schedules.find(record => record.title === '删除计划后保留的日程')
+        assert.equal(retainedSchedule.plan_id, deletedPlan.id)
+        await query('DELETE FROM plans WHERE id=$1', [deletedPlan.id])
+        const retained = await item('schedule', retainedSchedule.id)
+        assert.equal(retained.id, retainedSchedule.id)
+        assert.equal(retained.plan_id, null)
+        const detail = (await api('GET', `/api/planning?type=schedule&id=${encodeURIComponent(retainedSchedule.id)}`)).data
+        assert.equal(detail.plans.length, 0)
       })
       let preview
       await verify('完成操作只生成变更草案，确认前原状态保持', async () => {
@@ -332,7 +353,7 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
         await send(draft)
         const history=await api('GET','/api/planning?schedule_status=cancelled')
         assert(history.data.schedules.some(record=>record.id===second.id))
-        assert.equal((await query('SELECT count(*)::int AS n FROM schedules'))[0].n,4)
+        assert.equal((await query('SELECT count(*)::int AS n FROM schedules'))[0].n,5)
         const home=(await api('GET','/api/home?date=2027-01-01')).data
         assert(!home.today.items.some(record=>record.id===second.id))
         assert(home.today.items.some(record=>record.id===first.id && record.completion_state==='completed'))
