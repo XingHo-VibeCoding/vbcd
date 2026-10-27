@@ -710,7 +710,7 @@ agent 工具权限由**三层独立机制**叠加：
 | `AUTH_REQUIRED` | 401 | `AUTH_ENABLED=1` 无 session | 「请先登录」 |
 | `AUTH_WRITE_REQUIRED` | 401 | `AUTH_WRITE_REQUIRED=1` 无 session 调写 | 「登录后可操作」 |
 
-前端 `client.js` 对 `AUTH_WRITE_REQUIRED` 的处理：**不自动跳登录**（登录页不公开，跳了无意义），改成 toast 提示 + 存 `?next=` 供登录后回跳。
+前端 `client.js` 对 `AUTH_REQUIRED` / `AUTH_WRITE_REQUIRED` 统一跳转 `/login?from=<当前路径>`；登录成功后回到原路径。登录页仍不挂在主导航，只通过受保护操作按需进入。
 
 #### 5.6.8 环境变量（新增项）
 

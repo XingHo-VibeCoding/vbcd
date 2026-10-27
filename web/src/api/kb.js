@@ -1,7 +1,7 @@
 // 知识库问答接口封装（SPEC 第 3 章 9–11）
 // 普通问答走统一 client；流式问答用 fetch + ReadableStream 手写 SSE 解析
 //（不用 EventSource：便于复用同源 Cookie 与统一错误处理，也方便将来改 POST）。
-import { request } from './client.js'
+import { redirectOnAuthError, request } from './client.js'
 
 /** 普通问答：返回 { answer, sources[] } */
 export async function queryKb(q, k) {
@@ -30,6 +30,7 @@ export function streamKb(q, { k, onSources, onToken, onError, onDone } = {}) {
         } catch {
           /* 非 JSON 错误体就用默认文案 */
         }
+        redirectOnAuthError(code, res.status)
         onError?.({ code, message })
         return
       }

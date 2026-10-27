@@ -1,6 +1,6 @@
 // agent 对话接口封装（F12，对应 POST /api/agent/chat SSE 与 GET /api/agent/runs）
 // 与 api/kb.js 同一套手写 SSE 解析，但走 POST（消息体在 body，支持 session_id 多轮）。
-import { request } from './client.js'
+import { redirectOnAuthError, request } from './client.js'
 
 /**
  * 发一条 agent 消息（SSE 流）。
@@ -31,6 +31,7 @@ export function streamAgentChat(message, { sessionId = null, onEvent, onError, o
           code = data?.error?.code || code
           msg = data?.error?.message || msg
         } catch { /* 保持默认 */ }
+        redirectOnAuthError(code, res.status)
         onError?.({ code, message: msg })
         return
       }
