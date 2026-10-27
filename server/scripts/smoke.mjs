@@ -1260,6 +1260,7 @@ async function waitTask(id, cookie, timeoutMs = 60000) {
 // ① 健康检查（公开），顺带读 auth_enabled
 const health = await req('GET', '/api/health')
 check('① GET /api/health → 200', health.status === 200 && health.json?.data?.status === 'ok', JSON.stringify(health.json?.data))
+check('①a /api/health 返回当前浏览器会话状态布尔值', typeof health.json?.data?.authenticated === 'boolean', `authenticated=${health.json?.data?.authenticated}`)
 const authEnabled = Boolean(health.json?.data?.auth_enabled)
 console.log(`   模式：${authEnabled ? '隐私（需登录）' : '公开（免登录）'}`)
 

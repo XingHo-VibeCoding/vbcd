@@ -18,7 +18,8 @@ export default function LoginPage() {
     setBusy(true)
     try {
       await login(password)
-      navigate(from, { replace: true })
+      // 整页重新加载，让 App 重新读取 /api/session 后更新 Journal/后台权限状态。
+      window.location.assign(from)
     } catch (err) {
       // AUTH_FAILED / RATE_LIMITED / NETWORK 都直接展示后端文案
       setError(err.message || '登录失败')

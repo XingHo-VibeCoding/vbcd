@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import HomePage from './pages/HomePage.jsx'
 import NoteListPage from './pages/NoteListPage.jsx'
 import LogPage from './pages/LogPage.jsx'
@@ -30,18 +30,19 @@ const NAV_ITEMS = [
 ]
 
 function LogoutButton({ className = '' }) {
-  const navigate = useNavigate()
   async function onLogout() {
     try {
       await logout()
     } catch {
       // 登出失败也不阻塞跳转
     }
-    navigate('/login', { replace: true })
+    window.location.assign('/login')
   }
   return (
-    <button type="button" className={className} onClick={onLogout}>
-      退出
+    <button type="button" className={className} onClick={onLogout} aria-label="Logout">
+      <span className="nav-l1">Logout</span>
+      <span className="nav-l2" aria-hidden="true">Logout</span>
+      <span className="nav-swash" aria-hidden="true" />
     </button>
   )
 }
@@ -174,8 +175,9 @@ function BrandMark({ brand, avatar }) {
   )
 }
 
-function DesktopNav({ authRequired, site, avatar }) {
+function DesktopNav({ isAuthenticated, showJournal, site, avatar }) {
   const brand = site?.site?.title || site?.title || 'buddy'
+  const navItems = NAV_ITEMS.filter((item) => item.to !== '/log' || showJournal)
   return (
     <header
       className="fixed inset-x-0 top-0 z-50 hidden md:block
@@ -188,7 +190,7 @@ function DesktopNav({ authRequired, site, avatar }) {
           {brand}
         </NavLink>
         <nav className="flex items-center gap-1" aria-label="主导航">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -202,8 +204,8 @@ function DesktopNav({ authRequired, site, avatar }) {
               <span className="nav-swash" aria-hidden="true" />
             </NavLink>
           ))}
-          {authRequired ? (
-            <LogoutButton className="ml-1 inline-flex h-11 shrink-0 items-center rounded-xl px-3 font-sans text-sm font-semibold text-slate-500 transition-colors hover:text-danger dark:text-slate-400 dark:hover:text-danger" />
+          {isAuthenticated ? (
+            <LogoutButton className="nav-tab inline-flex h-11 shrink-0 cursor-pointer items-center rounded-xl border-0 bg-transparent px-3.5 text-slate-500 dark:text-slate-400" />
           ) : null}
         </nav>
       </div>
@@ -212,7 +214,8 @@ function DesktopNav({ authRequired, site, avatar }) {
 }
 
 // 移动底部玻璃 tab bar（<768px）：fixed bottom-0，图标+文字
-function MobileTabBar() {
+function MobileTabBar({ showJournal }) {
+  const navItems = NAV_ITEMS.filter((item) => item.to !== '/log' || showJournal)
   return (
     <nav
       data-mobile-nav="true"
@@ -221,7 +224,7 @@ function MobileTabBar() {
                  dark:border-white/5 dark:bg-slate-900/55 md:hidden"
       aria-label="主导航"
     >
-      {NAV_ITEMS.map((item) => (
+      {navItems.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
@@ -272,6 +275,8 @@ export default function App() {
   // 两种鉴权模式都开放登录页：全站隐私模式或公开读/登录写模式。
   // null 表示健康检查尚未完成，避免直接打开 /login 时误跳回首页。
   const [authRequired, setAuthRequired] = useState(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(null)
+  const showJournal = isAuthenticated === true
   // L0 背景 + 站点视觉配置（site.json）
   const [site, setSite] = useState(null)
   const [avatar, setAvatar] = useState(null)
@@ -308,8 +313,14 @@ export default function App() {
 
   useEffect(() => {
     request('/api/health')
-      .then((data) => setAuthRequired(Boolean(data?.auth_enabled || data?.auth_write_required)))
-      .catch(() => setAuthRequired(false))
+      .then((data) => {
+        setAuthRequired(Boolean(data?.auth_enabled || data?.auth_write_required))
+        setIsAuthenticated(Boolean(data?.authenticated))
+      })
+      .catch(() => {
+        setAuthRequired(false)
+        setIsAuthenticated(false)
+      })
     // site.json（含 background/social/hotspots/projects）；profile.avatar 供导航 logo 使用；失败不阻塞
     request('/api/me')
       .then((d) => {
@@ -345,15 +356,24 @@ export default function App() {
     <div className="app font-serif text-slate-900 dark:text-slate-100" data-keyboard-open={keyboardOpen ? 'true' : undefined}>
       <BackgroundLayer site={site} theme={theme} effectsEnabled={!isAdmin && !isAgent} />
       {!isAdmin ? <MobileBrandBar site={site} avatar={avatar} /> : null}
-      <DesktopNav authRequired={authRequired} site={site} avatar={avatar} />
-      <MobileTabBar />
+      <DesktopNav isAuthenticated={isAuthenticated === true} showJournal={showJournal} site={site} avatar={avatar} />
+      <MobileTabBar showJournal={showJournal} />
 
       {/* 主站移动端只保留 16px 顶部呼吸空间；底部为 tab bar 高度 + 安全区。桌面维持原间距，admin 维持原规则。 */}
       <main className={`${isAdmin ? '' : 'site-main '}relative z-10 mx-auto w-full max-w-6xl px-4 ${mainSpacing} sm:px-6 lg:px-10`}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/notes" element={<NoteListPage />} />
-          <Route path="/log" element={<LogPage />} />
+          <Route
+            path="/log"
+            element={isAuthenticated === null
+              ? <div role="status" className="hint">正在检查登录状态…</div>
+              : isAuthenticated
+                ? <LogPage />
+                : authRequired
+                  ? <Navigate to="/login?from=/log" replace />
+                  : <Navigate to="/" replace />}
+          />
           <Route path="/tasks/:id/confirm" element={<TaskConfirmPage />} />
           <Route path="/planning/drafts/:id/confirm" element={<PlanningDraftConfirmPage />} />
           <Route path="/planning" element={<PlanningPage />} />

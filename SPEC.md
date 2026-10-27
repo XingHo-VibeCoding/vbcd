@@ -272,7 +272,7 @@ vbcd/
 
 | # | 方法与路径 | 用途 | 关键请求字段 | 成功响应 | 主要错误 |
 |---|---|---|---|---|---|
-| S1 | `GET /api/health` | 健康检查（部署探针、`RUN.md` 8.7 用） | — | `200 {ok:true, ...}` | — |
+| S1 | `GET /api/health` | 健康检查（部署探针、`RUN.md` 8.7 用）；同时返回当前浏览器会话是否有效（不暴露 sid） | — | `200 {ok:true, data:{status, auth_enabled, auth_write_required, authenticated, ...}}` | — |
 | S2 | `PATCH /api/notes/:id` | 后台编辑资料（改标题/分类/标签/正文） | `title, category, content, tags`（**content 必填**，其余可选；2026-10-18 实测修正） | `200 {id, path, hash}` | `VALIDATION_FAILED`、`NOT_FOUND` |
 | S3 | `DELETE /api/notes/:id` | 后台直删资料；与任务确认流并存，生产策略待收敛 | — | `200 {id, path}` | `NOT_FOUND` |
 | S4 | `GET /api/agent/tools` | Agent 工具清单、风险等级和可用状态 | — | `200 {tools[]}` | `INTERNAL` |
@@ -640,6 +640,7 @@ buddy 是**单用户个人助手**：只有一个「登录用户」（你本人�
 | `GET /api/notes` `/api/notes/:id` `/api/db/notes*` | ✅ | ✅ |
 | `GET /api/github/*` | ✅ | ✅ |
 | `GET /api/agent/tools` | ✅ | ✅ |
+| 主导航「Journal」与 `/log` | 游客不显示；直接访问跳登录（鉴权开启时）或首页（公开模式） | ✅ 显示并可访问 |
 | `POST /api/agent/chat`（游客 LLM 只出 readonly 工具） | ✅ | ✅ |
 | `GET /api/agent/runs` `/api/agent/sessions/:id` | ❌ 401 | ✅ |
 | `GET /api/ima/*` | ❌ 401 | ✅ |
