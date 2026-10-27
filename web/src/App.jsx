@@ -249,17 +249,22 @@ function MobileTabBar({ showJournal }) {
 
 // 移动端品牌栏：只保留站点身份，不复制桌面主导航。
 // 品牌名与桌面导航同源：读站点配置 site.title，回退 buddy
-function MobileBrandBar({ site, avatar }) {
+function MobileBrandBar({ isAuthenticated, site, avatar }) {
   const brand = site?.site?.title || site?.title || 'buddy'
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-[52px] border-b border-white/20 bg-white/55 backdrop-blur-xl dark:border-white/5 dark:bg-slate-900/55 md:hidden">
       <NavLink
         to="/"
         aria-label="返回 buddy 主页"
-        className="mx-auto flex h-full w-full max-w-6xl items-center gap-2 px-4 font-sans text-base font-black text-slate-900 dark:text-slate-100 sm:px-6"
+        className="mx-auto flex h-full w-full max-w-6xl items-center justify-between gap-2 px-4 font-sans text-base font-black text-slate-900 dark:text-slate-100 sm:px-6"
       >
-        <BrandMark brand={brand} avatar={avatar} />
-        {brand}
+        <span className="flex items-center gap-2">
+          <BrandMark brand={brand} avatar={avatar} />
+          {brand}
+        </span>
+        {isAuthenticated ? (
+          <LogoutButton className="nav-tab inline-flex h-10 shrink-0 cursor-pointer items-center rounded-xl border-0 bg-transparent px-3 text-slate-500 dark:text-slate-400" />
+        ) : null}
       </NavLink>
     </header>
   )
@@ -355,7 +360,7 @@ export default function App() {
   return (
     <div className="app font-serif text-slate-900 dark:text-slate-100" data-keyboard-open={keyboardOpen ? 'true' : undefined}>
       <BackgroundLayer site={site} theme={theme} effectsEnabled={!isAdmin && !isAgent} />
-      {!isAdmin ? <MobileBrandBar site={site} avatar={avatar} /> : null}
+      {!isAdmin ? <MobileBrandBar isAuthenticated={isAuthenticated === true} site={site} avatar={avatar} /> : null}
       <DesktopNav isAuthenticated={isAuthenticated === true} showJournal={showJournal} site={site} avatar={avatar} />
       <MobileTabBar showJournal={showJournal} />
 
