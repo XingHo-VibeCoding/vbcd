@@ -84,6 +84,7 @@ export default function PlanningPage() {
     propose('update', editing, patch)
   }
   const items = data ? tab === 'plans' ? data.plans : data.schedules : []
+  const planTitles = new Map((data?.plans ?? []).map(plan => [plan.id, plan.title]))
   const options = tab === 'plans'
     ? [['','未完成'],['all','全部（含历史）'],['todo','待办'],['doing','进行中'],['done','已完成'],['cancelled','已取消']]
     : [['','全部状态'],['scheduled','已安排'],['completed','已完成'],['cancelled','已取消']]
@@ -103,7 +104,7 @@ export default function PlanningPage() {
       <p className="mt-4 text-xs text-slate-500">来源：PostgreSQL 规划 · 当前筛选 {items.length} 条</p>
       {items.length ? <ul className="mt-3 flex flex-col gap-3">{items.map(record=><li key={record.id} className={CLASS}>
         <div className="flex items-start justify-between gap-3"><strong>{record.title}</strong><span className="shrink-0 rounded-full bg-brand/10 px-2 py-1 text-xs">{LABELS[record.status]}</span></div>
-        {tab==='plans'? <><p className="mt-1 whitespace-pre-wrap text-sm text-slate-500">{record.description}</p><p className="mt-2 text-xs text-slate-500">开始 {fmt(record.start_at)} · 截止 {fmt(record.due_at)} · 优先级 {record.priority}</p></> : <p className="mt-2 text-xs text-slate-500">{record.all_day?'全天 · ':''}{fmt(record.start_at)}{record.end_at?` — ${fmt(record.end_at)}`:''} · {TIME_LABEL[record.time_state]}</p>}
+        {tab==='plans'? <><p className="mt-1 whitespace-pre-wrap text-sm text-slate-500">{record.description}</p><p className="mt-2 text-xs text-slate-500">开始 {fmt(record.start_at)} · 截止 {fmt(record.due_at)} · 优先级 {record.priority}</p></> : <><p className="mt-2 text-xs text-slate-500">{record.all_day?'全天 · ':''}{fmt(record.start_at)}{record.end_at?` — ${fmt(record.end_at)}`:''} · {TIME_LABEL[record.time_state]}</p><p className="mt-1 text-xs text-slate-500">所属计划：{record.plan_id ? (planTitles.get(record.plan_id) || '关联计划不可用') : '独立日程'}</p></>}
         {record.completed_at ? <p className="mt-1 text-xs text-slate-500">完成于 {fmt(record.completed_at)}</p> : null}
         <p className="mt-1 text-xs text-slate-400">更新于 {fmt(record.updated_at)} · 创建来源：{record.source==='agent'?'agent 草案':'个人操作'}</p>
         {!['done','completed','cancelled'].includes(record.status)? <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="btn-ghost" disabled={busy} onClick={()=>openEdit(record)}>编辑</button><button type="button" className="btn-ghost" disabled={busy} onClick={()=>propose('complete',record)}>标记完成</button><button type="button" className="btn-ghost" disabled={busy} onClick={()=>propose('cancel',record)}>取消安排</button></div> : <p className="mt-2 text-xs text-slate-400">历史记录保留，可由 agent 查询。</p>}

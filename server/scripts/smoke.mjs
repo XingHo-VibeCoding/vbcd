@@ -212,6 +212,12 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
         const found = JSON.parse(await getPlanningTool().invoke({ type: 'schedule', id: first.id }))
         assert.equal(found.item.plan_id, plan.id)
       })
+      await verify('按日程标题搜索时仍返回关联 Plan 作为上下文', async () => {
+        const result = (await api('GET', '/api/planning?plan_status=all&q=第一条日程')).data
+        assert.equal(result.schedules.length, 1)
+        assert.equal(result.schedules[0].id, first.id)
+        assert.equal(result.plans.some(item => item.id === plan.id && item.title === plan.title), true)
+      })
       await verify('显式 plan_id 关联既有 Plan，独立日程保持无关联', async () => {
         const linked = await proposePlanning({ schedules: [{ title: '显式关联日程', plan_id: plan.id, ...slot() }] })
         assert.equal((await send(linked)).data.status, 'approved')

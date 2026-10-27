@@ -40,7 +40,25 @@ export async function planningSnapshot({ from, to, planStatus = 'active', schedu
     query(`SELECT * FROM plans ${where(planWhere)} ORDER BY priority DESC,due_at NULLS LAST,updated_at DESC,id`, planValues),
     query(`SELECT * FROM schedules ${where(scheduleWhere)} ORDER BY start_at,id`, scheduleValues),
   ])
-  return { plans: plans.map(rowPlan), schedules: schedules.map(rowSchedule) }
+  // When a schedule matches a query but its parent plan title/description does not,
+  // still include that parent as relationship context for schedule views and tools.
+  const planById = new Map(plans.map(plan => [plan.id, plan]))
+  const missingPlanIds = [...new Set(schedules.map(schedule => schedule.plan_id).filter(id => id && !planById.has(id)))]
+  if (missingPlanIds.length) {
+    const relatedWhere = ['id = ANY($1::text[])']
+    const relatedValues = [missingPlanIds]
+    if (planStatus === 'active') relatedWhere.push("status NOT IN ('done','cancelled')")
+    else if (planStatus !== 'all') {
+      relatedValues.push(planStatus)
+      relatedWhere.push(`status=$${relatedValues.length}`)
+    }
+    const related = await query(`SELECT * FROM plans WHERE ${relatedWhere.join(' AND ')}`, relatedValues)
+    for (const plan of related) planById.set(plan.id, plan)
+  }
+  return {
+    plans: [...planById.values()].map(rowPlan),
+    schedules: schedules.map(rowSchedule),
+  }
 }
 
 // 审阅凭据覆盖用户看到的草案内容和冲突；不依赖毫秒时间戳的精度。

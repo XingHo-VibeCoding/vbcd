@@ -563,7 +563,7 @@ B. 焦点 / 项目卡片 / 热点 / 图片资源
                               Plan 1 ───────────── * Schedule（允许不绑定子任务）
 ```
 
-**当前已经实现的基础**：`plans` 是长期目标/项目容器；`schedules.plan_id` 外键关联 `plans.id`，删除 Plan 时 `ON DELETE SET NULL`，因此日程可独立存在；一个 Plan 可关联多条 Schedule。创建草案时可同时提交 Plan 和多条 Schedule，服务端在确认事务中把这些 Schedule 默认关联到新建 Plan；也允许仅创建 Schedule，或创建未关联 Plan 的 Schedule。现有查询分别返回 `plans[]` 与 `schedules[]`，Schedule 通过 `plan_id` 与 Plan 对应，尚未提供嵌套的 `plan.schedules[]` 响应。
+**当前已经实现的基础**：`plans` 是长期目标/项目容器；`schedules.plan_id` 外键关联 `plans.id`，删除 Plan 时 `ON DELETE SET NULL`，因此日程可独立存在；一个 Plan 可关联多条 Schedule。创建草案时可同时提交 Plan 和多条 Schedule，服务端在确认事务中把这些 Schedule 默认关联到新建 Plan；也允许仅创建 Schedule，或创建未关联 Plan 的 Schedule。现有查询分别返回 `plans[]` 与 `schedules[]`，Schedule 通过 `plan_id` 与 Plan 对应，未提供嵌套的 `plan.schedules[]` 响应；按日程标题筛选时，响应仍附带匹配日程所关联的 Plan，供前端/Agent 显示关系上下文。
 
 当前状态语义保持解耦：完成 Plan 不自动完成其 Schedule；完成 Schedule 不自动完成 Plan；取消 Plan 不自动取消其 Schedule。日程冲突按时间段检查，不因是否关联同一个 Plan 而豁免。现有实现与专项测试见 `db/migrations/002_planning.sql`、`server/src/services/planning.js`、`server/src/db/planning.js`、`server/scripts/smoke.mjs --planning-lifecycle-selftest`。
 
