@@ -23,6 +23,12 @@ import homeRouter from './routes/home.js'
 export function createApp() {
   const app = express()
 
+  // 仅信任 compose 内部的 Nginx 代理网段，避免把任意客户端提供的
+  // X-Forwarded-For 当成真实来源；登录失败限流依赖 req.ip（SPEC §5.6.12）。
+  // TRUST_PROXY=0 可在直连/特殊部署中显式关闭，其他值应填写明确的代理 CIDR。
+  const trustProxy = String(process.env.TRUST_PROXY ?? '172.30.0.0/16').trim()
+  app.set('trust proxy', trustProxy === '0' ? false : trustProxy)
+
   // 解析 JSON 请求体（限制 1MB，防止超大请求）
   app.use(express.json({ limit: '1mb' }))
 

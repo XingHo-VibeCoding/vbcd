@@ -185,6 +185,7 @@ node scripts/hash-password.js "你的口令"
 | `AUTH_WRITE_REQUIRED` | `1` | 可选；不设 = 公开模式写也免登录；设 1 时**必须配 `PASSWORD_HASH`**，否则无人能写 |
 | `PASSWORD_HASH` | bcrypt 哈希 | 模式②或③都需要 |
 | `SESSION_TTL_HOURS` | `720` | 会话有效期 30 天，可省 |
+| `TRUST_PROXY` | `172.30.0.0/16` | 仅信任 compose 内部 Nginx 代理网段；直连部署设 `0`，不要设无边界的 `true` |
 
 ### 8.2.1 可选 Key 获取向导（人操作 · 不做不跑也能用）
 

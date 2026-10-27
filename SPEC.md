@@ -747,6 +747,29 @@ agent 工具权限由**三层独立机制**叠加：
 - **登录页「不公开」仅是前端不挂链接**：路由本身可达，依赖入口不可知。IP 白名单 / 额外密钥属后续。
 - **needs-confirm 工具的人工闸不变**：登录用户也要走 `/api/confirmations` 批准，本权限模型不改变铁律 §1。
 
+#### 5.6.12 登录失败限流与反向代理边界（已实现）
+
+`POST /api/login` 当前按 `req.ip` 做失败限流：同一来源 10 分钟最多失败 5 次。部署在 Nginx 反向代理后时，必须明确 Express 对转发头的信任边界；否则可能出现两类问题：
+
+- **过度不信任**：所有请求都被识别成 Nginx/容器地址，一个访客输错 5 次会连带锁住其他访客；
+- **过度信任**：直接信任任意客户端提供的 `X-Forwarded-For`，攻击者可以伪造来源 IP 绕过限流。
+
+实现约束：
+
+1. 默认只信任 compose 内部 Nginx 代理网段 `172.30.0.0/16`；可用 `TRUST_PROXY` 覆盖，设为 `0` 表示关闭；不使用无边界的 `trust proxy=true`；
+2. 保留 Nginx 的 `X-Real-IP` / `X-Forwarded-For` 传递，同时让 Express 的 `req.ip` 得到真实客户端地址；
+3. 本地直连、Docker 内部请求和公网经 Nginx 请求的行为都要分别验证；
+4. 限流状态仍为进程内存储，服务重启后清空；多副本部署时必须迁移到共享限流存储。
+
+验收：
+
+| 场景 | 预期 |
+|---|---|
+| 代理转发下连续 5 次错误口令 | 第 1–5 次 `401 AUTH_FAILED`，后续 `429 RATE_LIMITED` |
+| 代理转发下另一客户端错误口令 | 不因前一客户端的失败计数被连带锁定 |
+| 伪造 `X-Forwarded-For` | 不能任意改变服务端用于限流的来源地址 |
+| 正确口令登录 | `200` + HttpOnly `sid` Cookie，不受其他来源的失败计数影响 |
+
 ## 6. 环境变量
 
 `.env` 不入库；仓库里只放 `.env.example`。
@@ -766,7 +789,7 @@ agent 工具权限由**三层独立机制**叠加：
 | `TZ` | `Asia/Shanghai` | 时区 | ⬜ |
 | `LOG_LEVEL` | `info` | 日志级别 | ⬜ |
 | `LOG_DIR` | `/srv/buddy/logs` | 日志目录 | ⬜ |
-| `TRUST_PROXY` | `1` | 位于 Nginx 之后 | ⬜ |
+| `TRUST_PROXY` | `172.30.0.0/16` | 仅信任 compose 内部 Nginx 代理网段；直连或特殊部署可设 `0` 关闭，或填写明确的代理 CIDR | ⬜ |
 | `OPENAI_API_KEY` | `sk-…` | F9 必填：OpenAI 兼容端点 key | 🔴 |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Chat 端点；可换 DashScope 兼容模式 / Ollama `/v1` | ⬜ |
 | `LLM_MODEL` | `gpt-4o-mini` | 聊天模型 | ⬜ |
@@ -815,7 +838,7 @@ agent 工具权限由**三层独立机制**叠加：
 
 `asr/` 服务侧变量见 `asr/.env.example`（完整清单以样例文件为准；高频项：`DASHSCOPE_API_KEY` / `SERVICE_TOKEN` / `MAAS_BASE_URL` / `ASR_MODEL` / `ASR_CHUNK_SECONDS` / **`ASR_MAX_AUDIO_SECONDS=300`（上游单请求时长硬上限，启动时把 `ASR_CHUNK_SECONDS` 夹紧到 ≤ 本值）** / `ASR_MAX_B64_BYTES` / `ASR_REQUEST_TIMEOUT` / `ASR_CHUNK_CONCURRENCY` / `ASR_GLOBAL_CONCURRENCY` / `ASR_HOST` `ASR_PORT` / `DOWNLOAD_TIMEOUT` `MAX_DOWNLOAD_MB` / `JOBS_DIR` `JOB_TTL_SECONDS` `JOB_TIMEOUT_SECONDS` / `YTDLP_*` / `CACHE_TTL_SECONDS`）。
 
-> ⚠️ **本表里有几个键目前代码不读**（属部署期预留，尚未启用）：`PUBLIC_ORIGIN` / `DATA_REPO_URL` / `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` / `TZ` / `LOG_DIR` / `TRUST_PROXY`。2026-09-29 由 `buddy-doc-sync` 核对发现（代码 0 处读取，`.env.example` 里也没有）——填入无害但也无效，启用对应功能时需同时补实现与文档。
+> ⚠️ **本表里有几个键目前代码不读**（属部署期预留，尚未启用）：`PUBLIC_ORIGIN` / `DATA_REPO_URL` / `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` / `TZ` / `LOG_DIR`。`TRUST_PROXY` 已由 server 读取，用于限制 Express 可信代理范围，默认值为 compose 内部网段 `172.30.0.0/16`。
 
 **密钥管理**：Git 拉取用服务器上的 deploy key（SSH），不放 `.env` 明文；`.env` 权限 600，只属于部署用户。
 
