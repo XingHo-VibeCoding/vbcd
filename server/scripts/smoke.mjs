@@ -205,6 +205,22 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
       assert.equal((await send(seed)).data.status, 'approved')
       const original = (await api('GET', '/api/planning?plan_status=all')).data
       const plan = original.plans[0], first = original.schedules[0], second = original.schedules[1]
+      await verify('Plan 新建时未指定 plan_id 的日程默认归属该 Plan，Agent 查询保留关联', async () => {
+        const { getPlanningTool } = await import('../src/services/agent/tools/get-planning.js')
+        assert.equal(first.plan_id, plan.id)
+        assert.equal(second.plan_id, plan.id)
+        const found = JSON.parse(await getPlanningTool().invoke({ type: 'schedule', id: first.id }))
+        assert.equal(found.item.plan_id, plan.id)
+      })
+      await verify('显式 plan_id 关联既有 Plan，独立日程保持无关联', async () => {
+        const linked = await proposePlanning({ schedules: [{ title: '显式关联日程', plan_id: plan.id, ...slot() }] })
+        assert.equal((await send(linked)).data.status, 'approved')
+        const standalone = await proposePlanning({ schedules: [{ title: '独立日程', ...slot() }] })
+        assert.equal((await send(standalone)).data.status, 'approved')
+        const records = (await api('GET', '/api/planning?plan_status=all')).data.schedules
+        assert.equal(records.find(item => item.title === '显式关联日程').plan_id, plan.id)
+        assert.equal(records.find(item => item.title === '独立日程').plan_id, null)
+      })
       let preview
       await verify('完成操作只生成变更草案，确认前原状态保持', async () => {
         preview = await change('complete', 'schedule', first.id)
@@ -310,7 +326,7 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
         await send(draft)
         const history=await api('GET','/api/planning?schedule_status=cancelled')
         assert(history.data.schedules.some(record=>record.id===second.id))
-        assert.equal((await query('SELECT count(*)::int AS n FROM schedules'))[0].n,2)
+        assert.equal((await query('SELECT count(*)::int AS n FROM schedules'))[0].n,4)
         const home=(await api('GET','/api/home?date=2027-01-01')).data
         assert(!home.today.items.some(record=>record.id===second.id))
         assert(home.today.items.some(record=>record.id===first.id && record.completion_state==='completed'))

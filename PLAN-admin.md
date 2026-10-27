@@ -553,6 +553,50 @@ B. 焦点 / 项目卡片 / 热点 / 图片资源
 
 ### 10.2 长期任务与日程优化
 
+#### 10.2.1 实施顺序与当前契约（2026-10-27 核对）
+
+目标链路分为两层，按「先补完整现有关联，再增加子任务实体」实施：
+
+```text
+阶段 A（当前基础）：Plan 1 ── * Schedule
+阶段 B（后续扩展）：Plan 1 ── * ProjectTask 1 ── * Schedule
+                              Plan 1 ───────────── * Schedule（允许不绑定子任务）
+```
+
+**当前已经实现的基础**：`plans` 是长期目标/项目容器；`schedules.plan_id` 外键关联 `plans.id`，删除 Plan 时 `ON DELETE SET NULL`，因此日程可独立存在；一个 Plan 可关联多条 Schedule。创建草案时可同时提交 Plan 和多条 Schedule，服务端在确认事务中把这些 Schedule 默认关联到新建 Plan；也允许仅创建 Schedule，或创建未关联 Plan 的 Schedule。现有查询分别返回 `plans[]` 与 `schedules[]`，Schedule 通过 `plan_id` 与 Plan 对应，尚未提供嵌套的 `plan.schedules[]` 响应。
+
+当前状态语义保持解耦：完成 Plan 不自动完成其 Schedule；完成 Schedule 不自动完成 Plan；取消 Plan 不自动取消其 Schedule。日程冲突按时间段检查，不因是否关联同一个 Plan 而豁免。现有实现与专项测试见 `db/migrations/002_planning.sql`、`server/src/services/planning.js`、`server/src/db/planning.js`、`server/scripts/smoke.mjs --planning-lifecycle-selftest`。
+
+**阶段 A：稳定 Plan → Schedule 的关联契约**（不新增表/字段）：
+
+1. 固定 API 的关联表达：列表继续返回 `plans[]`、`schedules[]`，每条 Schedule 以 `plan_id` 作为关联真值；详情查询明确说明所属 Plan（或无关联）。是否额外提供嵌套视图属于接口设计，不能让前端或 Agent 自行猜测关联。
+2. 确认创建规则：同一草案含新 Plan 时，未指定 `plan_id` 的草案 Schedule 默认挂到该 Plan；明确传入现有 `plan_id` 时保留该关联；仅有 Schedule 时 `plan_id` 可为空。
+3. 确认生命周期规则：Plan 与 Schedule 状态互不隐式级联；删除 Plan 的数据库行为为解除关联而保留 Schedule；完成/取消必须针对各自对象显式生成草案并确认。
+4. 明确时间约束：现有实现检查结束时间晚于开始时间及 Schedule-Schedule 时间重叠，但尚未要求 Schedule 必须位于 Plan 的 `start_at` / `due_at` 范围内。若要增加此约束，须作为独立决策加入草案冲突/复核契约，不能在实现中静默拒绝。
+5. Agent 的 `get_planning` 已可同时返回 Plan 与 Schedule 数据；工具说明要求使用实际 `plan_id`，不根据标题猜关联。`propose_planning` 的写入仍只走 `planning_drafts` → 冲突检查 → Confirmation → 事务。
+
+阶段 A 验收：独立 PostgreSQL 专项测试覆盖「新建 Plan + 多条默认关联 Schedule」「Schedule 单独创建/无 Plan」「显式关联既有 Plan」「计划与日程状态互不级联」「删除 Plan 后 Schedule 保留且 `plan_id` 置空」「Agent 查询可识别关联」「拒绝/冲突不写入」。完成阶段 A 后再评估是否需要嵌套响应或页面改版，不预先增加接口。
+
+**阶段 B：引入 ProjectTask 实体**（单独数据库设计与迁移板块）：
+
+- 新增 `project_tasks`，归属于 Plan；至少先设计字段、状态迁移、排序、进度/依赖含义、删除策略、审计快照和索引，再写迁移。
+- `schedules.task_id` 作为可空外键关联 ProjectTask；一条 Schedule 最多绑定一个 ProjectTask，也可只绑定 Plan 或完全独立。
+- 关联一致性约束：若同时存在 `schedule.plan_id` 与 `schedule.task_id`，Task 必须属于同一个 Plan；不能只靠前端保证。
+- 迁移现有数据时保留现有 `plans`、`schedules` 和 ID；旧 Schedule 的 `plan_id` 不自动推断或伪造 `task_id`。
+- 新建/修改子任务及其日程继续复用 Draft、冲突审查、Confirmation 和事务；不得让 Agent 直接写表。
+
+阶段 B 验收：迁移可重复执行；旧数据零损失；非法跨 Plan 关联被数据库/服务端拒绝；确认拒绝零业务写入；批准后 ProjectTask、Schedule 与 `planning_changes` 同事务落地；查询能双向定位 Plan、Task、Schedule。
+
+**阶段 C：进度与 Agent 日程建议**（阶段 B 稳定后）：
+
+- 先在 `manual` / `auto` / `hybrid` 中单独确定进度规则与完成率计算，定义权重、无子任务、阻塞和取消项的口径；不要先添加含义未定的 `progress` 字段。
+- 再决定 `get_planning` 是否已足够，只有响应不够表达时才新增独立进度工具。
+- `propose_schedule_adjustment` 只生成包含原因、前后时间、冲突和影响范围的草案；Agent 不因延期自动挪动日程，用户确认后才写入。
+
+阶段 C 验收：进度结果可由数据库状态复算；日程调整草案展示前后差异和冲突；拒绝无写入；并发或草案过期时要求重新审阅；不重复生成或重复应用调整。
+
+**当前推荐的下一项实现范围**：只做阶段 A 的契约/关联验收补齐，不新增 `project_tasks` 表、不增加 `schedules.task_id`、不做自动进度或 AI 自动改期。阶段 A 完成并经使用者复核后，再单独决定是否启动阶段 B。
+
 目标领域模型：
 
 ```text
