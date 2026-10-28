@@ -439,6 +439,47 @@ curl -s http://localhost:3100/api/planning
 
 Docker 部署改完 `web/src` 后必须重建 `web` 镜像，改完 `server/src` 后必须重建 `server`；不要只重启容器期待镜像内静态产物自动变化。
 
+### 8.7.1 ProjectTask 阶段 B：隔离验证与显式升级（2026-10-28）
+
+本次代码/网页已在临时数据库与本机浏览器验证；**真实及远程数据库尚未迁移、服务镜像尚未更新**。新代码查询规划需要 004，不能只更新 server/web 而跳过迁移。升级须先选择维护窗口、备份并停止写入（包括后台执行器）。以下是操作者在目标部署目录执行的步骤，本次未代执行。
+
+```bash
+# 备份放仓库外，不进版本控制；先停止后端写入，数据库保持运行。
+backup_dir="$HOME/buddy-backups"
+mkdir -p "$backup_dir"
+docker compose stop server
+backup_file="$backup_dir/pre-project-tasks-$(date +%Y%m%d-%H%M%S).sql"
+docker compose exec -T pg sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > "$backup_file"
+test -s "$backup_file"
+# 记录升级前 Plan/Schedule 行数及主键/字段校验，升级后对账；不要输出秘密配置。
+docker compose exec -T pg sh -c 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT (SELECT count(*) FROM plans) AS plans,(SELECT count(*) FROM schedules) AS schedules;"'
+docker compose exec -T pg sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < db/migrations/004_project_tasks.sql
+# 检查旧关联未改写，Task 初始为空；schema_version 不是执行迁移的标记。
+docker compose exec -T pg sh -c 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT (SELECT count(*) FROM plans) AS plans,(SELECT count(*) FROM schedules) AS schedules,(SELECT count(*) FROM project_tasks) AS tasks,(SELECT count(*) FROM schedules WHERE task_id IS NOT NULL) AS task_links;"'
+docker compose build server web
+docker compose up -d --no-deps server web
+docker compose restart web
+```
+
+已有库须先具备 002 规划表（003 为资料分 P 的独立迁移）；全新库先跑 schema.sql，再按编号执行 002/003/004。官方 Postgres 初始化挂载仍只跑 schema.sql，重启已有 pg 卷不会自动执行新增迁移。004 可重复执行但不负责修复未知的手工结构漂移。
+
+隔离测试（仓库根目录，本机已有 `postgres:18-alpine`）：
+
+```bash
+node server/scripts/project-planning-selftest.mjs
+node server/scripts/smoke.mjs --planning-lifecycle-selftest
+node server/scripts/smoke.mjs --planning-selftest
+(cd web && npm run build)
+# 可选浏览器验收：需要本机 browser-use Python 环境与 Chrome，不调用真实模型。
+node server/scripts/project-planning-selftest.mjs --browser
+```
+
+本机可选浏览器夹具使用 `/home/bird/.venv/bin/python`、`/usr/bin/google-chrome`，其他设备须替换为自身安装路径；默认专项不依赖浏览器。临时容器只绑定 127.0.0.1、随机端口，退出清理测试数据库/目录；备份恢复测试在同一临时容器的新库运行，不触碰真实备份。
+
+验证页面 `/planning?tab=tasks`：游客能读、写入口灰显；登录后新增/编辑/重排先看到草案与前后差异，拒绝不改业务数据。每天重复、无日期独立待办和自动进度未实现，不在验收中假称支持。更新网页后重新加载浏览器。
+
+恢复：迁移 SQL 在事务内失败时不会留下半套结构；保留日志，不在原库反复试改。已新增 Task 后先停写，验证备份可在独立恢复库还原并核对，再由操作者确定切换方案；不得直接 DROP 新表/列，或启动旧写应用静默忽略新任务。迁移已成功且无新业务写入时，也应保留备份和增量结构，先核对旧应用兼容性后再回退应用；本次未执行生产恢复或远程部署。
+
 ### 8.8 Docker 部署（Nginx + 后端 + Chroma + ASR + Postgres）
 
 彩排与上线同一份 `docker-compose.yml`。

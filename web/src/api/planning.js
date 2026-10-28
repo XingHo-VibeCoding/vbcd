@@ -1,7 +1,9 @@
 import { request } from './client.js'
 
-export function getPlanning({ from, to, planStatus, scheduleStatus, q, type, id } = {}) {
+export function getPlanning({ from, to, planStatus, scheduleStatus, q, type, id, planId, taskStatus } = {}) {
   const params = new URLSearchParams()
+  if (planId) params.set('plan_id', planId)
+  if (taskStatus) params.set('task_status', taskStatus)
   if (from) params.set('from', from)
   if (to) params.set('to', to)
   if (planStatus) params.set('plan_status', planStatus)

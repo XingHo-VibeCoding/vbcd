@@ -222,7 +222,6 @@ function TasksTab({ formOpen, setFormOpen }) {
       </div>
       {formOpen && <section className="site-glass-card log-create" aria-label="新建任务">
       <div className="log-create-head"><h2>新建任务</h2><button type="button" className="btn-ghost" onClick={() => setFormOpen(false)}>收起</button></div>
-      <p className="hint">添加提醒或记录资料，提交后可在任务列表查看。</p>
       <form onSubmit={handleSubmit} className="form">
         <div className="view-switch" role="group" aria-label="任务类型">
           {TASK_KINDS.map((kind) => <button type="button" key={kind.value}
@@ -388,10 +387,6 @@ function ConfirmTab() {
 
   return (
     <>
-      <p className="hint">
-        每次高风险动作的请求与决定都记在这里：请求时间、决定时间、决定了什么。不记录「谁」——单人使用。
-      </p>
-
       {error ? <p className="error-bar">{error}</p> : null}
 
       {error ? null : loading && total === 0 ? (

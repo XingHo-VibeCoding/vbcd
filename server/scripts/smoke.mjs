@@ -129,7 +129,7 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
       } catch { await new Promise(resolve => setTimeout(resolve, 200)) }
     }
     assert(ready, '隔离 PostgreSQL 未就绪')
-    const sql = (essayMode || lifecycleMode || sourceMode ? (await readFile(new URL('../../db/schema.sql', import.meta.url), 'utf8') + '\n' + await readFile(new URL('../../db/migrations/003_notes_source_part.sql', import.meta.url), 'utf8')) : '') + '\n' + await readFile(new URL('../../db/migrations/002_planning.sql', import.meta.url), 'utf8')
+    const sql = (essayMode || lifecycleMode || sourceMode ? (await readFile(new URL('../../db/schema.sql', import.meta.url), 'utf8') + '\n' + await readFile(new URL('../../db/migrations/003_notes_source_part.sql', import.meta.url), 'utf8')) : '') + '\n' + await readFile(new URL('../../db/migrations/002_planning.sql', import.meta.url), 'utf8') + '\n' + await readFile(new URL('../../db/migrations/004_project_tasks.sql', import.meta.url), 'utf8')
     docker(['exec', '-i', container, 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'planning_test', '-d', 'planning_test'], sql)
     const port = docker(['port', container, '5432/tcp']).trim().split(':').at(-1)
     Object.assign(process.env, {
@@ -392,6 +392,28 @@ if (process.argv.includes('--source-selftest') || process.argv.includes('--plann
       await verify('无效查询状态/时间范围返回明确校验错误',async()=>{
         assert.equal((await api('GET','/api/planning?plan_status=unknown')).status,400)
         assert.equal((await api('GET','/api/planning?from=2027-01-02&to=2027-01-01')).status,400)
+      })
+      await verify('Agent 保留 plan_id；同草案默认关联与明确独立分开，拒绝零写入', async () => {
+        const { proposePlanningTool } = await import('../src/services/agent/tools/propose-planning.js')
+        const activePlanId = (await send(await proposePlanning({ plan: { title: '关联活跃目标' } }))).data.created.plan_id
+        const before = await counts()
+        const result = JSON.parse(await proposePlanningTool().invoke({ plan: { title: '关联边界计划' }, schedules: [
+          { title: '边界默认', ...slot() }, { title: '边界独立', plan_id: null, ...slot() },
+          { title: '边界既有', plan_id: activePlanId, ...slot() },
+        ] }))
+        assert.equal(result.draft.payload.schedules[1].plan_id, null)
+        assert.equal(result.draft.payload.schedules[2].plan_id, activePlanId)
+        assert.deepEqual(await counts(), before)
+        assert.equal((await send(result.draft)).data.status, 'approved')
+        const rows = (await api('GET', '/api/planning?plan_status=all')).data
+        const parent = rows.plans.find(record => record.title === '关联边界计划')
+        assert.equal(rows.schedules.find(record => record.title === '边界默认').plan_id, parent.id)
+        assert.equal(rows.schedules.find(record => record.title === '边界独立').plan_id, null)
+        assert.equal(rows.schedules.find(record => record.title === '边界既有').plan_id, activePlanId)
+        const reject = JSON.parse(await proposePlanningTool().invoke({ schedules: [{ title: '不保存', plan_id: activePlanId, ...slot() }] }))
+        const saved = await counts()
+        await send(reject.draft, 'rejected')
+        assert.deepEqual(await counts(), saved)
       })
       const {createServer}=await import('../../web/node_modules/vite/dist/node/index.js')
       const {createRequire}=await import('node:module')

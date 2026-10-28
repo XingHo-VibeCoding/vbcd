@@ -15,7 +15,7 @@ import { proposePlanningTool } from './tools/propose-planning.js'
 export const TOOL_MANIFEST = [
   {
     name: 'get_planning',
-    description: '查询计划、日程及完成/取消历史，定位已有记录并检查安排',
+    description: '查询计划、项目子任务、依赖与日程及完成/取消历史，定位已有记录并检查安排',
     risk: 'readonly',
     authFields: [],
     build: getPlanningTool,

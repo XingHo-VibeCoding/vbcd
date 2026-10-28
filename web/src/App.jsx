@@ -381,7 +381,7 @@ export default function App() {
           />
           <Route path="/tasks/:id/confirm" element={<TaskConfirmPage />} />
           <Route path="/planning/drafts/:id/confirm" element={<PlanningDraftConfirmPage />} />
-          <Route path="/planning" element={<PlanningPage />} />
+          <Route path="/planning" element={<PlanningPage canWrite={authRequired === false || isAuthenticated} />} />
           <Route path="/notes/:id" element={<NoteDetailPage />} />
           {/* F15b · ima 笔记详情（只读）：静态段 ima 优先于动态段 :id（/notes/ima 落到重定向而非 id="ima" 的资料查询） */}
           <Route path="/notes/ima" element={<Navigate to="/notes?src=ima&panel=notes" replace />} />

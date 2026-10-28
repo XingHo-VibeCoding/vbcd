@@ -85,11 +85,8 @@ services:
       # Postgres 走内网服务名 pg；口令同样取自项目根 .env 的 PG_PASSWORD
       # （compose 的 ${VAR} 插值只认项目根 .env，不认 server/.env）
       DATABASE_URL: postgres://buddy:${PG_PASSWORD:?请在项目根 .env 里设置 PG_PASSWORD}@pg:5432/buddy
-      # 本机 vLLM 跑在宿主机 8000：容器里 127.0.0.1 指自己，要走 host.docker.internal
-      # （下方 extra_hosts 已配 host-gateway）。想切回云端 LLM 时删这一行 + 改 server/.env。
-      OPENAI_BASE_URL: http://host.docker.internal:8000/v1
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # LLM 端点/模型/Key 一律以 server/.env 为准（2026-10-28 起不再在此钉死；
+      # 原先钉的是宿主机 vLLM http://host.docker.internal:8000/v1，已改回千问云端）
     volumes:
       # 资料目录绑定挂载：宿主机上也能直接备份/Obsidian 打开
       - ./data:/app/data

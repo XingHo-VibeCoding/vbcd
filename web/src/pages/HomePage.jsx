@@ -51,15 +51,11 @@ function weekOf(value) {
   })
 }
 
-function SourceLine({ source, children }) {
+function SourceLine({ source }) {
   const stale = source?.state === 'stale'
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-xs text-slate-400 dark:text-slate-500">
-      <span>{children}</span>
-      {source?.read_at ? <span>读取于 {formatDateTime(source.read_at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span> : null}
-      {source?.synced_at ? <span className={stale ? 'text-amber-600 dark:text-amber-400' : ''}>{stale ? '缓存于' : '同步于'} {formatDateTime(source.synced_at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span> : null}
-    </div>
-  )
+  const updatedAt = source?.synced_at || source?.read_at
+  if (!updatedAt) return null
+  return <div className={`mt-2 font-sans text-xs ${stale ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 dark:text-slate-500'}`}>更新时间：{formatDateTime(updatedAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
 }
 
 function Badge({ label, tone = 'upcoming' }) {
@@ -75,13 +71,13 @@ function FocusCard({ item }) {
       <div className="flex flex-1 flex-col justify-between p-4">
       <div>
         <div className="flex items-center justify-between gap-2">
-          <span className="font-sans text-xs font-black tracking-widest text-brand">{item.tag || '焦点'} · {item.source_label}</span>
+          <span className="font-sans text-xs font-black tracking-widest text-brand">{item.tag || '焦点'}</span>
           {item.archived ? <Badge label="已归档" tone="ended" /> : null}
         </div>
         <h3 className="mt-2 line-clamp-2 text-base md:text-lg font-black leading-snug text-slate-900 dark:text-slate-100">{item.title}</h3>
         <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">{item.subtitle || item.summary || '暂无摘要'}</p>
       </div>
-      <div className="mt-2 font-sans text-xs text-slate-400">{item.source_label || item.source_type}{item.updated_at ? <> · 更新于 {formatDateTime(item.updated_at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</> : null}{external && item.pushed_at ? <span className="block">最近推送 {formatDateTime(item.pushed_at, { year: 'numeric', month: 'numeric', day: 'numeric' })}</span> : null}</div>
+      <div className="mt-2 font-sans text-xs text-slate-400">更新时间：{item.updated_at ? <>{formatDateTime(item.updated_at, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</> : null}{external && item.pushed_at ? <span className="block">最近推送 {formatDateTime(item.pushed_at, { year: 'numeric', month: 'numeric', day: 'numeric' })}</span> : null}</div>
       </div>
     </div>
   )
@@ -132,7 +128,7 @@ function TodaySchedule({ today, onDateChange }) {
           </div>
         )) : <p className="py-6 text-center text-sm text-slate-400">这一天暂无日程</p>}
       </div>
-      <SourceLine source={{ read_at: today?.read_at }}>来源：PostgreSQL 规划</SourceLine>
+      <SourceLine source={{ read_at: today?.read_at }} />
     </section>
   )
 }
@@ -140,9 +136,9 @@ function TodaySchedule({ today, onDateChange }) {
 function PlansCard({ plans }) {
   return (
     <section className={`flex flex-col p-4 ${GLASS}`}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-black text-slate-900 dark:text-slate-100">🧭 长期计划</h2><p className="mt-1 font-sans text-xs text-slate-400">不显示即时运行日志</p></div><Link to="/planning" className="inline-flex min-h-11 shrink-0 items-center font-sans text-sm font-bold text-brand hover:underline">查看全部计划 →</Link></div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-black text-slate-900 dark:text-slate-100">🧭 长期计划</h2><Link to="/planning" className="inline-flex min-h-11 shrink-0 items-center font-sans text-sm font-bold text-brand hover:underline">查看全部计划 →</Link></div>
       {plans === null ? <p className="py-6 text-center text-sm text-slate-400">计划暂不可用</p> : plans.items.length ? <ul className="flex flex-col gap-2">{plans.items.map(plan => <li key={plan.id} className="rounded-xl border border-white/50 bg-white/40 px-3 py-3 dark:border-white/10 dark:bg-white/5"><div className="flex items-start gap-2"><span className="min-w-0 flex-1 text-base md:text-lg font-black leading-snug text-slate-900 dark:text-slate-100">{plan.title}</span><Badge label={PLAN_LABEL[plan.group]} tone={plan.group} /></div><div className="mt-1 font-sans text-xs text-slate-400">{plan.due_at ? `截止 ${formatDateTime(plan.due_at, { year: 'numeric', month: 'numeric', day: 'numeric' })}` : plan.start_at ? `开始 ${formatDateTime(plan.start_at, { year: 'numeric', month: 'numeric', day: 'numeric' })}` : '尚未安排日期'}{plan.description ? ` · ${plan.description}` : ''}</div></li>)}</ul> : <p className="py-6 text-center text-sm text-slate-400">暂无未完成计划 · 去 agent 生成一个草案</p>}
-      {plans ? <SourceLine source={{ read_at: plans.read_at }}>来源：PostgreSQL 计划 · 共 {plans.total} 条未完成</SourceLine> : null}
+      {plans ? <SourceLine source={{ read_at: plans.read_at }} /> : null}
     </section>
   )
 }
@@ -151,7 +147,7 @@ export function EssaysCard({ essays }) {
   return (
     <section className={`flex flex-col p-4 ${GLASS}`}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-black text-slate-900 dark:text-slate-100">✒️ 随笔</h2><p className="mt-1 font-sans text-xs text-slate-400">最近写下的思考</p></div><Link to="/notes?category=essay" className="inline-flex min-h-11 shrink-0 items-center font-sans text-sm font-bold text-brand hover:underline">查看全部随笔 →</Link></div>
-      {essays === null ? <p className="py-6 text-center text-sm text-slate-400">随笔暂不可用</p> : essays.length ? <div className="flex flex-col gap-2">{essays.map(item => <Link key={item.id} to={item.url} className="rounded-xl border border-white/50 bg-white/40 px-3 py-3 transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"><div className="truncate text-base md:text-lg font-black leading-snug text-slate-900 dark:text-slate-100">{item.title}</div><div className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">{item.summary || '打开阅读这篇随笔'}</div><div className="mt-1 font-sans text-xs text-slate-400">创建于 {formatDateTime(item.created_at, { year: 'numeric', month: 'numeric', day: 'numeric' })} · 来源：个人档案</div></Link>)}</div> : <p className="py-6 text-center text-sm text-slate-400">暂无随笔档案</p>}
+      {essays === null ? <p className="py-6 text-center text-sm text-slate-400">随笔暂不可用</p> : essays.length ? <div className="flex flex-col gap-2">{essays.map(item => <Link key={item.id} to={item.url} className="rounded-xl border border-white/50 bg-white/40 px-3 py-3 transition-colors hover:bg-white/75 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"><div className="truncate text-base md:text-lg font-black leading-snug text-slate-900 dark:text-slate-100">{item.title}</div><div className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">{item.summary || '打开阅读这篇随笔'}</div><div className="mt-1 font-sans text-xs text-slate-400">创建于 {formatDateTime(item.created_at, { year: 'numeric', month: 'numeric', day: 'numeric' })}</div></Link>)}</div> : <p className="py-6 text-center text-sm text-slate-400">暂无随笔档案</p>}
     </section>
   )
 }
@@ -214,10 +210,10 @@ export default function HomePage() {
           <div className="flex items-center gap-3"><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-300 to-pink-300 text-2xl font-black text-indigo-800 shadow-lg">{profile.avatar && !avatarBroken ? <img className="h-full w-full rounded-xl object-cover" src={profile.avatar} onError={() => setAvatarBroken(true)} alt={`${nickname} 的头像`} /> : initial}</div><div className="min-w-0"><h2 className="truncate text-lg md:text-xl font-black tracking-tight text-slate-900 dark:text-slate-100">{nickname}</h2><p className="mt-0.5 font-sans text-xs font-bold text-brand">{profile.github ? `@${profile.github}` : '个人主页'} · {site.site?.subtitle || '会成长的个人助手'}</p></div><Link to="/about" className="ml-auto min-h-11 flex shrink-0 items-center font-sans text-sm hover:underline font-bold text-slate-400">关于 →</Link></div>
           {profile.bio ? <p className="text-sm leading-relaxed text-slate-500 dark:text-slate-400">{profile.bio}</p> : null}
           <div className="flex gap-2">{[['档案总数', stats?.notes_total ?? '—'], ['近 7 天新增', stats?.notes_added_7d ?? '—']].map(([label, value]) => <div key={label} className="flex-1 rounded-xl border border-white/50 bg-white/40 px-3 py-2 text-center dark:border-white/10 dark:bg-white/5"><b className="block font-sans tabular-nums text-lg font-black text-slate-900 dark:text-slate-100">{value}</b><span className="font-sans text-xs tracking-wider text-slate-500 dark:text-slate-400">{label}</span></div>)}</div>
-          <SourceLine source={data.sources?.notes}>统计来源：PostgreSQL 档案 · 随笔计入总数 · 近 7 天含今天</SourceLine>
+          <SourceLine source={data.sources?.notes} />
           {site.social?.length ? <div className="flex flex-wrap gap-2">{site.social.map(item => item.url ? <a key={item.label} href={item.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-xl bg-brand/10 px-3 py-2 font-sans text-sm hover:bg-brand/15 text-brand">{item.icon || '↗'} {item.label}</a> : <span key={item.label} className="rounded-xl px-3 py-2 text-xs text-slate-400">{item.label}（未配置）</span>)}</div> : null}
         </section>
-        <section className={`flex flex-col p-4 ${GLASS}`}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-black text-slate-900 dark:text-slate-100">◎ 焦点</h2><Link to="/about#projects" className="min-h-11 flex shrink-0 items-center font-sans text-sm hover:underline font-semibold text-brand">GitHub 项目 →</Link></div>{data.focus.items.length ? <div className="grid flex-1 gap-2">{data.focus.items.map(item => <FocusCard item={item} key={item.key || item.id} />)}</div> : <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-brand/30 px-4 text-center text-sm text-slate-400">{data.focus.partial ? '暂无可展示焦点，部分来源尚未核实' : data.focus.mode === 'curated' ? '暂无可展示的精选热点，请检查显示状态及来源' : '没有带“焦点”标签的项目或档案'}</div>}<SourceLine source={projectsState}>{data.focus.mode === 'curated' ? '后台精选 · 来源实时读取' : 'GitHub Topic + 档案标签'} · {data.focus.partial ? '目前可读' : '共'} {data.focus.total} 条</SourceLine>{data.sources.notes.state === 'unavailable' ? <p role="status" className="mt-2 text-xs text-amber-600">档案焦点暂不可用。</p> : null}{projectsState?.state === 'stale' ? <p role="status" className="mt-2 text-xs text-amber-600">GitHub 项目来自缓存，可能已过期。</p> : null}</section>
+        <section className={`flex flex-col p-4 ${GLASS}`}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-black text-slate-900 dark:text-slate-100">◎ 焦点</h2><Link to="/about#projects" className="min-h-11 flex shrink-0 items-center font-sans text-sm hover:underline font-semibold text-brand">GitHub 项目 →</Link></div>{data.focus.items.length ? <div className="grid flex-1 gap-2">{data.focus.items.map(item => <FocusCard item={item} key={item.key || item.id} />)}</div> : <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-brand/30 px-4 text-center text-sm text-slate-400">{data.focus.partial ? '暂无可展示焦点，部分来源尚未核实' : data.focus.mode === 'curated' ? '暂无可展示的精选热点，请检查显示状态及来源' : '没有带“焦点”标签的项目或档案'}</div>}<SourceLine source={projectsState} />{data.sources.notes.state === 'unavailable' ? <p role="status" className="mt-2 text-xs text-amber-600">档案焦点暂不可用。</p> : null}{projectsState?.state === 'stale' ? <p role="status" className="mt-2 text-xs text-amber-600">GitHub 项目来自缓存，可能已过期。</p> : null}</section>
       </div>
       <div className="grid items-stretch gap-4 md:grid-cols-[.9fr_1.1fr]"><TodaySchedule today={data.today} onDateChange={changeDate} /><PlansCard plans={data.plans} /></div>
       <div className="grid items-stretch gap-4 md:grid-cols-[1.5fr_.5fr]"><EssaysCard essays={data.essays} /><button type="button" onClick={() => setTheme(toggleTheme())} aria-label={theme === 'dark' ? '切换到日间模式' : '切换到夜间模式'} className={`flex min-h-11 flex-col items-center justify-center gap-2 p-4 ${GLASS} hover:bg-brand/10 active:scale-95`}><span className="text-3xl" aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span><span className="font-sans text-xs font-black tracking-wider text-slate-500 dark:text-slate-400">{theme === 'dark' ? '日间模式' : '夜间模式'}</span></button></div>

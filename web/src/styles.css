@@ -2234,6 +2234,14 @@ body {
   --workflow-brand: var(--color-brand-dark-text);
 }
 .planning-page { padding: 16px; }
+.planning-page .planning-head { margin-bottom: 4px; }
+.planning-page .planning-toolbar { align-items: flex-end; gap: 12px; }
+.planning-page .planning-toolbar label { min-width: 150px; }
+.planning-page .planning-toolbar label:first-child { min-width: min(260px, 100%); }
+.planning-page .planning-source { margin-bottom: 0; }
+.planning-page .planning-list { padding: 0; list-style: none; }
+.planning-page .planning-item { background: var(--site-glass-bg); border-color: var(--site-glass-border); box-shadow: none; }
+.planning-page .planning-item:hover { box-shadow: var(--shadow-card); }
 .confirm-page { width: 100%; max-width: 880px; margin-inline: auto; padding: 16px; }
 .planning-title, .confirm-page > h2 { font-size: 24px; font-weight: 900; line-height: 1.375; letter-spacing: -.02em; margin: 0 0 12px; }
 .planning-page form h2, .confirm-page > h3 { font-size: 18px; font-weight: 900; line-height: 1.375; overflow-wrap: anywhere; }

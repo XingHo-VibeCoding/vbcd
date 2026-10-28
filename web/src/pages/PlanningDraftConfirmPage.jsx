@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import Breadcrumb from '../components/Breadcrumb.jsx'
 import { getPlanningDraft } from '../api/planning.js'
 import { request } from '../api/client.js'
-import { PlanningChangesPreview } from '../agent/ToolFallback.jsx'
+import { PlanningChangesPreview, PlanningCreatePreview } from '../agent/ToolFallback.jsx'
 
 const STATUS_LABEL = { pending: '待确认', approved: '已批准并保存', rejected: '已拒绝', failed: '已批准，但保存失败' }
 
@@ -24,7 +24,7 @@ export default function PlanningDraftConfirmPage() {
   const [busy, setBusy] = useState(false)
 
   const handleAuth = useCallback(err => {
-    if (err.code !== 'AUTH_REQUIRED') return false
+    if (!['AUTH_REQUIRED','AUTH_WRITE_REQUIRED'].includes(err.code)) return false
     navigate(`/login?from=/planning/drafts/${encodeURIComponent(id)}/confirm`, { replace: true })
     return true
   }, [id, navigate])
@@ -86,35 +86,14 @@ export default function PlanningDraftConfirmPage() {
     <section className="site-glass-card confirm-page">
       <Breadcrumb items={[{ label: 'agent', to: '/agent' }, { label: '规划草案确认' }]} />
       <h2>规划草案</h2>
-      <p className="hint">草案使用北京时间。批准后本组变更才会生效，拒绝则保持现有记录。</p>
       {notice ? <p role="status" className="error-bar">{notice}</p> : null}
       <div className="confirm-block">
         <p className="confirm-summary">{draft.summary}</p>
         <span>状态：{STATUS_LABEL[draft.status] || draft.status}</span>
         {draft.confirmation?.confirmed_at ? <p className="hint">决定时间：{fmt(draft.confirmation.confirmed_at)}</p> : null}
       </div>
-      {draft.payload?.changes ? <PlanningChangesPreview changes={draft.payload.changes} /> : <>
-      {plan ? (
-        <article className="card mt-4">
-          <h3>长期计划：{plan.title}</h3>
-          <p>{plan.description || '暂无说明'}</p>
-          <p>开始：{fmt(plan.start_at)} · 截止：{fmt(plan.due_at)} · 优先级：{plan.priority ?? 0}</p>
-        </article>
-      ) : null}
-      <h3 className="mt-5 font-bold">日程（{schedules.length}）</h3>
-      {schedules.length ? (
-        <ol className="mt-2 flex flex-col gap-2">
-          {schedules.map((item, index) => (
-            <li className="rounded-xl border border-brand/15 p-3" key={`${item.title}-${index}`}>
-              <strong>{item.title}</strong>
-              <div className="text-sm text-slate-500">
-                {item.all_day ? `${fmt(item.start_at)} · 全天` : `${fmt(item.start_at)} – ${fmt(item.end_at)}`}
-              </div>
-            </li>
-          ))}
-        </ol>
-      ) : <p className="hint">草案没有新增具体日程。</p>}
-      </>}
+      {draft.payload?.changes ? <PlanningChangesPreview changes={draft.payload.changes} reorder={draft.payload.reorder} basis={draft.payload.basis} /> : <PlanningCreatePreview draft={draft} />}
+      {draft.payload?.warnings?.map((text,index) => <p role="status" className="hint mt-2" key={index}>{text}</p>)}
       {draft.conflicts?.length ? (
         <div role="status" className="error-bar mt-4">
           发现 {draft.conflicts.length} 个时间冲突，请确认是否保留重叠安排：

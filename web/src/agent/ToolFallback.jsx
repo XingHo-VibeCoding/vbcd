@@ -14,54 +14,46 @@ function fmt(value) {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
 }
 
-const CHANGE_FIELDS = { title: '标题', description: '说明', start_at: '开始时间', due_at: '截止时间', end_at: '结束时间', priority: '优先级', status: '状态', all_day: '全天', plan_id: '关联计划' }
-const RECORD_STATUS = { todo: '待办', doing: '进行中', done: '已完成', scheduled: '已安排', completed: '已完成', cancelled: '已取消' }
+const CHANGE_FIELDS = { title: '标题', description: '说明', start_at: '开始时间', due_at: '截止时间', end_at: '结束时间', priority: '优先级', status: '状态', all_day: '全天', plan_id: '关联计划', task_id: '关联子任务', depends_on: '前置任务 ID', position: '排序位置' }
+const RECORD_STATUS = { todo: '待办', doing: '进行中', blocked: '人工阻塞', done: '已完成', scheduled: '已安排', completed: '已完成', cancelled: '已取消' }
 const CHANGE_LABEL = { update: '修改', complete: '标记完成', cancel: '取消' }
 
-export function PlanningChangesPreview({ changes }) {
+export function PlanningChangesPreview({ changes, reorder, basis }) {
   const valueText = (key, value) => value == null || value === '' ? '未设置'
     : key.endsWith('_at') ? fmt(value) : key === 'status' ? RECORD_STATUS[value] || value
       : typeof value === 'boolean' ? value ? '是' : '否' : String(value)
-  return <div className="mt-3 flex flex-col gap-3">{changes.map((change, index) => {
+  return <div className="mt-3 flex flex-col gap-3">{reorder ? <section className="rounded-xl border border-brand/15 p-3"><strong>完整活跃任务顺序</strong><p>原：{basis?.tasks?.filter(t=>!['done','cancelled'].includes(t.status)).sort((a,b)=>a.position-b.position||a.id.localeCompare(b.id)).map(t=>t.title).join(' → ')}</p><p>改为：{reorder.task_ids.map(id=>basis?.tasks?.find(t=>t.id===id)?.title||id).join(' → ')}</p></section> : null}{changes.map((change, index) => {
     const fields = Object.keys(CHANGE_FIELDS).filter(key => JSON.stringify(change.before[key]) !== JSON.stringify(change.after[key]))
     return <section key={index} className="rounded-xl border border-brand/15 p-3">
-      <strong>{CHANGE_LABEL[change.action]}{change.target.type === 'plan' ? '计划' : '日程'}《{change.before.title}》</strong>
+      <strong>{CHANGE_LABEL[change.action]}{change.target.type === 'plan' ? '计划' : change.target.type === 'project_task' ? '子任务' : '日程'}《{change.before.title}》</strong>
+      {change.relations ? <p className="mt-2 text-xs">所属计划：{change.relations.before.plan?.title || '独立日程'} → {change.relations.after.plan?.title || '独立日程'}<br/>关联子任务：{change.relations.before.task?.title || '无'} → {change.relations.after.task?.title || '无'}</p> : null}
       <dl className="mt-2 flex flex-col gap-2">{fields.map(key => <div key={key}>
         <dt className="text-xs font-bold">{CHANGE_FIELDS[key]}</dt>
         <dd className="mt-1 whitespace-pre-wrap break-words text-sm"><span className="text-slate-500">原：{valueText(key, change.before[key])}</span><br /><span>改为：{valueText(key, change.after[key])}</span></dd>
       </div>)}</dl>
-      {!fields.length ? <p className="mt-2 text-xs text-slate-500">记录已处于目标状态，本次确认会记录你的决定。</p> : null}
-      {change.action === 'complete' && !change.before.completed_at ? <p className="mt-2 text-xs text-slate-500">完成时间将在确认生效时记录。</p> : null}
-      <p className="mt-2 text-xs text-slate-500">此操作针对当前记录，关联计划和日程的状态独立管理。</p>
     </section>
   })}</div>
 }
 
+export function PlanningCreatePreview({ draft }) {
+  const payload = draft?.payload ?? {}, plan = payload.plan
+  const tasks = payload.project_tasks ?? [], schedules = payload.schedules ?? []
+  const planName = id => id === null ? '独立日程' : id ? `${payload.basis?.plans?.find(p => p.id === id)?.title || '既有计划'}（${id}）` : plan?.title || '独立日程'
+  const taskName = item => item.task_ref ? `${tasks.find(t => t.ref === item.task_ref)?.title || item.task_ref}（草案引用 ${item.task_ref}）` : item.task_id ? `${payload.basis?.tasks?.find(t => t.id === item.task_id)?.title || '既有子任务'}（${item.task_id}）` : '不关联子任务'
+  return <div className="mt-3 flex flex-col gap-3">
+    {plan ? <section className="rounded-xl border border-brand/15 p-3"><strong>长期计划：{plan.title}</strong><p className="whitespace-pre-wrap">{plan.description}</p><p className="text-xs">开始 {fmt(plan.start_at)} · 截止 {fmt(plan.due_at)}</p></section> : null}
+    <strong>项目子任务 {tasks.length} 条</strong>
+    {tasks.map(task => <section key={task.ref} className="rounded-xl border border-brand/15 p-3"><strong>{task.title}</strong><p className="whitespace-pre-wrap text-sm">{task.description}</p><p className="text-xs">引用 {task.ref} · 所属计划 {planName(task.plan_id)} · 截止 {fmt(task.due_at)}</p><p className="text-xs">前置：{task.depends_on?.map(d => d.ref ? `${tasks.find(t=>t.ref===d.ref)?.title || d.ref}（引用 ${d.ref}）` : d.id).join('、') || '无'} · 初始状态：待办</p></section>)}
+    <strong>日程 {schedules.length} 条 · 北京时间</strong>
+    {schedules.map((item,index) => <section key={index} className="rounded-xl border border-brand/15 p-3"><strong>{item.title}</strong><p className="text-xs">{fmt(item.start_at)} — {item.all_day ? '全天' : fmt(item.end_at)}</p><p className="text-xs">所属计划 {planName(item.plan_id)} · {taskName(item)}</p></section>)}
+    {payload.warnings?.map((text,index) => <p role="status" className="text-sm" key={index}>{text}</p>)}
+  </div>
+}
+
 function DraftPreview({ pending, draft }) {
   if (pending.planning) {
-    if (draft?.payload?.changes) return <PlanningChangesPreview changes={draft.payload.changes} />
-    const plan = draft?.payload?.plan
-    const schedules = draft?.payload?.schedules ?? []
-    return (
-      <div>
-        {plan ? <div className="mt-3">
-          <strong>长期计划：{plan.title}</strong>
-          {plan.description ? <p className="mt-1 text-sm whitespace-pre-wrap">{plan.description}</p> : null}
-          <p className="mt-1 text-xs text-slate-500">开始：{fmt(plan.start_at)} · 截止：{fmt(plan.due_at)} · 优先级：{plan.priority ?? 0}</p>
-        </div> : null}
-        <div className="mt-3 text-xs font-bold">日程 {schedules.length} 条 · 北京时间</div>
-        <ol className="mt-2 flex flex-col gap-2">
-          {schedules.map((item, index) => <li key={index} className="rounded-lg border border-brand/15 p-2">
-            <strong className="text-sm">{item.title}</strong>
-            <div className="mt-1 text-xs text-slate-500">{item.all_day ? `${fmt(item.start_at)} · 全天` : `${fmt(item.start_at)} — ${fmt(item.end_at)}`}</div>
-          </li>)}
-        </ol>
-        {draft?.conflicts?.length ? <div role="status" className="error-bar mt-3">
-          时间冲突 {draft.conflicts.length} 项，请审阅是否保留重叠安排：
-          {draft.conflicts.map((item, index) => <p key={index} className="mt-1 text-xs">{item.proposed_title} 与「{item.existing_title}」重叠（{fmt(item.existing_start_at)} — {fmt(item.existing_end_at)}）</p>)}
-        </div> : null}
-      </div>
-    )
+    if (draft?.payload?.changes) return <PlanningChangesPreview changes={draft.payload.changes} reorder={draft.payload.reorder} basis={draft.payload.basis} />
+    return <PlanningCreatePreview draft={draft} />
   }
   return (
     <div className="mt-3">
@@ -150,7 +142,6 @@ function ConfirmationCard({ pending }) {
       <div className="aui-tool-confirm-icon">{terminal ? status === 'approved' ? '✓' : '!' : '⏸'}</div>
       <div className="aui-tool-confirm-body min-w-0 flex-1">
         <div className="aui-tool-confirm-title">{pending.planning ? '规划' : '归档'} · {STATUS_LABEL[status] || status}</div>
-        {!terminal ? <p className="mt-1 text-xs text-slate-500">{draft?.payload?.changes ? '请审阅修改前后内容，确认后才会改变已有记录。' : '以下是草案。确认前不会出现在首页计划或档案里。'}</p> : null}
         {loading ? <p role="status" className="mt-2 text-xs">正在读取最新草案…</p> : null}
         <DraftPreview pending={pending} draft={draft} />
         {notice ? <p role="status" className="error-bar mt-3">{notice}</p> : null}
@@ -167,7 +158,7 @@ function ConfirmationCard({ pending }) {
           <button type="button" className="btn-ghost" disabled={disabled || !actions} onClick={() => decide('rejected')}>拒绝草案</button>
           {error ? <button type="button" className="btn-ghost" disabled={disabled} onClick={refresh}>重新读取</button> : null}
         </div>}
-        {pending.planning && pending.draft_id ? <Link className="aui-tool-confirm-hint" to={`/planning/drafts/${encodeURIComponent(pending.draft_id)}/confirm`}>也可打开独立确认页 →</Link> : pending.task_id ? <Link className="aui-tool-confirm-hint" to={`/tasks/${encodeURIComponent(pending.task_id)}/confirm`}>也可打开独立确认页 →</Link> : null}
+        {pending.planning && pending.draft_id ? <Link className="aui-tool-confirm-hint" to={`/planning/drafts/${encodeURIComponent(pending.draft_id)}/confirm`}>打开独立确认页 →</Link> : pending.task_id ? <Link className="aui-tool-confirm-hint" to={`/tasks/${encodeURIComponent(pending.task_id)}/confirm`}>打开独立确认页 →</Link> : null}
       </div>
     </div>
   )

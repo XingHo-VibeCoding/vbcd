@@ -28,13 +28,12 @@ function GitHubProjects({ curated }) {
   return (
     <section id="projects" className="mt-6 border-t border-brand/15 pt-5">
       <div className="flex items-center justify-between gap-3"><h2 className="text-lg font-bold">GitHub 项目</h2><button type="button" className="min-h-11 rounded-xl px-3 text-sm text-brand" onClick={() => setRetry(value => value + 1)}>重新检查</button></div>
-      <p className="mt-1 text-xs text-slate-500">{enabled ? '后台精选项目 · 按设置顺序展示' : '公开、非 Fork 仓库 · 按最近推送时间排序'}</p>
       {error ? <p role="alert" className="error-bar">{error} · 已有列表如仍显示，则是上次读取的数据。</p> : null}
       {!data && !error ? <p className="loading">项目载入中…</p> : null}
       {data?.state === 'unconfigured' ? <p className="activity-empty">GitHub 项目来源尚未配置</p> : null}
       {data?.state === 'unavailable' ? <p role="alert" className="activity-empty">项目暂不可用，没有可用缓存。</p> : null}
       {data?.state === 'stale' ? <p role="status" className="activity-empty">刷新失败，正在显示上次成功数据，可能已过期。</p> : null}
-      {data?.synced_at ? <p className="mt-2 text-xs text-slate-400">来源：GitHub · 最后同步于 {format(data.synced_at)}（北京时间）</p> : null}
+      {data?.synced_at ? <p className="mt-2 text-xs text-slate-400">更新时间：{new Date(data.synced_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</p> : null}
       {data && !['unconfigured', 'unavailable'].includes(data.state) && !selected.length ? <p className="activity-empty">{enabled ? '暂无可展示的精选项目，所选项目可能已隐藏或来源不可用' : '没有符合条件的公开项目'}</p> : null}
       {data ? (enabled ? [null] : [false, true]).map(archived => {
         const repos = enabled ? selected : selected.filter(repo => repo.archived === archived)
@@ -312,7 +311,6 @@ export default function AboutPage() {
             </div>
           )}
           <div className="about-title">
-            <p className="about-kicker">PERSONAL PROFILE</p>
             <h1 className="about-name">{nickname}</h1>
             <p className="about-sub">{en}</p>
           </div>

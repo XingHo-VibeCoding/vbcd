@@ -91,11 +91,10 @@ export default function AgentPageV2() {
             <AgentIcon name="chat" size={18} />
             <span>{sessionId ? '当前对话' : '新会话'}{busy ? <small>正在生成</small> : null}</span>
           </div>
-          <p className="aui-session-hint">{sessionId ? '离开页面后，可恢复当前对话。' : '发送第一条消息，开始这段对话。'}</p>
         </div>
         <div className="aui-sidebar-footer">
           <span className="aui-owner-avatar">B</span>
-          <div><strong>我的个人空间</strong><span>资料 · 对话 · 成长</span></div>
+          <div><strong>我的个人空间</strong></div>
           <AgentIcon name="shield" size={18} />
         </div>
       </aside>
@@ -106,7 +105,7 @@ export default function AgentPageV2() {
           <header className="aui-workspace-header">
             <div className="aui-header-title">
               <button ref={menuRef} type="button" className="aui-icon-button" aria-label={sidebarOpen ? '收回会话列表' : '打开会话列表'} aria-expanded={sidebarOpen} aria-controls="agent-conversations" onClick={() => sidebarOpen ? closeSidebar() : setSidebarOpen(true)}><AgentIcon name="menu" /></button>
-              <div><h1>Agent</h1><p>你的资料，随时接着聊</p></div>
+              <div><h1>Agent</h1></div>
             </div>
             <span className={`aui-runtime-status ${busy ? 'running' : ''}`} role="status"><span />{busy ? '正在生成' : confirming ? '正在确认' : pendingConfirmation ? '草案待确认' : '准备就绪'}</span>
           </header>
@@ -114,9 +113,7 @@ export default function AgentPageV2() {
             <ThreadPrimitive.Empty>
               <div className="aui-welcome">
                 <span className="aui-welcome-icon"><AgentIcon name="spark" size={32} /></span>
-                <span className="aui-eyebrow">从一个问题开始</span>
                 <h2>今天，想一起做些什么？</h2>
-                <p>查找自己的资料，理清一个想法，<br />或把值得留下的内容整理归档。</p>
                 <div className="aui-suggestions">
                   {[
                     ['folder', '查一查我的资料', '帮我查找个人知识库相关的资料'],
@@ -140,7 +137,6 @@ export default function AgentPageV2() {
                 {busy ? <ComposerPrimitive.Cancel className="aui-send" aria-label="停止生成"><AgentIcon name="stop" /></ComposerPrimitive.Cancel> : <ComposerPrimitive.Send className="aui-send" aria-label="发送消息" disabled={confirming || Boolean(pendingConfirmation)}><AgentIcon name="arrow" /></ComposerPrimitive.Send>}
               </div>
             </ComposerPrimitive.Root>
-            <p className="aui-input-hint">{busy ? '生成期间，请先停止再新建对话。' : confirming ? '正在记录你的决定…' : pendingConfirmation ? '草案尚未保存，请先使用对话内的确认或拒绝按钮。' : 'Enter 发送 · Shift + Enter 换行'}<span>buddy</span></p>
           </footer>
         </ThreadPrimitive.Root>
       </AssistantRuntimeProvider>

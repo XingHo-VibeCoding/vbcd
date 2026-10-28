@@ -8,7 +8,7 @@ import { resumeAfterDecision } from '../services/agent/loop.js'
 const router = Router()
 
 router.get('/', async (req, res, next) => {
-  try { res.json({ ok: true, data: await getPlanning({ from: req.query.from, to: req.query.to, planStatus: req.query.plan_status, scheduleStatus: req.query.schedule_status, q: req.query.q, type: req.query.type, id: req.query.id }) }) } catch (err) { next(err) }
+  try { res.json({ ok: true, data: await getPlanning({ from: req.query.from, to: req.query.to, planStatus: req.query.plan_status, scheduleStatus: req.query.schedule_status, q: req.query.q, type: req.query.type, id: req.query.id, planId: req.query.plan_id, taskStatus: req.query.task_status }) }) } catch (err) { next(err) }
 })
 
 router.post('/drafts', requireAuthForWrite, async (req, res, next) => {

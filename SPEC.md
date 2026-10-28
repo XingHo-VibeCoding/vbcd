@@ -317,6 +317,21 @@ vbcd/
 - 关于页通过已有 `/api/me` 中 `site.site.curated.projects` 和未经筛选的 `/api/github/projects` 派生项目精选；关闭时显示原项目清单。精选顺序跨已归档/未归档统一生效。
 - 身份和权限仍沿用现有 `requireAuth`，本次不新增权限层。
 
+### 3.0.6 项目子任务规划契约（2026-10-28，阶段 B 本地实现）
+
+沿用 M5–M8 四个端点及两个 Agent 工具，不增加端点计数；本地隔离数据库验证通过，部署前必须执行 `db/migrations/004_project_tasks.sql`，步骤见 RUN §8.7.1。此处 Task 指 `project_tasks`，不是 §2.3 的异步 SystemTask。
+
+- `project_tasks`：id/plan_id/title/description/status/due_at/position/source/created_at/updated_at/completed_at/schema_version。plan_id 必填且不可改；标题 trim 后 1–200 Unicode 码点、说明最多 10000；创建为 todo，due_at 可空且非空需带时区。done/cancelled 只读；blocked 人工设置，解除后才可 complete；只有全部前置为 done 才可开始/完成，不自动完成或取消关联日程。
+- `project_task_dependencies(plan_id,task_id,depends_on_task_id)`：复合外键保证同 Plan，CHECK 拒绝自依赖、主键防重复；服务端最终图校验和统一写锁防并发成环。Task 和依赖关系限制物理删除；现有 Schedule.plan_id 的 SET NULL 不变，新 Schedule.task_id 默认 NULL，依赖不从旧 SystemTask 导入。
+- GET 列表新增 `project_tasks` 和 `related:{plans,project_tasks}`；Task 含 `depends_on`、派生 `dependency_state:{satisfied,waiting_on_ids}`。新增 plan_id/task_status（all/active/todo/doing/blocked/done/cancelled）；日期范围仍仅筛 Schedule。关键词不匹配但显示归属所需的 Task 放 related，不冒充筛选命中。type 增加 project_task；详情返回真实 item/version 与关联 Plan/Task/Schedule。
+- POST create：保留 plan/schedules，新增 project_tasks；每项 `{ref,title,description?,due_at?,plan_id?,depends_on?:[{id}|{ref}]}`。ref 是本草案唯一局部名，只可由 task_ref 或依赖 ref 引用；确认时生成真实 ID。任务未提供 plan_id 时只可默认关联同草案新 Plan；没有新 Plan 则需真实 plan_id。
+- Schedule 创建支持 plan_id/task_id/task_ref。省略 plan_id 默认关联同草案新 Plan；显式 null 明确独立；关联 Task 时解析其 Plan，显式矛盾拒绝。task_id 和 task_ref 互斥。Task+Schedule 新增总数最多 50；完成创建的草案返回持久化 `created:{plan_id,task_ids_by_ref,schedule_ids}`，重复确认保持同一结果。
+- POST 修改：旧 operation/target/patch 继续有效，target.type 增加 project_task。Task patch 为 title/description/due_at/status/depends_on；due_at:null 清除，depends_on:[] 清空；系统字段/position/归属不可直接编辑。批量格式 `{operation:"update",changes:[{action,target,patch?}]}`，最多 50 条、每对象一次。重排格式 `{operation:"update",reorder:{plan_id,task_ids}}`，必须完整覆盖 1–50 条活跃任务，与单目标/批量/新增互斥。
+- 重排确认后活跃 Task 的 position 为 0..n-1，终态 position 不改；默认稳定排序 position/id。无变化不建新草案；过期可安全重算则 409 重审，不可安全重算（目标消失、非法关联或成员集合改变）明确拒绝并要求重新生成，不自动丢弃或合并操作。
+- API 与 Agent 共用 `services/planning-schema.js`；未知字段与类型错误返回 VALIDATION_FAILED，不静默丢字段。草案包含 basis、逐项前后值、关系名称/ID、warnings 与时间 conflicts；确认凭据覆盖依赖状态和排序成员，不只是目标行时间戳。
+- 权限保持 SPEC §5.6。批准时按统一顺序锁 schedules/plans/project_tasks/project_task_dependencies，再锁草案并重读校验（单人部署的表级串行锁）；409 不记录批准。保存点中业务与审计全成功才落地；失败保留 approved 决定但草案 failed。拒绝零业务写入，同决定幂等、反向决定冲突；会话同步失败只重试同步。
+- `/planning?tab=tasks&plan=<id>` 支持子任务列表、新建、编辑、截止/依赖、关联查询与重排草案；确认页面与 Agent 卡共用创建/变更预览，游客只读且操作灰显。无日期独立待办、重复规则、自动完成率及自动改期仍不在阶段 B。
+
 ### 3.1 知识库问答（F9）
 
 **索引（`POST /api/kb/index` 触发）**：

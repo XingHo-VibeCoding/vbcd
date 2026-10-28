@@ -87,12 +87,6 @@ function ConvergeForm() {
           </button>
         ))}
       </div>
-      <p className="hint">
-        {isVideo
-          ? '贴一个视频链接，buddy 先抓平台字幕、抓不到就转写音频，产出带时间戳全文与 srt；'
-          : '贴一个链接，buddy 抓取正文并用模型整理成资料（失败会告诉你原因）；'}
-        任务进度去<Link to="/log">日志</Link>看。
-      </p>
       <label>
         链接 *
         <input
@@ -135,7 +129,6 @@ export default function ArchivePage() {
   return (
     <section className="site-glass-card archive-workflow">
       <h2>归档</h2>
-      <p className="hint">收敛：贴链接 → 抓取正文+模型整理 → 归档｜发散：手动写一条资料</p>
       <div className="view-switch" role="group" aria-label="归档方式">
         {MODES.map((m) => (
           <button
